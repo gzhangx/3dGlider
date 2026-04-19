@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Viewport3D } from './components/Viewport3D/Viewport3D'
 import { Toolbar } from './components/Toolbar/Toolbar'
 import { SketchSidebar } from './components/SketchSidebar/SketchSidebar'
+import { FeatureTree } from './components/FeatureTree/FeatureTree'
 import { useModelStore, SketchTool } from './store/modelStore'
 import styles from './App.module.css'
 
@@ -12,7 +13,6 @@ const KEY_TOOL: Record<string, SketchTool> = {
 export default function App() {
   const { mode, setActiveTool } = useModelStore()
 
-  // Keyboard shortcuts for sketch tools
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (mode !== 'sketch') return
@@ -31,6 +31,7 @@ export default function App() {
         <div className={styles.canvas}>
           <Viewport3D />
         </div>
+        <FeatureTree />
       </div>
     </div>
   )

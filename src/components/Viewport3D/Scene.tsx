@@ -6,6 +6,7 @@ import { AxesHelper } from './AxesHelper'
 import { PlaneGizmo } from './PlaneGizmo'
 import { SketchPlane } from './SketchPlane'
 import { CommittedSketches } from './CommittedSketches'
+import { ExtrudedSolids } from './ExtrudedSolids'
 
 const PLANE_NORMAL: Record<PlaneId, [number, number, number]> = {
   XY: [0, 0, 1],
@@ -73,7 +74,7 @@ export function Scene() {
         </>
       )}
 
-      {/* Always render committed sketches — visible in both view and sketch modes */}
+      <ExtrudedSolids />
       <CommittedSketches />
 
       {mode === 'sketch' && <SketchPlane />}

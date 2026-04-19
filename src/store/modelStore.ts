@@ -7,32 +7,26 @@ export type SketchTool = 'select' | 'line' | 'rect' | 'circle'
 export type SketchPoint = { x: number; y: number }
 
 export interface SketchLine {
-  type: 'line'
-  id: string
-  start: SketchPoint
-  end: SketchPoint
+  type: 'line'; id: string; start: SketchPoint; end: SketchPoint
 }
-
 export interface SketchRect {
-  type: 'rect'
-  id: string
-  start: SketchPoint
-  end: SketchPoint
+  type: 'rect'; id: string; start: SketchPoint; end: SketchPoint
 }
-
 export interface SketchCircle {
-  type: 'circle'
-  id: string
-  center: SketchPoint
-  radius: number
+  type: 'circle'; id: string; center: SketchPoint; radius: number
 }
-
 export type SketchElement = SketchLine | SketchRect | SketchCircle
 
 export interface Sketch {
   id: string
   plane: PlaneId
   elements: SketchElement[]
+}
+
+export interface ExtrudeFeature {
+  id: string
+  sketchId: string
+  depth: number  // units along the plane's normal
 }
 
 interface ModelState {
@@ -42,6 +36,7 @@ interface ModelState {
   activeTool: SketchTool
   sketchElements: SketchElement[]
   sketches: Sketch[]
+  extrudes: ExtrudeFeature[]
   selectedElementId: string | null
 
   setHoveredPlane: (plane: PlaneId | null) => void
@@ -49,6 +44,8 @@ interface ModelState {
   selectElement: (id: string | null) => void
   addSketchElement: (el: SketchElement) => void
   deleteSketchElement: (id: string) => void
+  addExtrude: (sketchId: string, depth: number) => void
+  deleteExtrude: (id: string) => void
   enterSketch: (plane: PlaneId) => void
   exitSketch: () => void
 }
@@ -60,6 +57,7 @@ export const useModelStore = create<ModelState>((set) => ({
   activeTool: 'select',
   sketchElements: [],
   sketches: [],
+  extrudes: [],
   selectedElementId: null,
 
   setHoveredPlane: (hoveredPlane) => set({ hoveredPlane }),
@@ -76,6 +74,14 @@ export const useModelStore = create<ModelState>((set) => ({
         .map((sk) => ({ ...sk, elements: sk.elements.filter((el) => el.id !== id) }))
         .filter((sk) => sk.elements.length > 0),
     })),
+
+  addExtrude: (sketchId, depth) =>
+    set((s) => ({
+      extrudes: [...s.extrudes, { id: crypto.randomUUID(), sketchId, depth }],
+    })),
+
+  deleteExtrude: (id) =>
+    set((s) => ({ extrudes: s.extrudes.filter((e) => e.id !== id) })),
 
   enterSketch: (plane) =>
     set({ mode: 'sketch', activePlane: plane, activeTool: 'select', sketchElements: [], selectedElementId: null }),

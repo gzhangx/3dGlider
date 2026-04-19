@@ -52,3 +52,16 @@
 .exitBtn:hover {
   background: #5a2222;
 }
+
+.exportBtn {
+  padding: 5px 14px;
+  background: #1a3a1a;
+  color: #88ff88;
+  border: 1px solid #226622;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+  margin-left: 8px;
+}
+.exportBtn:hover { background: #224422; }

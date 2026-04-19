@@ -1,8 +1,9 @@
 import { useModelStore } from '../../store/modelStore'
+import { exportSTL } from '../../lib/exportSTL'
 import styles from './Toolbar.module.css'
 
 export function Toolbar() {
-  const { mode, activePlane, exitSketch } = useModelStore()
+  const { mode, activePlane, extrudes, sketches, exitSketch } = useModelStore()
 
   return (
     <header className={styles.toolbar}>
@@ -21,6 +22,16 @@ export function Toolbar() {
           </>
         )}
       </div>
+
+      {extrudes.length > 0 && (
+        <button
+          className={styles.exportBtn}
+          onClick={() => exportSTL(extrudes, sketches)}
+          title="Export all extruded solids as binary STL"
+        >
+          ⬇ Export STL
+        </button>
+      )}
     </header>
   )
 }
