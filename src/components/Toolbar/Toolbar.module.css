@@ -1,0 +1,54 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  height: 48px;
+  background: #12122a;
+  border-bottom: 1px solid #2a2a4a;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.logo {
+  font-size: 16px;
+  font-weight: 700;
+  color: #7cacff;
+  letter-spacing: 0.05em;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.hint {
+  font-size: 13px;
+  color: #888;
+}
+
+.activeLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #7cacff;
+  background: #1e1e4a;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.exitBtn {
+  padding: 5px 14px;
+  background: #3a1a1a;
+  color: #ff8888;
+  border: 1px solid #662222;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+
+.exitBtn:hover {
+  background: #5a2222;
+}

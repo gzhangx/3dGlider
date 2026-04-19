@@ -1,0 +1,80 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 112px;
+  padding: 12px 8px;
+  background: #12122a;
+  border-right: 1px solid #2a2a4a;
+  flex-shrink: 0;
+}
+
+.heading {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #555;
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  width: 100%;
+  text-align: left;
+}
+
+.btn:hover {
+  background: #1e1e40;
+  color: #ddd;
+}
+
+.btn.active {
+  background: #1e2a50;
+  border-color: #4488ff;
+  color: #7cacff;
+}
+
+.icon {
+  font-size: 15px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.label {
+  flex: 1;
+  font-size: 12px;
+}
+
+.key {
+  font-size: 10px;
+  color: #555;
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+.btn.active .key {
+  color: #4488ff;
+  border-color: #4488ff44;
+}
+
+.hint {
+  margin-top: auto;
+  font-size: 10px;
+  color: #444;
+  line-height: 1.5;
+  padding: 4px;
+}
