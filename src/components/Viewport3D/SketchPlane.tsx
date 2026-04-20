@@ -19,6 +19,7 @@ import {
   rectPts,
   circlePts,
 } from '../../lib/sketchGeometry'
+import { distToSeg, computeCut, CutResult } from '../../lib/cutTool'
 
 // ─── dot marker ──────────────────────────────────────────────────────────────
 
@@ -33,13 +34,13 @@ function Dot({ pos, color, size = 0.06 }: { pos: [number, number, number]; color
 
 // ─── single element renderer (with hover/select) ──────────────────────────────
 
-function SketchEl({ el, plane }: { el: SketchElement; plane: PlaneId }) {
+function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: PlaneId; highlighted?: boolean }) {
   const { activeTool, selectedElementId, selectElement } = useModelStore()
   const [hovered, setHovered] = useState(false)
 
   const isSelected = selectedElementId === el.id
-  const color = isSelected ? '#ff8844' : hovered ? '#ffe888' : '#ffdd44'
-  const width = isSelected || hovered ? 3 : 2
+  const color = highlighted ? '#ff8844' : isSelected ? '#ff8844' : hovered ? '#ffe888' : '#ffdd44'
+  const width = highlighted || isSelected || hovered ? 3 : 2
 
   const selectProps = activeTool === 'select'
     ? {
@@ -64,13 +65,14 @@ export function SketchPlane() {
   const {
     activePlane, activeTool, sketchElements,
     selectedElementId, selectElement,
-    addSketchElement, deleteSketchElement, exitSketch,
+    addSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
   } = useModelStore()
 
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
   const [cursorPt, setCursorPt] = useState<SketchPoint | null>(null)
+  const [cutPreview, setCutPreview] = useState<CutResult | null>(null)
 
-  useEffect(() => { setStartPt(null); setCursorPt(null) }, [activeTool])
+  useEffect(() => { setStartPt(null); setCursorPt(null); setCutPreview(null) }, [activeTool])
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
@@ -96,14 +98,45 @@ export function SketchPlane() {
   const isDrawTool = activeTool !== 'select'
 
   const getSnapped = (e: ThreeEvent<PointerEvent | MouseEvent>) => snapPt(toSketch(e.point, plane))
+  const getRaw    = (e: ThreeEvent<PointerEvent | MouseEvent>) => toSketch(e.point, plane)
 
   const onMove = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     setCursorPt(getSnapped(e))
+
+    if (activeTool === 'cut') {
+      const raw = getRaw(e)
+      const THRESHOLD = 0.5
+      let nearest: SketchLine | null = null
+      let minDist = THRESHOLD
+      for (const el of sketchElements) {
+        if (el.type !== 'line') continue
+        const d = distToSeg(raw, el.start, el.end)
+        if (d < minDist) { minDist = d; nearest = el }
+      }
+      setCutPreview(nearest ? computeCut(nearest, raw, sketchElements) : null)
+    }
   }
 
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
+
+    if (activeTool === 'cut') {
+      if (cutPreview) {
+        cutSketchElement(
+          cutPreview.lineId,
+          cutPreview.keeps.map(seg => ({
+            type: 'line' as const,
+            id: crypto.randomUUID(),
+            start: seg.start,
+            end: seg.end,
+          })),
+        )
+        setCutPreview(null)
+      }
+      return
+    }
+
     const pt = getSnapped(e)
 
     if (startPt === null) {
@@ -135,13 +168,22 @@ export function SketchPlane() {
         </mesh>
       )}
 
-      {/* Elements — clickable in select mode */}
+      {/* Elements — clickable in select mode, highlighted when targeted by cut */}
       {sketchElements.map((el) => (
-        <SketchEl key={el.id} el={el} plane={plane} />
+        <SketchEl key={el.id} el={el} plane={plane} highlighted={cutPreview?.lineId === el.id} />
       ))}
 
-      {/* Cursor & anchor dots (draw tools only) */}
-      {isDrawTool && cursorPt && <Dot pos={worldPt(cursorPt, plane)} color="#ffffff" size={0.05} />}
+      {/* Cut preview — red overlay on the segment to be removed */}
+      {activeTool === 'cut' && cutPreview && (
+        <Line
+          points={[worldPt(cutPreview.cutStart, plane), worldPt(cutPreview.cutEnd, plane)]}
+          color="#ff3333"
+          lineWidth={4}
+        />
+      )}
+
+      {/* Cursor & anchor dots (draw tools only, not cut) */}
+      {isDrawTool && activeTool !== 'cut' && cursorPt && <Dot pos={worldPt(cursorPt, plane)} color="#ffffff" size={0.05} />}
       {isDrawTool && startPt && <Dot pos={worldPt(startPt, plane)} color="#ffdd44" size={0.08} />}
 
       {/* Live preview */}

@@ -13,6 +13,7 @@ const TOOLS: ToolBtn[] = [
   { id: 'line',    label: 'Line',      key: 'L', icon: '╱' },
   { id: 'rect',    label: 'Rectangle', key: 'R', icon: '▭' },
   { id: 'circle',  label: 'Circle',    key: 'C', icon: '◯' },
+  { id: 'cut',     label: 'Cut',       key: 'X', icon: '✂' },
 ]
 
 export function SketchSidebar() {

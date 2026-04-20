@@ -7,7 +7,7 @@ import { useModelStore, SketchTool } from './store/modelStore'
 import styles from './App.module.css'
 
 const KEY_TOOL: Record<string, SketchTool> = {
-  s: 'select', l: 'line', r: 'rect', c: 'circle',
+  s: 'select', l: 'line', r: 'rect', c: 'circle', x: 'cut',
 }
 
 export default function App() {

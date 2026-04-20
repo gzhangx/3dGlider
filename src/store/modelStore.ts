@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 export type PlaneId = 'XY' | 'XZ' | 'YZ'
 export type AppMode = 'view' | 'sketch'
-export type SketchTool = 'select' | 'line' | 'rect' | 'circle'
+export type SketchTool = 'select' | 'line' | 'rect' | 'circle' | 'cut'
 
 export type SketchPoint = { x: number; y: number }
 
@@ -44,6 +44,7 @@ interface ModelState {
   selectElement: (id: string | null) => void
   addSketchElement: (el: SketchElement) => void
   deleteSketchElement: (id: string) => void
+  cutSketchElement: (id: string, replacements: SketchElement[]) => void
   addExtrude: (sketchId: string, depth: number) => void
   deleteExtrude: (id: string) => void
   enterSketch: (plane: PlaneId) => void
@@ -73,6 +74,11 @@ export const useModelStore = create<ModelState>((set) => ({
       sketches: s.sketches
         .map((sk) => ({ ...sk, elements: sk.elements.filter((el) => el.id !== id) }))
         .filter((sk) => sk.elements.length > 0),
+    })),
+
+  cutSketchElement: (id, replacements) =>
+    set((s) => ({
+      sketchElements: [...s.sketchElements.filter((el) => el.id !== id), ...replacements],
     })),
 
   addExtrude: (sketchId, depth) =>
