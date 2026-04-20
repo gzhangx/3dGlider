@@ -3,6 +3,7 @@ import { Line } from '@react-three/drei'
 import { ThreeEvent } from '@react-three/fiber'
 import {
   useModelStore,
+  PlaneId,
   SketchPoint,
   SketchElement,
   SketchLine,
@@ -32,7 +33,7 @@ function Dot({ pos, color, size = 0.06 }: { pos: [number, number, number]; color
 
 // ─── single element renderer (with hover/select) ──────────────────────────────
 
-function SketchEl({ el, plane }: { el: SketchElement; plane: ReturnType<typeof useModelStore>['activePlane'] & string }) {
+function SketchEl({ el, plane }: { el: SketchElement; plane: PlaneId }) {
   const { activeTool, selectedElementId, selectElement } = useModelStore()
   const [hovered, setHovered] = useState(false)
 

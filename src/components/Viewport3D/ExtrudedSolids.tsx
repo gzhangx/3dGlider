@@ -9,9 +9,9 @@ function ExtrudedSolid({ ext }: { ext: ExtrudeFeature }) {
 
   const geometry = useMemo(() => {
     if (!sketch) return null
-    const shape = sketchElementsToShape(sketch.elements, sketch.plane)
-    if (!shape) return null
-    return new ExtrudeGeometry(shape, { depth: Math.abs(ext.depth), bevelEnabled: false })
+    const shapes = sketchElementsToShape(sketch.elements, sketch.plane)
+    if (shapes.length === 0) return null
+    return new ExtrudeGeometry(shapes, { depth: Math.abs(ext.depth), bevelEnabled: false })
   }, [sketch, ext.depth])
 
   useEffect(() => () => { geometry?.dispose() }, [geometry])

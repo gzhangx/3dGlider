@@ -52,18 +52,18 @@ function tryLoop(lines: SketchLine[]) {
 }
 
 /**
- * Convert a sketch's elements into a THREE.Shape suitable for ExtrudeGeometry.
- * Priority: rectangle > circle > closed line loop.
- * Returns null if no closed profile can be derived.
+ * Convert a sketch's elements into THREE.Shape[] suitable for ExtrudeGeometry.
+ * All closed profiles (rects, circles, closed line loops) are returned.
+ * Returns empty array if no closed profile can be derived.
  */
 export function sketchElementsToShape(
   elements: SketchElement[],
   plane: PlaneId,
-): THREE.Shape | null {
-  // ── Rectangle ────────────────────────────────────────────────────────────
-  const rects = elements.filter((e): e is SketchRect => e.type === 'rect')
-  if (rects.length > 0) {
-    const r = rects[0]
+): THREE.Shape[] {
+  const shapes: THREE.Shape[] = []
+
+  // ── Rectangles ───────────────────────────────────────────────────────────
+  for (const r of elements.filter((e): e is SketchRect => e.type === 'rect')) {
     const x0 = Math.min(r.start.x, r.end.x), x1 = Math.max(r.start.x, r.end.x)
     const y0 = Math.min(r.start.y, r.end.y), y1 = Math.max(r.start.y, r.end.y)
     const shape = new THREE.Shape()
@@ -72,17 +72,15 @@ export function sketchElementsToShape(
     shape.lineTo(...pt(x1, y1, plane))
     shape.lineTo(...pt(x0, y1, plane))
     shape.closePath()
-    return shape
+    shapes.push(shape)
   }
 
-  // ── Circle ────────────────────────────────────────────────────────────────
-  const circles = elements.filter((e): e is SketchCircle => e.type === 'circle')
-  if (circles.length > 0) {
-    const c = circles[0]
+  // ── Circles ───────────────────────────────────────────────────────────────
+  for (const c of elements.filter((e): e is SketchCircle => e.type === 'circle')) {
     const shape = new THREE.Shape()
     const [cx, cy] = pt(c.center.x, c.center.y, plane)
     shape.absarc(cx, cy, c.radius, 0, Math.PI * 2, false)
-    return shape
+    shapes.push(shape)
   }
 
   // ── Closed line loop ──────────────────────────────────────────────────────
@@ -94,9 +92,9 @@ export function sketchElementsToShape(
       shape.moveTo(...pt(loop[0].x, loop[0].y, plane))
       for (let i = 1; i < loop.length; i++) shape.lineTo(...pt(loop[i].x, loop[i].y, plane))
       shape.closePath()
-      return shape
+      shapes.push(shape)
     }
   }
 
-  return null
+  return shapes
 }

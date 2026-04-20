@@ -8,7 +8,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   const [depth, setDepth] = useState('5')
 
   const existing = extrudes.filter((e) => e.sketchId === sketch.id)
-  const canExtrude = sketchElementsToShape(sketch.elements, sketch.plane) !== null
+  const canExtrude = sketchElementsToShape(sketch.elements, sketch.plane).length > 0
 
   const handleExtrude = () => {
     const d = parseFloat(depth)

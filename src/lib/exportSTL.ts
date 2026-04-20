@@ -11,9 +11,9 @@ export function exportSTL(extrudes: ExtrudeFeature[], sketches: Sketch[]) {
   for (const ext of extrudes) {
     const sketch = sketches.find((s) => s.id === ext.sketchId)
     if (!sketch) continue
-    const shape = sketchElementsToShape(sketch.elements, sketch.plane)
-    if (!shape) continue
-    const geo = new ExtrudeGeometry(shape, { depth: Math.abs(ext.depth), bevelEnabled: false })
+    const shapes = sketchElementsToShape(sketch.elements, sketch.plane)
+    if (shapes.length === 0) continue
+    const geo = new ExtrudeGeometry(shapes, { depth: Math.abs(ext.depth), bevelEnabled: false })
     const mesh = new Mesh(geo)
     const [rx, ry, rz] = EXTRUDE_ROTATION[sketch.plane]
     mesh.rotation.set(rx, ry, rz)
