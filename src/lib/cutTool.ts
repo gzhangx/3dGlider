@@ -132,6 +132,7 @@ export interface CircleCutResult {
   lineId: string
   cutStart: SketchPoint
   cutEnd: SketchPoint
+  cutArc: SketchArc
   keeps: SketchArc[]
 }
 
@@ -139,6 +140,7 @@ export interface ArcCutResult {
   lineId: string
   cutStart: SketchPoint
   cutEnd: SketchPoint
+  cutArc: SketchArc
   keeps: SketchArc[]
 }
 
@@ -267,7 +269,16 @@ export function computeCircleCut(
     endAngle: lo + Math.PI * 2,
   }]
 
-  return { lineId: circle.id, cutStart, cutEnd, keeps }
+  const cutArc: SketchArc = {
+    type: 'arc',
+    id: circle.id,
+    center: circle.center,
+    radius: circle.radius,
+    startAngle: lo,
+    endAngle: hi,
+  }
+
+  return { lineId: circle.id, cutStart, cutEnd, cutArc, keeps }
 }
 
 export function computeArcCut(
@@ -327,7 +338,16 @@ export function computeArcCut(
     })
   }
 
-  return { lineId: arc.id, cutStart: pointAt(lo), cutEnd: pointAt(hi), keeps }
+  const cutArc: SketchArc = {
+    type: 'arc',
+    id: arc.id,
+    center: arc.center,
+    radius: arc.radius,
+    startAngle: lo,
+    endAngle: hi,
+  }
+
+  return { lineId: arc.id, cutStart: pointAt(lo), cutEnd: pointAt(hi), cutArc, keeps }
 }
 
 export function computeCut(

@@ -272,13 +272,27 @@ export function SketchPlane() {
         <SketchEl key={el.id} el={el} plane={plane} highlighted={cutPreview?.lineId === el.id} />
       ))}
 
-      {/* Cut preview — red overlay on the segment to be removed */}
+      {/* Cut preview — red overlay of the exact removed geometry */}
       {activeTool === 'cut' && cutPreview && (
-        <Line
-          points={[worldPt(cutPreview.cutStart, plane), worldPt(cutPreview.cutEnd, plane)]}
-          color="#ff3333"
-          lineWidth={4}
-        />
+        'cutArc' in cutPreview ? (
+          <Line
+            points={arcPts(
+              cutPreview.cutArc.center,
+              cutPreview.cutArc.radius,
+              cutPreview.cutArc.startAngle,
+              cutPreview.cutArc.endAngle,
+              plane,
+            )}
+            color="#ff3333"
+            lineWidth={4}
+          />
+        ) : (
+          <Line
+            points={[worldPt(cutPreview.cutStart, plane), worldPt(cutPreview.cutEnd, plane)]}
+            color="#ff3333"
+            lineWidth={4}
+          />
+        )
       )}
 
       {/* Cursor & anchor dots (draw tools only, not cut) */}
