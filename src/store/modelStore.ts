@@ -93,7 +93,18 @@ export const useModelStore = create<ModelState>((set) => ({
     set((s) => ({ extrudes: s.extrudes.filter((e) => e.id !== id) })),
 
   enterSketch: (plane) =>
-    set({ mode: 'sketch', activePlane: plane, activeTool: 'select', sketchElements: [], selectedElementId: null }),
+    set((s) => {
+      // Re-entering sketch should load existing geometry for that plane.
+      // Use the most recently committed sketch on that plane as the working set.
+      const last = [...s.sketches].reverse().find((sk) => sk.plane === plane)
+      return {
+        mode: 'sketch',
+        activePlane: plane,
+        activeTool: 'select',
+        sketchElements: last ? last.elements : [],
+        selectedElementId: null,
+      }
+    }),
 
   exitSketch: () =>
     set((s) => {
