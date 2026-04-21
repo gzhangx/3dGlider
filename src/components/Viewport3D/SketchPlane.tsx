@@ -64,16 +64,18 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: PlaneI
       }
     : {}
 
-  const cutPassthrough = activeTool === 'cut' ? { raycast: noopRaycast } : {}
+  // In non-select modes, pointer events must go to the invisible hit-test plane,
+  // not to rendered sketch geometry (which would shift e.point off-plane).
+  const hitPlanePassthrough = activeTool !== 'select' ? { raycast: noopRaycast } : {}
 
   if (el.type === 'line')
-    return <Line points={linePts(el.start, el.end, plane)} color={color} lineWidth={width} {...cutPassthrough} {...selectProps} />
+    return <Line points={linePts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
   if (el.type === 'rect')
-    return <Line points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...cutPassthrough} {...selectProps} />
+    return <Line points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
   if (el.type === 'circle')
-    return <Line points={circlePts(el.center, el.radius, plane)} color={color} lineWidth={width} {...cutPassthrough} {...selectProps} />
+    return <Line points={circlePts(el.center, el.radius, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
   if (el.type === 'arc')
-    return <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane)} color={color} lineWidth={width} {...cutPassthrough} {...selectProps} />
+    return <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
   return null
 }
 
@@ -255,13 +257,20 @@ export function SketchPlane() {
     setStartPt(null)
   }
 
+  // In cut mode, prefer pointer-down over click (down+up) which can be flaky if
+  // the hovered hit target changes during the gesture.
+  const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
+    if (activeTool !== 'cut') return
+    onClick(e as unknown as ThreeEvent<MouseEvent>)
+  }
+
   const preview = startPt !== null && cursorPt !== null
 
   return (
     <>
       {/* Hit-test plane — only present during draw tools; absent in select mode so camera gets events */}
       {isDrawTool && (
-        <mesh rotation={PLANE_ROTATION[plane]} onPointerMove={onMove} onClick={onClick}>
+        <mesh rotation={PLANE_ROTATION[plane]} onPointerMove={onMove} onPointerDown={onPointerDown} onClick={onClick}>
           <planeGeometry args={[200, 200]} />
           <meshBasicMaterial visible={false} />
         </mesh>
@@ -285,12 +294,14 @@ export function SketchPlane() {
             )}
             color="#ff3333"
             lineWidth={4}
+            raycast={noopRaycast}
           />
         ) : (
           <Line
             points={[worldPt(cutPreview.cutStart, plane), worldPt(cutPreview.cutEnd, plane)]}
             color="#ff3333"
             lineWidth={4}
+            raycast={noopRaycast}
           />
         )
       )}
@@ -301,15 +312,15 @@ export function SketchPlane() {
 
       {/* Live preview */}
       {preview && activeTool === 'line' && (
-        <Line points={linePts(startPt, cursorPt, plane)} color="#ffdd4488" lineWidth={1.5} />
+        <Line points={linePts(startPt, cursorPt, plane)} color="#ffdd4488" lineWidth={1.5} raycast={noopRaycast} />
       )}
       {preview && activeTool === 'rect' && (
-        <Line points={rectPts(startPt, cursorPt, plane)} color="#ffdd4488" lineWidth={1.5} />
+        <Line points={rectPts(startPt, cursorPt, plane)} color="#ffdd4488" lineWidth={1.5} raycast={noopRaycast} />
       )}
       {preview && activeTool === 'circle' && (() => {
         const r = Math.hypot(cursorPt.x - startPt.x, cursorPt.y - startPt.y)
         return r > 0
-          ? <Line points={circlePts(startPt, r, plane)} color="#ffdd4488" lineWidth={1.5} />
+          ? <Line points={circlePts(startPt, r, plane)} color="#ffdd4488" lineWidth={1.5} raycast={noopRaycast} />
           : null
       })()}
     </>
