@@ -14,13 +14,31 @@ function segSegT(
   p1: SketchPoint, p2: SketchPoint,
   p3: SketchPoint, p4: SketchPoint,
 ): number | null {
+  const EPS = 1e-6
   const d1x = p2.x - p1.x, d1y = p2.y - p1.y
   const d2x = p4.x - p3.x, d2y = p4.y - p3.y
   const denom = d1x * d2y - d1y * d2x
-  if (Math.abs(denom) < 1e-10) return null
+  if (Math.abs(denom) < 1e-10) {
+    // Parallel/colinear segments: still count endpoint touches as intersections.
+    const len2 = d1x * d1x + d1y * d1y
+    if (len2 < 1e-10) return null
+    const endpointT = (p: SketchPoint): number | null => {
+      const px = p.x - p1.x
+      const py = p.y - p1.y
+      const cross = Math.abs(px * d1y - py * d1x)
+      if (cross > EPS) return null
+      const t = (px * d1x + py * d1y) / len2
+      if (t >= -EPS && t <= 1 + EPS) return Math.max(0, Math.min(1, t))
+      return null
+    }
+    const t3 = endpointT(p3)
+    if (t3 !== null) return t3
+    const t4 = endpointT(p4)
+    if (t4 !== null) return t4
+    return null
+  }
   const t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / denom
   const u = ((p3.x - p1.x) * d1y - (p3.y - p1.y) * d1x) / denom
-  const EPS = 1e-6
   if (t >= -EPS && t <= 1 + EPS && u >= -EPS && u <= 1 + EPS) {
     return Math.max(0, Math.min(1, t))
   }
@@ -122,13 +140,13 @@ export function computeCut(
     return { lineId: line.id, cutStart, cutEnd, keeps }
   }
 
-  // Two or more crossings: remove the span between the nearest hits on each side of the cursor.
+  // Two or more crossings: remove the span around the cursor.
+  // If cursor is outside all crossings, allow endpoint-to-nearest-hit trimming.
   const below = ts.filter((t) => t < tCursor)
   const above = ts.filter((t) => t > tCursor)
-  if (below.length === 0 || above.length === 0) return null
-
-  const lo = Math.max(...below)
-  const hi = Math.min(...above)
+  const lo = below.length > 0 ? Math.max(...below) : 0
+  const hi = above.length > 0 ? Math.min(...above) : 1
+  if (hi - lo < EPS) return null
 
   const keeps: Array<{ start: SketchPoint; end: SketchPoint }> = []
   if (lo > EPS) keeps.push({ start: line.start, end: lerp(lo) })
