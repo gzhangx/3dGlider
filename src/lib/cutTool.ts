@@ -1,4 +1,4 @@
-import { SketchElement, SketchLine, SketchRect, SketchPoint } from '../store/modelStore'
+import { SketchArc, SketchElement, SketchLine, SketchRect, SketchPoint } from '../store/modelStore'
 
 function rectCorners(r: SketchRect): SketchPoint[] {
   return [
@@ -92,6 +92,14 @@ function intersectionTs(line: SketchLine, elements: SketchElement[]): number[] {
       }
     } else if (el.type === 'circle') {
       ts.push(...segCircleTs(line.start, line.end, el.center, el.radius))
+    } else if (el.type === 'arc') {
+      const arcTs = segCircleTs(line.start, line.end, el.center, el.radius).filter((t) => {
+        const x = line.start.x + (line.end.x - line.start.x) * t
+        const y = line.start.y + (line.end.y - line.start.y) * t
+        const a = Math.atan2(y - el.center.y, x - el.center.x)
+        return angleInArc(a, el.startAngle, el.endAngle)
+      })
+      ts.push(...arcTs)
     }
   }
   return ts.sort((a, b) => a - b)
@@ -108,7 +116,7 @@ export interface CircleCutResult {
   lineId: string
   cutStart: SketchPoint
   cutEnd: SketchPoint
-  keeps: Array<{ start: SketchPoint; end: SketchPoint }>
+  keeps: SketchArc[]
 }
 
 function normalizeAngle(a: number): number {
@@ -116,6 +124,16 @@ function normalizeAngle(a: number): number {
   let out = a % TAU
   if (out < 0) out += TAU
   return out
+}
+
+function angleInArc(theta: number, start: number, end: number): boolean {
+  const t = normalizeAngle(theta)
+  const s = normalizeAngle(start)
+  const e = normalizeAngle(end)
+  const EPS = 1e-6
+  if (Math.abs(e - s) < EPS) return true
+  if (s <= e) return t >= s - EPS && t <= e + EPS
+  return t >= s - EPS || t <= e + EPS
 }
 
 function circleLineIntersectionAngles(circle: { center: SketchPoint; radius: number }, a: SketchPoint, b: SketchPoint): number[] {
@@ -171,6 +189,25 @@ function circleIntersectionAngles(circle: { id: string; center: SketchPoint; rad
       const ry = (dx * h) / d
       push(Math.atan2((ym + ry) - circle.center.y, (xm + rx) - circle.center.x))
       push(Math.atan2((ym - ry) - circle.center.y, (xm - rx) - circle.center.x))
+    } else if (el.type === 'arc') {
+      const dx = el.center.x - circle.center.x
+      const dy = el.center.y - circle.center.y
+      const d = Math.hypot(dx, dy)
+      const r0 = circle.radius
+      const r1 = el.radius
+      if (d < 1e-8 || d > r0 + r1 + 1e-6 || d < Math.abs(r0 - r1) - 1e-6) continue
+      const a = (r0 * r0 - r1 * r1 + d * d) / (2 * d)
+      const h2 = r0 * r0 - a * a
+      if (h2 < -1e-6) continue
+      const h = Math.sqrt(Math.max(0, h2))
+      const xm = circle.center.x + (a * dx) / d
+      const ym = circle.center.y + (a * dy) / d
+      const p1 = { x: xm + (-dy * h) / d, y: ym + (dx * h) / d }
+      const p2 = { x: xm - (-dy * h) / d, y: ym - (dx * h) / d }
+      const a1Arc = Math.atan2(p1.y - el.center.y, p1.x - el.center.x)
+      const a2Arc = Math.atan2(p2.y - el.center.y, p2.x - el.center.x)
+      if (angleInArc(a1Arc, el.startAngle, el.endAngle)) push(Math.atan2(p1.y - circle.center.y, p1.x - circle.center.x))
+      if (angleInArc(a2Arc, el.startAngle, el.endAngle)) push(Math.atan2(p2.y - circle.center.y, p2.x - circle.center.x))
     }
   }
   return [...new Set(angles.map((x) => Math.round(x * 1e9) / 1e9))].sort((a, b) => a - b)
@@ -198,18 +235,14 @@ export function computeCircleCut(
   const cutStart = pointAt(lo)
   const cutEnd = pointAt(hi)
 
-  const keepArcStart = hi
-  const keepArcEnd = lo + Math.PI * 2
-  const arcLen = keepArcEnd - keepArcStart
-  const SEG_STEP = Math.PI / 24
-  const segCount = Math.max(1, Math.ceil(arcLen / SEG_STEP))
-  const arcPts: SketchPoint[] = []
-  for (let i = 0; i <= segCount; i++) {
-    const a = keepArcStart + (arcLen * i) / segCount
-    arcPts.push(pointAt(a))
-  }
-  const keeps: Array<{ start: SketchPoint; end: SketchPoint }> = []
-  for (let i = 0; i < arcPts.length - 1; i++) keeps.push({ start: arcPts[i], end: arcPts[i + 1] })
+  const keeps: SketchArc[] = [{
+    type: 'arc',
+    id: crypto.randomUUID(),
+    center: circle.center,
+    radius: circle.radius,
+    startAngle: hi,
+    endAngle: lo + Math.PI * 2,
+  }]
 
   return { lineId: circle.id, cutStart, cutEnd, keeps }
 }

@@ -15,7 +15,10 @@ export interface SketchRect {
 export interface SketchCircle {
   type: 'circle'; id: string; center: SketchPoint; radius: number
 }
-export type SketchElement = SketchLine | SketchRect | SketchCircle
+export interface SketchArc {
+  type: 'arc'; id: string; center: SketchPoint; radius: number; startAngle: number; endAngle: number
+}
+export type SketchElement = SketchLine | SketchRect | SketchCircle | SketchArc
 
 export interface Sketch {
   id: string

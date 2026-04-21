@@ -9,6 +9,7 @@ import {
   SketchLine,
   SketchRect,
   SketchCircle,
+  SketchArc,
 } from '../../store/modelStore'
 import {
   PLANE_ROTATION,
@@ -18,6 +19,7 @@ import {
   linePts,
   rectPts,
   circlePts,
+  arcPts,
 } from '../../lib/sketchGeometry'
 import { distToSeg, distToCircle, computeCut, computeCircleCut, CutResult, CircleCutResult } from '../../lib/cutTool'
 
@@ -70,6 +72,8 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: PlaneI
     return <Line points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...cutPassthrough} {...selectProps} />
   if (el.type === 'circle')
     return <Line points={circlePts(el.center, el.radius, plane)} color={color} lineWidth={width} {...cutPassthrough} {...selectProps} />
+  if (el.type === 'arc')
+    return <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane)} color={color} lineWidth={width} {...cutPassthrough} {...selectProps} />
   return null
 }
 
@@ -184,12 +188,17 @@ export function SketchPlane() {
     if (activeTool === 'cut') {
       if (cutPreview && cutTarget) {
         let targetId = cutPreview.lineId
-        let replacements = cutPreview.keeps.map(seg => ({
-          type: 'line' as const,
-          id: crypto.randomUUID(),
-          start: seg.start,
-          end: seg.end,
-        }))
+        let replacements: SketchElement[] = cutPreview.keeps.map((seg) => {
+          if ('start' in seg && 'end' in seg) {
+            return {
+              type: 'line' as const,
+              id: crypto.randomUUID(),
+              start: seg.start,
+              end: seg.end,
+            } satisfies SketchLine
+          }
+          return { ...seg, id: crypto.randomUUID() } satisfies SketchArc
+        })
 
         if (cutTarget.kind === 'rect-edge') {
           targetId = cutTarget.rect.id

@@ -51,3 +51,21 @@ export function circlePts(center: SketchPoint, radius: number, plane: PlaneId, s
   }
   return pts
 }
+
+export function arcPts(
+  center: SketchPoint,
+  radius: number,
+  startAngle: number,
+  endAngle: number,
+  plane: PlaneId,
+  segs = 64,
+) {
+  const pts: [number, number, number][] = []
+  const span = Math.max(0, endAngle - startAngle)
+  const count = Math.max(1, Math.ceil((span / (Math.PI * 2)) * segs))
+  for (let i = 0; i <= count; i++) {
+    const a = startAngle + (span * i) / count
+    pts.push(worldPt({ x: center.x + Math.cos(a) * radius, y: center.y + Math.sin(a) * radius }, plane))
+  }
+  return pts
+}
