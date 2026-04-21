@@ -32,7 +32,19 @@ function Dot({ pos, color, size = 0.06 }: { pos: [number, number, number]; color
   )
 }
 
+function rectCorners(rect: SketchRect): SketchPoint[] {
+  return [
+    { x: rect.start.x, y: rect.start.y },
+    { x: rect.end.x, y: rect.start.y },
+    { x: rect.end.x, y: rect.end.y },
+    { x: rect.start.x, y: rect.end.y },
+  ]
+}
+
 // ─── single element renderer (with hover/select) ──────────────────────────────
+
+/** Let the invisible sketch plane receive hits in cut mode (Line2 otherwise wins the raycast). */
+const noopRaycast: () => void = () => {}
 
 function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: PlaneId; highlighted?: boolean }) {
   const { activeTool, selectedElementId, selectElement } = useModelStore()
@@ -50,12 +62,14 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: PlaneI
       }
     : {}
 
+  const cutPassthrough = activeTool === 'cut' ? { raycast: noopRaycast } : {}
+
   if (el.type === 'line')
-    return <Line points={linePts(el.start, el.end, plane)} color={color} lineWidth={width} {...selectProps} />
+    return <Line points={linePts(el.start, el.end, plane)} color={color} lineWidth={width} {...cutPassthrough} {...selectProps} />
   if (el.type === 'rect')
-    return <Line points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...selectProps} />
+    return <Line points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...cutPassthrough} {...selectProps} />
   if (el.type === 'circle')
-    return <Line points={circlePts(el.center, el.radius, plane)} color={color} lineWidth={width} {...selectProps} />
+    return <Line points={circlePts(el.center, el.radius, plane)} color={color} lineWidth={width} {...cutPassthrough} {...selectProps} />
   return null
 }
 
@@ -71,8 +85,13 @@ export function SketchPlane() {
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
   const [cursorPt, setCursorPt] = useState<SketchPoint | null>(null)
   const [cutPreview, setCutPreview] = useState<CutResult | null>(null)
+  const [cutTarget, setCutTarget] = useState<
+    | { kind: 'line'; line: SketchLine }
+    | { kind: 'rect-edge'; rect: SketchRect; edgeIndex: number }
+    | null
+  >(null)
 
-  useEffect(() => { setStartPt(null); setCursorPt(null); setCutPreview(null) }, [activeTool])
+  useEffect(() => { setStartPt(null); setCursorPt(null); setCutPreview(null); setCutTarget(null) }, [activeTool])
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
@@ -107,14 +126,42 @@ export function SketchPlane() {
     if (activeTool === 'cut') {
       const raw = getRaw(e)
       const THRESHOLD = 0.5
-      let nearest: SketchLine | null = null
+      let nearest: { kind: 'line'; line: SketchLine } | { kind: 'rect-edge'; rect: SketchRect; edgeIndex: number } | null = null
       let minDist = THRESHOLD
       for (const el of sketchElements) {
-        if (el.type !== 'line') continue
-        const d = distToSeg(raw, el.start, el.end)
-        if (d < minDist) { minDist = d; nearest = el }
+        if (el.type === 'line') {
+          const d = distToSeg(raw, el.start, el.end)
+          if (d < minDist) { minDist = d; nearest = { kind: 'line', line: el } }
+          continue
+        }
+        if (el.type === 'rect') {
+          const c = rectCorners(el)
+          for (let i = 0; i < 4; i++) {
+            const d = distToSeg(raw, c[i], c[(i + 1) % 4])
+            if (d < minDist) {
+              minDist = d
+              nearest = { kind: 'rect-edge', rect: el, edgeIndex: i }
+            }
+          }
+        }
       }
-      setCutPreview(nearest ? computeCut(nearest, raw, sketchElements) : null)
+      if (!nearest) {
+        setCutPreview(null)
+        setCutTarget(null)
+      } else if (nearest.kind === 'line') {
+        setCutPreview(computeCut(nearest.line, raw, sketchElements))
+        setCutTarget(nearest)
+      } else {
+        const c = rectCorners(nearest.rect)
+        const probe: SketchLine = {
+          type: 'line',
+          id: nearest.rect.id,
+          start: c[nearest.edgeIndex],
+          end: c[(nearest.edgeIndex + 1) % 4],
+        }
+        setCutPreview(computeCut(probe, raw, sketchElements))
+        setCutTarget(nearest)
+      }
     }
   }
 
@@ -122,17 +169,35 @@ export function SketchPlane() {
     e.stopPropagation()
 
     if (activeTool === 'cut') {
-      if (cutPreview) {
+      if (cutPreview && cutTarget) {
+        let targetId = cutPreview.lineId
+        let replacements = cutPreview.keeps.map(seg => ({
+          type: 'line' as const,
+          id: crypto.randomUUID(),
+          start: seg.start,
+          end: seg.end,
+        }))
+
+        if (cutTarget.kind === 'rect-edge') {
+          targetId = cutTarget.rect.id
+          const c = rectCorners(cutTarget.rect)
+          const untouchedSides = [0, 1, 2, 3]
+            .filter(i => i !== cutTarget.edgeIndex)
+            .map(i => ({
+              type: 'line' as const,
+              id: crypto.randomUUID(),
+              start: c[i],
+              end: c[(i + 1) % 4],
+            }))
+          replacements = [...untouchedSides, ...replacements]
+        }
+
         cutSketchElement(
-          cutPreview.lineId,
-          cutPreview.keeps.map(seg => ({
-            type: 'line' as const,
-            id: crypto.randomUUID(),
-            start: seg.start,
-            end: seg.end,
-          })),
+          targetId,
+          replacements,
         )
         setCutPreview(null)
+        setCutTarget(null)
       }
       return
     }

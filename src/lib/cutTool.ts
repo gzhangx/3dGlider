@@ -20,7 +20,10 @@ function segSegT(
   if (Math.abs(denom) < 1e-10) return null
   const t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / denom
   const u = ((p3.x - p1.x) * d1y - (p3.y - p1.y) * d1x) / denom
-  if (t > 1e-6 && t < 1 - 1e-6 && u >= -1e-6 && u <= 1 + 1e-6) return t
+  const EPS = 1e-6
+  if (t >= -EPS && t <= 1 + EPS && u >= -EPS && u <= 1 + EPS) {
+    return Math.max(0, Math.min(1, t))
+  }
   return null
 }
 
@@ -36,9 +39,11 @@ function segCircleTs(
   const c = fx * fx + fy * fy - radius * radius
   const disc = b * b - 4 * a * c
   if (disc < 0) return []
+  const EPS = 1e-6
   return [-1, 1]
     .map(s => (-b + s * Math.sqrt(disc)) / (2 * a))
-    .filter(t => t > 1e-6 && t < 1 - 1e-6)
+    .filter(t => t >= -EPS && t <= 1 + EPS)
+    .map(t => Math.max(0, Math.min(1, t)))
 }
 
 export function distToSeg(p: SketchPoint, a: SketchPoint, b: SketchPoint): number {
@@ -82,25 +87,49 @@ export function computeCut(
   cursorPt: SketchPoint,
   elements: SketchElement[],
 ): CutResult | null {
-  const ts = intersectionTs(line, elements)
-  if (ts.length < 2) return null
+  const rawTs = intersectionTs(line, elements)
+  const ts = [...new Set(rawTs.map((t) => Math.round(t * 1e9) / 1e9))].sort((a, b) => a - b)
+  if (ts.length === 0) return null
 
-  // Project cursor onto line to get t parameter
   const dx = line.end.x - line.start.x, dy = line.end.y - line.start.y
   const len2 = dx * dx + dy * dy
   if (len2 < 1e-10) return null
-  const tCursor = ((cursorPt.x - line.start.x) * dx + (cursorPt.y - line.start.y) * dy) / len2
+  const lerp = (t: number): SketchPoint => ({ x: line.start.x + t * dx, y: line.start.y + t * dy })
 
-  // Nearest intersection on each side of cursor
-  const below = ts.filter(t => t < tCursor)
-  const above = ts.filter(t => t > tCursor)
+  let tCursor = ((cursorPt.x - line.start.x) * dx + (cursorPt.y - line.start.y) * dy) / len2
+  tCursor = Math.max(0, Math.min(1, tCursor))
+
+  const EPS = 1e-4
+
+  // One crossing (e.g. two lines meet once): trim from that hit toward the open end past the cursor.
+  if (ts.length === 1) {
+    const tHit = ts[0]
+    let tc = tCursor
+    if (Math.abs(tc - tHit) < 1e-5) tc = Math.min(1, tHit + 1e-3)
+
+    const keeps: Array<{ start: SketchPoint; end: SketchPoint }> = []
+    let cutStart: SketchPoint
+    let cutEnd: SketchPoint
+    if (tc > tHit) {
+      cutStart = lerp(tHit)
+      cutEnd = line.end
+      if (tHit > EPS) keeps.push({ start: line.start, end: lerp(tHit) })
+    } else {
+      cutStart = line.start
+      cutEnd = lerp(tHit)
+      if (tHit < 1 - EPS) keeps.push({ start: lerp(tHit), end: line.end })
+    }
+    return { lineId: line.id, cutStart, cutEnd, keeps }
+  }
+
+  // Two or more crossings: remove the span between the nearest hits on each side of the cursor.
+  const below = ts.filter((t) => t < tCursor)
+  const above = ts.filter((t) => t > tCursor)
   if (below.length === 0 || above.length === 0) return null
 
   const lo = Math.max(...below)
   const hi = Math.min(...above)
-  const lerp = (t: number): SketchPoint => ({ x: line.start.x + t * dx, y: line.start.y + t * dy })
 
-  const EPS = 1e-4
   const keeps: Array<{ start: SketchPoint; end: SketchPoint }> = []
   if (lo > EPS) keeps.push({ start: line.start, end: lerp(lo) })
   if (hi < 1 - EPS) keeps.push({ start: lerp(hi), end: line.end })
