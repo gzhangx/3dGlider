@@ -19,7 +19,7 @@ import {
   rectPts,
   circlePts,
 } from '../../lib/sketchGeometry'
-import { distToSeg, computeCut, CutResult } from '../../lib/cutTool'
+import { distToSeg, distToCircle, computeCut, computeCircleCut, CutResult, CircleCutResult } from '../../lib/cutTool'
 
 // ─── dot marker ──────────────────────────────────────────────────────────────
 
@@ -84,10 +84,11 @@ export function SketchPlane() {
 
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
   const [cursorPt, setCursorPt] = useState<SketchPoint | null>(null)
-  const [cutPreview, setCutPreview] = useState<CutResult | null>(null)
+  const [cutPreview, setCutPreview] = useState<CutResult | CircleCutResult | null>(null)
   const [cutTarget, setCutTarget] = useState<
     | { kind: 'line'; line: SketchLine }
     | { kind: 'rect-edge'; rect: SketchRect; edgeIndex: number }
+    | { kind: 'circle'; circle: SketchCircle }
     | null
   >(null)
 
@@ -126,7 +127,11 @@ export function SketchPlane() {
     if (activeTool === 'cut') {
       const raw = getRaw(e)
       const THRESHOLD = 0.5
-      let nearest: { kind: 'line'; line: SketchLine } | { kind: 'rect-edge'; rect: SketchRect; edgeIndex: number } | null = null
+      let nearest:
+        | { kind: 'line'; line: SketchLine }
+        | { kind: 'rect-edge'; rect: SketchRect; edgeIndex: number }
+        | { kind: 'circle'; circle: SketchCircle }
+        | null = null
       let minDist = THRESHOLD
       for (const el of sketchElements) {
         if (el.type === 'line') {
@@ -144,6 +149,10 @@ export function SketchPlane() {
             }
           }
         }
+        if (el.type === 'circle') {
+          const d = distToCircle(raw, el.center, el.radius)
+          if (d < minDist) { minDist = d; nearest = { kind: 'circle', circle: el } }
+        }
       }
       if (!nearest) {
         setCutPreview(null)
@@ -152,14 +161,18 @@ export function SketchPlane() {
         setCutPreview(computeCut(nearest.line, raw, sketchElements))
         setCutTarget(nearest)
       } else {
-        const c = rectCorners(nearest.rect)
-        const probe: SketchLine = {
-          type: 'line',
-          id: nearest.rect.id,
-          start: c[nearest.edgeIndex],
-          end: c[(nearest.edgeIndex + 1) % 4],
+        if (nearest.kind === 'rect-edge') {
+          const c = rectCorners(nearest.rect)
+          const probe: SketchLine = {
+            type: 'line',
+            id: nearest.rect.id,
+            start: c[nearest.edgeIndex],
+            end: c[(nearest.edgeIndex + 1) % 4],
+          }
+          setCutPreview(computeCut(probe, raw, sketchElements))
+        } else {
+          setCutPreview(computeCircleCut(nearest.circle, raw, sketchElements))
         }
-        setCutPreview(computeCut(probe, raw, sketchElements))
         setCutTarget(nearest)
       }
     }
@@ -190,6 +203,8 @@ export function SketchPlane() {
               end: c[(i + 1) % 4],
             }))
           replacements = [...untouchedSides, ...replacements]
+        } else if (cutTarget.kind === 'circle') {
+          targetId = cutTarget.circle.id
         }
 
         cutSketchElement(

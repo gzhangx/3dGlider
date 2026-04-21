@@ -72,6 +72,10 @@ export function distToSeg(p: SketchPoint, a: SketchPoint, b: SketchPoint): numbe
   return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy)
 }
 
+export function distToCircle(p: SketchPoint, center: SketchPoint, radius: number): number {
+  return Math.abs(Math.hypot(p.x - center.x, p.y - center.y) - radius)
+}
+
 // All t values ∈ (0,1) on `line` where it intersects other elements
 function intersectionTs(line: SketchLine, elements: SketchElement[]): number[] {
   const ts: number[] = []
@@ -98,6 +102,116 @@ export interface CutResult {
   cutStart: SketchPoint
   cutEnd: SketchPoint
   keeps: Array<{ start: SketchPoint; end: SketchPoint }>
+}
+
+export interface CircleCutResult {
+  lineId: string
+  cutStart: SketchPoint
+  cutEnd: SketchPoint
+  keeps: Array<{ start: SketchPoint; end: SketchPoint }>
+}
+
+function normalizeAngle(a: number): number {
+  const TAU = Math.PI * 2
+  let out = a % TAU
+  if (out < 0) out += TAU
+  return out
+}
+
+function circleLineIntersectionAngles(circle: { center: SketchPoint; radius: number }, a: SketchPoint, b: SketchPoint): number[] {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const fx = a.x - circle.center.x
+  const fy = a.y - circle.center.y
+  const A = dx * dx + dy * dy
+  if (A < 1e-10) return []
+  const B = 2 * (fx * dx + fy * dy)
+  const C = fx * fx + fy * fy - circle.radius * circle.radius
+  const disc = B * B - 4 * A * C
+  if (disc < 0) return []
+  const EPS = 1e-6
+  const sqrtDisc = Math.sqrt(Math.max(0, disc))
+  const us = [(-B - sqrtDisc) / (2 * A), (-B + sqrtDisc) / (2 * A)]
+  return us
+    .filter((u) => u >= -EPS && u <= 1 + EPS)
+    .map((u) => {
+      const uu = Math.max(0, Math.min(1, u))
+      const x = a.x + uu * dx
+      const y = a.y + uu * dy
+      return normalizeAngle(Math.atan2(y - circle.center.y, x - circle.center.x))
+    })
+}
+
+function circleIntersectionAngles(circle: { id: string; center: SketchPoint; radius: number }, elements: SketchElement[]): number[] {
+  const angles: number[] = []
+  const push = (a: number) => angles.push(normalizeAngle(a))
+  for (const el of elements) {
+    if (el.id === circle.id) continue
+    if (el.type === 'line') {
+      for (const a of circleLineIntersectionAngles(circle, el.start, el.end)) push(a)
+    } else if (el.type === 'rect') {
+      const c = rectCorners(el)
+      for (let i = 0; i < 4; i++) {
+        for (const a of circleLineIntersectionAngles(circle, c[i], c[(i + 1) % 4])) push(a)
+      }
+    } else if (el.type === 'circle') {
+      const dx = el.center.x - circle.center.x
+      const dy = el.center.y - circle.center.y
+      const d = Math.hypot(dx, dy)
+      const r0 = circle.radius
+      const r1 = el.radius
+      if (d < 1e-8 || d > r0 + r1 + 1e-6 || d < Math.abs(r0 - r1) - 1e-6) continue
+      const a = (r0 * r0 - r1 * r1 + d * d) / (2 * d)
+      const h2 = r0 * r0 - a * a
+      if (h2 < -1e-6) continue
+      const h = Math.sqrt(Math.max(0, h2))
+      const xm = circle.center.x + (a * dx) / d
+      const ym = circle.center.y + (a * dy) / d
+      const rx = (-dy * h) / d
+      const ry = (dx * h) / d
+      push(Math.atan2((ym + ry) - circle.center.y, (xm + rx) - circle.center.x))
+      push(Math.atan2((ym - ry) - circle.center.y, (xm - rx) - circle.center.x))
+    }
+  }
+  return [...new Set(angles.map((x) => Math.round(x * 1e9) / 1e9))].sort((a, b) => a - b)
+}
+
+export function computeCircleCut(
+  circle: { id: string; center: SketchPoint; radius: number },
+  cursorPt: SketchPoint,
+  elements: SketchElement[],
+): CircleCutResult | null {
+  const angles = circleIntersectionAngles(circle, elements)
+  if (angles.length < 2) return null
+  const cAng = normalizeAngle(Math.atan2(cursorPt.y - circle.center.y, cursorPt.x - circle.center.x))
+
+  const below = angles.filter((a) => a < cAng)
+  const above = angles.filter((a) => a > cAng)
+  const lo = below.length > 0 ? Math.max(...below) : angles[angles.length - 1] - Math.PI * 2
+  const hi = above.length > 0 ? Math.min(...above) : angles[0] + Math.PI * 2
+  if (hi - lo < 1e-5) return null
+
+  const pointAt = (a: number): SketchPoint => ({
+    x: circle.center.x + Math.cos(a) * circle.radius,
+    y: circle.center.y + Math.sin(a) * circle.radius,
+  })
+  const cutStart = pointAt(lo)
+  const cutEnd = pointAt(hi)
+
+  const keepArcStart = hi
+  const keepArcEnd = lo + Math.PI * 2
+  const arcLen = keepArcEnd - keepArcStart
+  const SEG_STEP = Math.PI / 24
+  const segCount = Math.max(1, Math.ceil(arcLen / SEG_STEP))
+  const arcPts: SketchPoint[] = []
+  for (let i = 0; i <= segCount; i++) {
+    const a = keepArcStart + (arcLen * i) / segCount
+    arcPts.push(pointAt(a))
+  }
+  const keeps: Array<{ start: SketchPoint; end: SketchPoint }> = []
+  for (let i = 0; i < arcPts.length - 1; i++) keeps.push({ start: arcPts[i], end: arcPts[i + 1] })
+
+  return { lineId: circle.id, cutStart, cutEnd, keeps }
 }
 
 export function computeCut(
