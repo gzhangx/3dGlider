@@ -41,6 +41,7 @@ interface ModelState {
   sketches: Sketch[]
   extrudes: ExtrudeFeature[]
   selectedElementId: string | null
+  editingSketchId: string | null
 
   setHoveredPlane: (plane: PlaneId | null) => void
   setActiveTool: (tool: SketchTool) => void
@@ -63,6 +64,7 @@ export const useModelStore = create<ModelState>((set) => ({
   sketches: [],
   extrudes: [],
   selectedElementId: null,
+  editingSketchId: null,
 
   setHoveredPlane: (hoveredPlane) => set({ hoveredPlane }),
   setActiveTool: (activeTool) => set({ activeTool, selectedElementId: null }),
@@ -103,15 +105,38 @@ export const useModelStore = create<ModelState>((set) => ({
         activeTool: 'select',
         sketchElements: last ? last.elements : [],
         selectedElementId: null,
+        editingSketchId: last ? last.id : null,
       }
     }),
 
   exitSketch: () =>
     set((s) => {
-      const committed =
-        s.activePlane && s.sketchElements.length > 0
-          ? [...s.sketches, { id: crypto.randomUUID(), plane: s.activePlane, elements: s.sketchElements }]
-          : s.sketches
-      return { mode: 'view', activePlane: null, activeTool: 'select', sketchElements: [], selectedElementId: null, sketches: committed }
+      let sketches = s.sketches
+      if (s.activePlane && s.sketchElements.length > 0) {
+        if (s.editingSketchId) {
+          // Update existing sketch instead of creating a duplicate entry.
+          sketches = sketches.map((sk) =>
+            sk.id === s.editingSketchId
+              ? { ...sk, plane: s.activePlane!, elements: s.sketchElements }
+              : sk,
+          )
+        } else {
+          // New sketch on this plane.
+          sketches = [...sketches, { id: crypto.randomUUID(), plane: s.activePlane, elements: s.sketchElements }]
+        }
+      } else if (s.editingSketchId) {
+        // If user cleared all elements while editing, delete the sketch.
+        sketches = sketches.filter((sk) => sk.id !== s.editingSketchId)
+      }
+
+      return {
+        mode: 'view',
+        activePlane: null,
+        activeTool: 'select',
+        sketchElements: [],
+        selectedElementId: null,
+        editingSketchId: null,
+        sketches,
+      }
     }),
 }))
