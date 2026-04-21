@@ -76,6 +76,22 @@ export function distToCircle(p: SketchPoint, center: SketchPoint, radius: number
   return Math.abs(Math.hypot(p.x - center.x, p.y - center.y) - radius)
 }
 
+export function distToArc(p: SketchPoint, arc: SketchArc): number {
+  const a = Math.atan2(p.y - arc.center.y, p.x - arc.center.x)
+  if (angleInArc(a, arc.startAngle, arc.endAngle)) {
+    return distToCircle(p, arc.center, arc.radius)
+  }
+  const s = {
+    x: arc.center.x + Math.cos(arc.startAngle) * arc.radius,
+    y: arc.center.y + Math.sin(arc.startAngle) * arc.radius,
+  }
+  const e = {
+    x: arc.center.x + Math.cos(arc.endAngle) * arc.radius,
+    y: arc.center.y + Math.sin(arc.endAngle) * arc.radius,
+  }
+  return Math.min(Math.hypot(p.x - s.x, p.y - s.y), Math.hypot(p.x - e.x, p.y - e.y))
+}
+
 // All t values ∈ (0,1) on `line` where it intersects other elements
 function intersectionTs(line: SketchLine, elements: SketchElement[]): number[] {
   const ts: number[] = []
@@ -113,6 +129,13 @@ export interface CutResult {
 }
 
 export interface CircleCutResult {
+  lineId: string
+  cutStart: SketchPoint
+  cutEnd: SketchPoint
+  keeps: SketchArc[]
+}
+
+export interface ArcCutResult {
   lineId: string
   cutStart: SketchPoint
   cutEnd: SketchPoint
@@ -245,6 +268,66 @@ export function computeCircleCut(
   }]
 
   return { lineId: circle.id, cutStart, cutEnd, keeps }
+}
+
+export function computeArcCut(
+  arc: SketchArc,
+  cursorPt: SketchPoint,
+  elements: SketchElement[],
+): ArcCutResult | null {
+  const allAngles = circleIntersectionAngles({ id: arc.id, center: arc.center, radius: arc.radius }, elements)
+    .filter((a) => angleInArc(a, arc.startAngle, arc.endAngle))
+    .sort((a, b) => a - b)
+  if (allAngles.length === 0) return null
+
+  const cAng = normalizeAngle(Math.atan2(cursorPt.y - arc.center.y, cursorPt.x - arc.center.x))
+  if (!angleInArc(cAng, arc.startAngle, arc.endAngle)) return null
+
+  const start = normalizeAngle(arc.startAngle)
+  let end = normalizeAngle(arc.endAngle)
+  if (end <= start) end += Math.PI * 2
+  const toUnwrapped = (a: number) => {
+    let out = normalizeAngle(a)
+    if (out < start) out += Math.PI * 2
+    return out
+  }
+  const c = toUnwrapped(cAng)
+  const xs = allAngles.map(toUnwrapped).filter((x) => x >= start - 1e-6 && x <= end + 1e-6).sort((a, b) => a - b)
+
+  const below = xs.filter((x) => x < c)
+  const above = xs.filter((x) => x > c)
+  const lo = below.length > 0 ? Math.max(...below) : start
+  const hi = above.length > 0 ? Math.min(...above) : end
+  if (hi - lo < 1e-5) return null
+
+  const pointAt = (a: number): SketchPoint => ({
+    x: arc.center.x + Math.cos(a) * arc.radius,
+    y: arc.center.y + Math.sin(a) * arc.radius,
+  })
+
+  const keeps: SketchArc[] = []
+  if (lo - start > 1e-5) {
+    keeps.push({
+      type: 'arc',
+      id: crypto.randomUUID(),
+      center: arc.center,
+      radius: arc.radius,
+      startAngle: start,
+      endAngle: lo,
+    })
+  }
+  if (end - hi > 1e-5) {
+    keeps.push({
+      type: 'arc',
+      id: crypto.randomUUID(),
+      center: arc.center,
+      radius: arc.radius,
+      startAngle: hi,
+      endAngle: end,
+    })
+  }
+
+  return { lineId: arc.id, cutStart: pointAt(lo), cutEnd: pointAt(hi), keeps }
 }
 
 export function computeCut(

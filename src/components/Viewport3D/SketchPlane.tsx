@@ -21,7 +21,7 @@ import {
   circlePts,
   arcPts,
 } from '../../lib/sketchGeometry'
-import { distToSeg, distToCircle, computeCut, computeCircleCut, CutResult, CircleCutResult } from '../../lib/cutTool'
+import { distToSeg, distToCircle, distToArc, computeCut, computeCircleCut, computeArcCut, CutResult, CircleCutResult, ArcCutResult } from '../../lib/cutTool'
 
 // ─── dot marker ──────────────────────────────────────────────────────────────
 
@@ -88,11 +88,12 @@ export function SketchPlane() {
 
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
   const [cursorPt, setCursorPt] = useState<SketchPoint | null>(null)
-  const [cutPreview, setCutPreview] = useState<CutResult | CircleCutResult | null>(null)
+  const [cutPreview, setCutPreview] = useState<CutResult | CircleCutResult | ArcCutResult | null>(null)
   const [cutTarget, setCutTarget] = useState<
     | { kind: 'line'; line: SketchLine }
     | { kind: 'rect-edge'; rect: SketchRect; edgeIndex: number }
     | { kind: 'circle'; circle: SketchCircle }
+    | { kind: 'arc'; arc: SketchArc }
     | null
   >(null)
 
@@ -135,6 +136,7 @@ export function SketchPlane() {
         | { kind: 'line'; line: SketchLine }
         | { kind: 'rect-edge'; rect: SketchRect; edgeIndex: number }
         | { kind: 'circle'; circle: SketchCircle }
+        | { kind: 'arc'; arc: SketchArc }
         | null = null
       let minDist = THRESHOLD
       for (const el of sketchElements) {
@@ -157,6 +159,10 @@ export function SketchPlane() {
           const d = distToCircle(raw, el.center, el.radius)
           if (d < minDist) { minDist = d; nearest = { kind: 'circle', circle: el } }
         }
+        if (el.type === 'arc') {
+          const d = distToArc(raw, el)
+          if (d < minDist) { minDist = d; nearest = { kind: 'arc', arc: el } }
+        }
       }
       if (!nearest) {
         setCutPreview(null)
@@ -174,8 +180,10 @@ export function SketchPlane() {
             end: c[(nearest.edgeIndex + 1) % 4],
           }
           setCutPreview(computeCut(probe, raw, sketchElements))
-        } else {
+        } else if (nearest.kind === 'circle') {
           setCutPreview(computeCircleCut(nearest.circle, raw, sketchElements))
+        } else {
+          setCutPreview(computeArcCut(nearest.arc, raw, sketchElements))
         }
         setCutTarget(nearest)
       }
@@ -214,6 +222,8 @@ export function SketchPlane() {
           replacements = [...untouchedSides, ...replacements]
         } else if (cutTarget.kind === 'circle') {
           targetId = cutTarget.circle.id
+        } else if (cutTarget.kind === 'arc') {
+          targetId = cutTarget.arc.id
         }
 
         cutSketchElement(
