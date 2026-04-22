@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Line } from '@react-three/drei'
 import { ThreeEvent } from '@react-three/fiber'
 import { useModelStore, Sketch, SketchElement, PlaneId } from '../../store/modelStore'
-import { linePts, rectPts, circlePts } from '../../lib/sketchGeometry'
+import { linePts, rectPts, circlePts, arcPts } from '../../lib/sketchGeometry'
 
 function SketchEl({ el, plane }: { el: SketchElement; plane: PlaneId }) {
   const { mode, activeTool, selectedElementId, selectElement } = useModelStore()
@@ -27,6 +27,8 @@ function SketchEl({ el, plane }: { el: SketchElement; plane: PlaneId }) {
     return <Line points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...selectProps} />
   if (el.type === 'circle')
     return <Line points={circlePts(el.center, el.radius, plane)} color={color} lineWidth={width} {...selectProps} />
+  if (el.type === 'arc')
+    return <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane)} color={color} lineWidth={width} {...selectProps} />
   return null
 }
 
