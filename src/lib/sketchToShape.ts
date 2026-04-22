@@ -167,7 +167,7 @@ export function sketchElementsToShape(
   elements: SketchElement[],
   plane: PlaneId,
 ): THREE.Shape[] {
-  const shapes: THREE.Shape[] = []
+  const rawShapes: THREE.Shape[] = []
 
   // ── Rectangles ───────────────────────────────────────────────────────────
   for (const r of elements.filter((e): e is SketchRect => e.type === 'rect')) {
@@ -179,7 +179,7 @@ export function sketchElementsToShape(
     shape.lineTo(...pt(x1, y1, plane))
     shape.lineTo(...pt(x0, y1, plane))
     shape.closePath()
-    shapes.push(shape)
+    rawShapes.push(shape)
   }
 
   // ── Circles ───────────────────────────────────────────────────────────────
@@ -187,7 +187,7 @@ export function sketchElementsToShape(
     const shape = new THREE.Shape()
     const [cx, cy] = pt(c.center.x, c.center.y, plane)
     shape.absarc(cx, cy, c.radius, 0, Math.PI * 2, false)
-    shapes.push(shape)
+    rawShapes.push(shape)
   }
 
   // ── Full arcs (treated as circles) ─────────────────────────────────────────
@@ -204,7 +204,7 @@ export function sketchElementsToShape(
     const shape = new THREE.Shape()
     const [cx, cy] = pt(a.center.x, a.center.y, plane)
     shape.absarc(cx, cy, a.radius, 0, TAU, false)
-    shapes.push(shape)
+    rawShapes.push(shape)
   }
 
   // ── Closed line loop ──────────────────────────────────────────────────────
@@ -216,7 +216,7 @@ export function sketchElementsToShape(
       shape.moveTo(...pt(loop[0].x, loop[0].y, plane))
       for (let i = 1; i < loop.length; i++) shape.lineTo(...pt(loop[i].x, loop[i].y, plane))
       shape.closePath()
-      shapes.push(shape)
+      rawShapes.push(shape)
     }
   }
 
@@ -250,9 +250,65 @@ export function sketchElementsToShape(
         cur = next
       }
       shape.closePath()
-      shapes.push(shape)
+      rawShapes.push(shape)
     }
   }
 
-  return shapes
+  // ── Holes: nest inner shapes into outer shapes ─────────────────────────────
+  const poly = (s: THREE.Shape) => s.getPoints(96).map((p) => ({ x: p.x, y: p.y }))
+  const area = (pts: Array<{ x: number; y: number }>) => {
+    let a = 0
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length
+      a += pts[i].x * pts[j].y - pts[j].x * pts[i].y
+    }
+    return a / 2
+  }
+  const pointInPoly = (p: { x: number; y: number }, pts: Array<{ x: number; y: number }>) => {
+    let inside = false
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const xi = pts[i].x, yi = pts[i].y
+      const xj = pts[j].x, yj = pts[j].y
+      const intersect =
+        yi > p.y !== yj > p.y &&
+        p.x < ((xj - xi) * (p.y - yi)) / (yj - yi + 1e-12) + xi
+      if (intersect) inside = !inside
+    }
+    return inside
+  }
+
+  const items = rawShapes
+    .map((s, idx) => {
+      const pts = poly(s)
+      return { idx, shape: s, pts, absArea: Math.abs(area(pts)) }
+    })
+    .filter((it) => it.pts.length >= 3 && it.absArea > 1e-6)
+
+  // Assign each shape to the smallest containing outer (if any)
+  const parent: Array<number | null> = new Array(items.length).fill(null)
+  for (let i = 0; i < items.length; i++) {
+    const test = items[i].pts[0]
+    let best: { j: number; absArea: number } | null = null
+    for (let j = 0; j < items.length; j++) {
+      if (i === j) continue
+      if (items[j].absArea <= items[i].absArea + 1e-9) continue
+      if (pointInPoly(test, items[j].pts)) {
+        if (!best || items[j].absArea < best.absArea) best = { j, absArea: items[j].absArea }
+      }
+    }
+    parent[i] = best ? best.j : null
+  }
+
+  const outers: THREE.Shape[] = []
+  for (let i = 0; i < items.length; i++) {
+    const p = parent[i]
+    if (p === null) continue
+    // add as hole into its parent shape
+    items[p].shape.holes.push(items[i].shape)
+  }
+  for (let i = 0; i < items.length; i++) {
+    if (parent[i] === null) outers.push(items[i].shape)
+  }
+
+  return outers
 }
