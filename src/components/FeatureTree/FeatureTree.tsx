@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { useModelStore, Sketch } from '../../store/modelStore'
+import { useModelStore, Sketch, PlaneId } from '../../store/modelStore'
 import { sketchElementsToShape } from '../../lib/sketchToShape'
 import styles from './FeatureTree.module.css'
 
 function SketchRow({ sketch }: { sketch: Sketch }) {
-  const { extrudes, addExtrude, deleteExtrude, enterSketch } = useModelStore()
+  const { extrudes, addExtrude, deleteExtrude, editSketch } = useModelStore()
   const [depth, setDepth] = useState('5')
 
   const existing = extrudes.filter((e) => e.sketchId === sketch.id)
@@ -26,7 +26,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
         <button
           className={styles.editBtn}
           title="Re-open sketch"
-          onClick={() => enterSketch(sketch.plane)}
+          onClick={() => editSketch(sketch.id)}
         >
           ✎
         </button>
@@ -72,12 +72,42 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   )
 }
 
+function NewSketchRow() {
+  const { mode, startNewSketch } = useModelStore()
+  const [plane, setPlane] = useState<PlaneId>('XY')
+
+  return (
+    <div className={styles.newSketchRow}>
+      <select
+        className={styles.planeSelect}
+        value={plane}
+        disabled={mode === 'sketch'}
+        onChange={(e) => setPlane(e.target.value as PlaneId)}
+        title="Sketch plane"
+      >
+        <option value="XY">XY</option>
+        <option value="XZ">XZ</option>
+        <option value="YZ">YZ</option>
+      </select>
+      <button
+        className={styles.newSketchBtn}
+        onClick={() => startNewSketch(plane)}
+        disabled={mode === 'sketch'}
+        title="Create a new sketch"
+      >
+        + New Sketch
+      </button>
+    </div>
+  )
+}
+
 export function FeatureTree() {
   const { sketches } = useModelStore()
 
   return (
     <aside className={styles.panel}>
       <span className={styles.heading}>Features</span>
+      <NewSketchRow />
       {sketches.length === 0 && (
         <span className={styles.empty}>No sketches yet</span>
       )}

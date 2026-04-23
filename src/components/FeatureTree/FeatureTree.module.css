@@ -26,6 +26,48 @@
   padding: 4px;
 }
 
+.newSketchRow {
+  display: flex;
+  gap: 6px;
+  padding: 0 4px 8px;
+}
+
+.planeSelect {
+  width: 56px;
+  padding: 3px 4px;
+  background: #0e0e24;
+  border: 1px solid #334;
+  border-radius: 3px;
+  color: #ccd;
+  font-size: 12px;
+}
+
+.planeSelect:focus {
+  outline: none;
+  border-color: #4488ff;
+}
+
+.newSketchBtn {
+  flex: 1;
+  padding: 4px 8px;
+  background: #1d2f5c;
+  border: 1px solid #335088;
+  border-radius: 4px;
+  color: #aecdff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.newSketchBtn:hover:enabled {
+  background: #27417e;
+}
+
+.newSketchBtn:disabled,
+.planeSelect:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* ── Sketch group ── */
 .sketchGroup {
   display: flex;

@@ -51,7 +51,8 @@ interface ModelState {
   cutSketchElement: (id: string, replacements: SketchElement[]) => void
   addExtrude: (sketchId: string, depth: number) => void
   deleteExtrude: (id: string) => void
-  enterSketch: (plane: PlaneId) => void
+  startNewSketch: (plane: PlaneId) => void
+  editSketch: (sketchId: string) => void
   exitSketch: () => void
 }
 
@@ -94,18 +95,27 @@ export const useModelStore = create<ModelState>((set) => ({
   deleteExtrude: (id) =>
     set((s) => ({ extrudes: s.extrudes.filter((e) => e.id !== id) })),
 
-  enterSketch: (plane) =>
+  startNewSketch: (plane) =>
+    set({
+      mode: 'sketch',
+      activePlane: plane,
+      activeTool: 'select',
+      sketchElements: [],
+      selectedElementId: null,
+      editingSketchId: null,
+    }),
+
+  editSketch: (sketchId) =>
     set((s) => {
-      // Re-entering sketch should load existing geometry for that plane.
-      // Use the most recently committed sketch on that plane as the working set.
-      const last = [...s.sketches].reverse().find((sk) => sk.plane === plane)
+      const target = s.sketches.find((sk) => sk.id === sketchId)
+      if (!target) return s
       return {
         mode: 'sketch',
-        activePlane: plane,
+        activePlane: target.plane,
         activeTool: 'select',
-        sketchElements: last ? last.elements : [],
+        sketchElements: target.elements,
         selectedElementId: null,
-        editingSketchId: last ? last.id : null,
+        editingSketchId: target.id,
       }
     }),
 
