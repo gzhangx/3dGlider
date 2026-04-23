@@ -68,6 +68,27 @@
   cursor: not-allowed;
 }
 
+.cancelBtn {
+  padding: 4px 8px;
+  background: #2a1b22;
+  border: 1px solid #4d2b3b;
+  border-radius: 4px;
+  color: #d9a8bb;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cancelBtn:hover {
+  background: #3a2430;
+}
+
+.pickHint {
+  padding: 0 4px 8px;
+  font-size: 10px;
+  color: #60708e;
+  line-height: 1.4;
+}
+
 /* ── Sketch group ── */
 .sketchGroup {
   display: flex;

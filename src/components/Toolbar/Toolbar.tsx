@@ -11,7 +11,7 @@ export function Toolbar() {
 
       <div className={styles.status}>
         {mode === 'view' && (
-          <span className={styles.hint}>Click a plane (XY / XZ / YZ) to start a sketch</span>
+          <span className={styles.hint}>Use New Sketch, then pick XY / XZ / YZ or click a flat extruded face</span>
         )}
         {mode === 'sketch' && (
           <>

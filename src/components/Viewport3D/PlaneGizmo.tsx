@@ -14,11 +14,11 @@ const SIZE = 4
 
 export function PlaneGizmo({ id, rotation, color, label }: PlaneGizmoProps) {
   const ref = useRef<Mesh>(null)
-  const { hoveredPlane, mode, setHoveredPlane, startNewSketch } = useModelStore()
+  const { hoveredPlane, mode, newSketchArmed, setHoveredPlane, startNewSketch } = useModelStore()
   const edges = useMemo(() => new EdgesGeometry(new PlaneGeometry(SIZE, SIZE)), [])
 
   const isHovered = hoveredPlane === id
-  const isDisabled = mode === 'sketch'
+  const isDisabled = mode === 'sketch' || !newSketchArmed
 
   return (
     <group rotation={rotation}>

@@ -73,31 +73,56 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
 }
 
 function NewSketchRow() {
-  const { mode, startNewSketch } = useModelStore()
+  const { mode, newSketchArmed, armNewSketch, cancelNewSketch, startNewSketch } = useModelStore()
   const [plane, setPlane] = useState<PlaneId>('XY')
 
+  if (!newSketchArmed) {
+    return (
+      <div className={styles.newSketchRow}>
+        <button
+          className={styles.newSketchBtn}
+          onClick={armNewSketch}
+          disabled={mode === 'sketch'}
+          title="Create a new sketch"
+        >
+          + New Sketch
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <div className={styles.newSketchRow}>
-      <select
-        className={styles.planeSelect}
-        value={plane}
-        disabled={mode === 'sketch'}
-        onChange={(e) => setPlane(e.target.value as PlaneId)}
-        title="Sketch plane"
-      >
-        <option value="XY">XY</option>
-        <option value="XZ">XZ</option>
-        <option value="YZ">YZ</option>
-      </select>
-      <button
-        className={styles.newSketchBtn}
-        onClick={() => startNewSketch(plane)}
-        disabled={mode === 'sketch'}
-        title="Create a new sketch"
-      >
-        + New Sketch
-      </button>
-    </div>
+    <>
+      <div className={styles.newSketchRow}>
+        <select
+          className={styles.planeSelect}
+          value={plane}
+          disabled={mode === 'sketch'}
+          onChange={(e) => setPlane(e.target.value as PlaneId)}
+          title="Sketch plane"
+        >
+          <option value="XY">XY</option>
+          <option value="XZ">XZ</option>
+          <option value="YZ">YZ</option>
+        </select>
+        <button
+          className={styles.newSketchBtn}
+          onClick={() => startNewSketch(plane)}
+          disabled={mode === 'sketch'}
+          title="Start sketch on selected plane"
+        >
+          Start
+        </button>
+        <button
+          className={styles.cancelBtn}
+          onClick={cancelNewSketch}
+          title="Cancel new sketch"
+        >
+          Cancel
+        </button>
+      </div>
+      <div className={styles.pickHint}>Or click a plane or flat extruded face in the viewport</div>
+    </>
   )
 }
 

@@ -36,6 +36,7 @@ interface ModelState {
   mode: AppMode
   activePlane: PlaneId | null
   hoveredPlane: PlaneId | null
+  newSketchArmed: boolean
   activeTool: SketchTool
   sketchElements: SketchElement[]
   sketches: Sketch[]
@@ -51,6 +52,8 @@ interface ModelState {
   cutSketchElement: (id: string, replacements: SketchElement[]) => void
   addExtrude: (sketchId: string, depth: number) => void
   deleteExtrude: (id: string) => void
+  armNewSketch: () => void
+  cancelNewSketch: () => void
   startNewSketch: (plane: PlaneId) => void
   editSketch: (sketchId: string) => void
   exitSketch: () => void
@@ -60,6 +63,7 @@ export const useModelStore = create<ModelState>((set) => ({
   mode: 'view',
   activePlane: null,
   hoveredPlane: null,
+  newSketchArmed: false,
   activeTool: 'select',
   sketchElements: [],
   sketches: [],
@@ -95,10 +99,16 @@ export const useModelStore = create<ModelState>((set) => ({
   deleteExtrude: (id) =>
     set((s) => ({ extrudes: s.extrudes.filter((e) => e.id !== id) })),
 
+  armNewSketch: () =>
+    set((s) => (s.mode === 'view' ? { newSketchArmed: true } : s)),
+
+  cancelNewSketch: () => set({ newSketchArmed: false }),
+
   startNewSketch: (plane) =>
     set({
       mode: 'sketch',
       activePlane: plane,
+      newSketchArmed: false,
       activeTool: 'select',
       sketchElements: [],
       selectedElementId: null,
@@ -112,6 +122,7 @@ export const useModelStore = create<ModelState>((set) => ({
       return {
         mode: 'sketch',
         activePlane: target.plane,
+        newSketchArmed: false,
         activeTool: 'select',
         sketchElements: target.elements,
         selectedElementId: null,
@@ -142,6 +153,7 @@ export const useModelStore = create<ModelState>((set) => ({
       return {
         mode: 'view',
         activePlane: null,
+        newSketchArmed: false,
         activeTool: 'select',
         sketchElements: [],
         selectedElementId: null,
