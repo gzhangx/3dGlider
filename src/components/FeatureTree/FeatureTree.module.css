@@ -181,6 +181,21 @@
 }
 .depthInput:focus { outline: none; border-color: #4488ff; }
 
+.opSelect {
+  width: 56px;
+  padding: 3px 4px;
+  background: #0e0e24;
+  border: 1px solid #334;
+  border-radius: 3px;
+  color: #ccd;
+  font-size: 11px;
+}
+
+.opSelect:focus {
+  outline: none;
+  border-color: #4488ff;
+}
+
 .unit {
   font-size: 11px;
   color: #445;

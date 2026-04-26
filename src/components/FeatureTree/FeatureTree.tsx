@@ -6,13 +6,14 @@ import styles from './FeatureTree.module.css'
 function SketchRow({ sketch }: { sketch: Sketch }) {
   const { extrudes, addExtrude, deleteExtrude, editSketch } = useModelStore()
   const [depth, setDepth] = useState('5')
+  const [operation, setOperation] = useState<'add' | 'cut'>('add')
 
   const existing = extrudes.filter((e) => e.sketchId === sketch.id)
   const canExtrude = sketchElementsToShape(sketch.elements, sketch.plane).length > 0
 
   const handleExtrude = () => {
     const d = parseFloat(depth)
-    if (!isNaN(d) && d !== 0) addExtrude(sketch.id, d)
+    if (!isNaN(d) && d !== 0) addExtrude(sketch.id, d, operation)
   }
 
   return (
@@ -34,8 +35,8 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
 
       {existing.map((ext) => (
         <div key={ext.id} className={styles.extrudeRow}>
-          <span className={styles.extrudeIcon}>▲</span>
-          <span className={styles.extrudeLabel}>Extrude {ext.depth} u</span>
+          <span className={styles.extrudeIcon}>{ext.operation === 'cut' ? '▼' : '▲'}</span>
+          <span className={styles.extrudeLabel}>{ext.operation === 'cut' ? 'Pocket' : 'Extrude'} {ext.depth} u</span>
           <button
             className={styles.deleteBtn}
             title="Delete extrude"
@@ -48,6 +49,15 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
 
       {canExtrude && (
         <div className={styles.extrudeForm}>
+          <select
+            className={styles.opSelect}
+            value={operation}
+            onChange={(e) => setOperation(e.target.value as 'add' | 'cut')}
+            title="Feature operation"
+          >
+            <option value="add">Add</option>
+            <option value="cut">Cut</option>
+          </select>
           <input
             type="number"
             className={styles.depthInput}
@@ -58,7 +68,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
           />
           <span className={styles.unit}>u</span>
           <button className={styles.extrudeBtn} onClick={handleExtrude}>
-            Extrude ▶
+            {operation === 'cut' ? 'Pocket ▶' : 'Extrude ▶'}
           </button>
         </div>
       )}

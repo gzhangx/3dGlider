@@ -1,9 +1,9 @@
 import { useMemo, useEffect } from 'react'
 import { ThreeEvent } from '@react-three/fiber'
-import { Vector3 } from 'three'
-import { DoubleSide, ExtrudeGeometry } from 'three'
-import { useModelStore, ExtrudeFeature, PlaneId } from '../../store/modelStore'
-import { sketchElementsToShape, EXTRUDE_ROTATION } from '../../lib/sketchToShape'
+import { Vector3, BufferGeometry } from 'three'
+import { DoubleSide } from 'three'
+import { useModelStore, PlaneId } from '../../store/modelStore'
+import { buildSolidMeshes, disposeSolidMeshes } from '../../lib/solidModel'
 
 function normalToPlane(normal: Vector3): PlaneId {
   const ax = Math.abs(normal.x)
@@ -20,27 +20,8 @@ function offsetForPlane(plane: PlaneId, point: { x: number; y: number; z: number
   return point.x
 }
 
-function planeOffsetPosition(plane: PlaneId, offset: number): [number, number, number] {
-  if (plane === 'XY') return [0, 0, offset]
-  if (plane === 'XZ') return [0, offset, 0]
-  return [offset, 0, 0]
-}
-
-function ExtrudedSolid({ ext }: { ext: ExtrudeFeature }) {
-  const { mode, newSketchArmed, startNewSketch, sketches } = useModelStore()
-  const sketch = sketches.find((s) => s.id === ext.sketchId)
-
-  const geometry = useMemo(() => {
-    if (!sketch) return null
-    const shapes = sketchElementsToShape(sketch.elements, sketch.plane)
-    if (shapes.length === 0) return null
-    return new ExtrudeGeometry(shapes, { depth: Math.abs(ext.depth), bevelEnabled: false })
-  }, [sketch, ext.depth])
-
-  useEffect(() => () => { geometry?.dispose() }, [geometry])
-
-  if (!geometry || !sketch) return null
-
+function SolidMesh({ geometry }: { geometry: BufferGeometry }) {
+  const { mode, newSketchArmed, startNewSketch } = useModelStore()
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     if (mode !== 'view' || !newSketchArmed || !e.face) return
     e.stopPropagation()
@@ -50,23 +31,24 @@ function ExtrudedSolid({ ext }: { ext: ExtrudeFeature }) {
   }
 
   return (
-    <mesh
-      position={planeOffsetPosition(sketch.plane, sketch.offset)}
-      rotation={EXTRUDE_ROTATION[sketch.plane]}
-      onClick={onClick}
-    >
-      <primitive object={geometry} attach="geometry" />
+    <mesh geometry={geometry} onClick={onClick}>
       <meshStandardMaterial color="#4477bb" transparent opacity={0.82} side={DoubleSide} />
     </mesh>
   )
 }
 
 export function ExtrudedSolids() {
-  const { extrudes } = useModelStore()
+  const { extrudes, sketches } = useModelStore()
+  const solids = useMemo(() => buildSolidMeshes(extrudes, sketches), [extrudes, sketches])
+
+  useEffect(() => {
+    return () => disposeSolidMeshes(solids)
+  }, [solids])
+
   return (
     <>
-      {extrudes.map((ext) => (
-        <ExtrudedSolid key={ext.id} ext={ext} />
+      {solids.map((mesh) => (
+        <SolidMesh key={mesh.uuid} geometry={mesh.geometry} />
       ))}
     </>
   )

@@ -30,6 +30,7 @@ export interface Sketch {
 export interface ExtrudeFeature {
   id: string
   sketchId: string
+  operation: 'add' | 'cut'
   depth: number  // units along the plane's normal
 }
 
@@ -52,7 +53,7 @@ interface ModelState {
   addSketchElement: (el: SketchElement) => void
   deleteSketchElement: (id: string) => void
   cutSketchElement: (id: string, replacements: SketchElement[]) => void
-  addExtrude: (sketchId: string, depth: number) => void
+  addExtrude: (sketchId: string, depth: number, operation?: 'add' | 'cut') => void
   deleteExtrude: (id: string) => void
   armNewSketch: () => void
   cancelNewSketch: () => void
@@ -94,9 +95,9 @@ export const useModelStore = create<ModelState>((set) => ({
       sketchElements: [...s.sketchElements.filter((el) => el.id !== id), ...replacements],
     })),
 
-  addExtrude: (sketchId, depth) =>
+  addExtrude: (sketchId, depth, operation = 'add') =>
     set((s) => ({
-      extrudes: [...s.extrudes, { id: crypto.randomUUID(), sketchId, depth }],
+      extrudes: [...s.extrudes, { id: crypto.randomUUID(), sketchId, operation, depth }],
     })),
 
   deleteExtrude: (id) =>
