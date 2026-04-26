@@ -4,7 +4,7 @@ import { ThreeEvent } from '@react-three/fiber'
 import { useModelStore, Sketch, SketchElement, PlaneId } from '../../store/modelStore'
 import { linePts, rectPts, circlePts, arcPts } from '../../lib/sketchGeometry'
 
-function SketchEl({ el, plane }: { el: SketchElement; plane: PlaneId }) {
+function SketchEl({ el, plane, offset }: { el: SketchElement; plane: PlaneId; offset: number }) {
   const { mode, activeTool, selectedElementId, selectElement } = useModelStore()
   const [hovered, setHovered] = useState(false)
 
@@ -22,13 +22,13 @@ function SketchEl({ el, plane }: { el: SketchElement; plane: PlaneId }) {
     : {}
 
   if (el.type === 'line')
-    return <Line points={linePts(el.start, el.end, plane)} color={color} lineWidth={width} {...selectProps} />
+    return <Line points={linePts(el.start, el.end, plane, offset)} color={color} lineWidth={width} {...selectProps} />
   if (el.type === 'rect')
-    return <Line points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...selectProps} />
+    return <Line points={rectPts(el.start, el.end, plane, offset)} color={color} lineWidth={width} {...selectProps} />
   if (el.type === 'circle')
-    return <Line points={circlePts(el.center, el.radius, plane)} color={color} lineWidth={width} {...selectProps} />
+    return <Line points={circlePts(el.center, el.radius, plane, 64, offset)} color={color} lineWidth={width} {...selectProps} />
   if (el.type === 'arc')
-    return <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane)} color={color} lineWidth={width} {...selectProps} />
+    return <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64, offset)} color={color} lineWidth={width} {...selectProps} />
   return null
 }
 
@@ -36,7 +36,7 @@ function SavedSketch({ sketch }: { sketch: Sketch }) {
   return (
     <>
       {sketch.elements.map((el) => (
-        <SketchEl key={el.id} el={el} plane={sketch.plane} />
+        <SketchEl key={el.id} el={el} plane={sketch.plane} offset={sketch.offset} />
       ))}
     </>
   )

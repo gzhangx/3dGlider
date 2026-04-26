@@ -49,7 +49,7 @@ function rectCorners(rect: SketchRect): SketchPoint[] {
 const noopRaycast: () => void = () => {}
 
 function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: PlaneId; highlighted?: boolean }) {
-  const { activeTool, selectedElementId, selectElement } = useModelStore()
+  const { activeTool, activePlaneOffset, selectedElementId, selectElement } = useModelStore()
   const [hovered, setHovered] = useState(false)
 
   const isSelected = selectedElementId === el.id
@@ -69,13 +69,13 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: PlaneI
   const hitPlanePassthrough = activeTool !== 'select' ? { raycast: noopRaycast } : {}
 
   if (el.type === 'line')
-    return <Line points={linePts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
+    return <Line points={linePts(el.start, el.end, plane, activePlaneOffset)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
   if (el.type === 'rect')
-    return <Line points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
+    return <Line points={rectPts(el.start, el.end, plane, activePlaneOffset)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
   if (el.type === 'circle')
-    return <Line points={circlePts(el.center, el.radius, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
+    return <Line points={circlePts(el.center, el.radius, plane, 64, activePlaneOffset)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
   if (el.type === 'arc')
-    return <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
+    return <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64, activePlaneOffset)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
   return null
 }
 
@@ -83,7 +83,7 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: PlaneI
 
 export function SketchPlane() {
   const {
-    activePlane, activeTool, sketchElements,
+    activePlane, activePlaneOffset, activeTool, sketchElements,
     selectedElementId, selectElement,
     addSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
   } = useModelStore()
@@ -270,7 +270,17 @@ export function SketchPlane() {
     <>
       {/* Hit-test plane — only present during draw tools; absent in select mode so camera gets events */}
       {isDrawTool && (
-        <mesh rotation={PLANE_ROTATION[plane]} onPointerMove={onMove} onPointerDown={onPointerDown} onClick={onClick}>
+        <mesh
+          position={
+            plane === 'XY' ? [0, 0, activePlaneOffset]
+            : plane === 'XZ' ? [0, activePlaneOffset, 0]
+            : [activePlaneOffset, 0, 0]
+          }
+          rotation={PLANE_ROTATION[plane]}
+          onPointerMove={onMove}
+          onPointerDown={onPointerDown}
+          onClick={onClick}
+        >
           <planeGeometry args={[200, 200]} />
           <meshBasicMaterial visible={false} />
         </mesh>
@@ -291,6 +301,8 @@ export function SketchPlane() {
               cutPreview.cutArc.startAngle,
               cutPreview.cutArc.endAngle,
               plane,
+              64,
+              activePlaneOffset,
             )}
             color="#ff3333"
             lineWidth={4}
@@ -298,7 +310,7 @@ export function SketchPlane() {
           />
         ) : (
           <Line
-            points={[worldPt(cutPreview.cutStart, plane), worldPt(cutPreview.cutEnd, plane)]}
+            points={[worldPt(cutPreview.cutStart, plane, activePlaneOffset), worldPt(cutPreview.cutEnd, plane, activePlaneOffset)]}
             color="#ff3333"
             lineWidth={4}
             raycast={noopRaycast}
@@ -307,20 +319,20 @@ export function SketchPlane() {
       )}
 
       {/* Cursor & anchor dots (draw tools only, not cut) */}
-      {isDrawTool && activeTool !== 'cut' && cursorPt && <Dot pos={worldPt(cursorPt, plane)} color="#ffffff" size={0.05} />}
-      {isDrawTool && startPt && <Dot pos={worldPt(startPt, plane)} color="#ffdd44" size={0.08} />}
+      {isDrawTool && activeTool !== 'cut' && cursorPt && <Dot pos={worldPt(cursorPt, plane, activePlaneOffset)} color="#ffffff" size={0.05} />}
+      {isDrawTool && startPt && <Dot pos={worldPt(startPt, plane, activePlaneOffset)} color="#ffdd44" size={0.08} />}
 
       {/* Live preview */}
       {preview && activeTool === 'line' && (
-        <Line points={linePts(startPt, cursorPt, plane)} color="#ffdd4488" lineWidth={1.5} raycast={noopRaycast} />
+        <Line points={linePts(startPt, cursorPt, plane, activePlaneOffset)} color="#ffdd4488" lineWidth={1.5} raycast={noopRaycast} />
       )}
       {preview && activeTool === 'rect' && (
-        <Line points={rectPts(startPt, cursorPt, plane)} color="#ffdd4488" lineWidth={1.5} raycast={noopRaycast} />
+        <Line points={rectPts(startPt, cursorPt, plane, activePlaneOffset)} color="#ffdd4488" lineWidth={1.5} raycast={noopRaycast} />
       )}
       {preview && activeTool === 'circle' && (() => {
         const r = Math.hypot(cursorPt.x - startPt.x, cursorPt.y - startPt.y)
         return r > 0
-          ? <Line points={circlePts(startPt, r, plane)} color="#ffdd4488" lineWidth={1.5} raycast={noopRaycast} />
+          ? <Line points={circlePts(startPt, r, plane, 64, activePlaneOffset)} color="#ffdd4488" lineWidth={1.5} raycast={noopRaycast} />
           : null
       })()}
     </>

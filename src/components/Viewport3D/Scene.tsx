@@ -20,7 +20,7 @@ const ACTION_ROTATE = 1
 const ACTION_TRUCK = 2
 
 export function Scene() {
-  const { activePlane, mode, activeTool } = useModelStore()
+  const { activePlane, activePlaneOffset, mode, activeTool } = useModelStore()
   const { camera } = useThree()
   const controlsRef = useRef<CameraControls>(null)
 
@@ -29,8 +29,11 @@ export function Scene() {
     if (!activePlane || !controlsRef.current) return
     const dist = camera.position.length() || 12
     const [nx, ny, nz] = PLANE_NORMAL[activePlane]
-    controlsRef.current.setLookAt(nx * dist, ny * dist, nz * dist, 0, 0, 0, true)
-  }, [activePlane, camera])
+    const tx = nx * activePlaneOffset
+    const ty = ny * activePlaneOffset
+    const tz = nz * activePlaneOffset
+    controlsRef.current.setLookAt(tx + nx * dist, ty + ny * dist, tz + nz * dist, tx, ty, tz, true)
+  }, [activePlane, activePlaneOffset, camera])
 
   // In sketch mode with a draw tool: disable left-button orbit so clicks reach the sketch plane.
   // Right-drag and scroll still pan/zoom freely.

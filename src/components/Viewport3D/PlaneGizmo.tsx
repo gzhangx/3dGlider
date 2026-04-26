@@ -26,7 +26,7 @@ export function PlaneGizmo({ id, rotation, color, label }: PlaneGizmoProps) {
         ref={ref}
         onPointerEnter={() => !isDisabled && setHoveredPlane(id)}
         onPointerLeave={() => setHoveredPlane(null)}
-        onClick={() => !isDisabled && startNewSketch(id)}
+        onClick={() => !isDisabled && startNewSketch(id, 0)}
       >
         <planeGeometry args={[SIZE, SIZE]} />
         <meshStandardMaterial

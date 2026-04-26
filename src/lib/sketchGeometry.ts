@@ -9,11 +9,11 @@ export const PLANE_ROTATION: Record<PlaneId, [number, number, number]> = {
 // Small lift off the plane surface to prevent z-fighting
 const LIFT = 0.003
 
-export function worldPt(p: SketchPoint, plane: PlaneId): [number, number, number] {
+export function worldPt(p: SketchPoint, plane: PlaneId, offset = 0): [number, number, number] {
   switch (plane) {
-    case 'XY': return [p.x, p.y, LIFT]
-    case 'XZ': return [p.x, LIFT, p.y]
-    case 'YZ': return [LIFT, p.x, p.y]
+    case 'XY': return [p.x, p.y, offset + LIFT]
+    case 'XZ': return [p.x, offset + LIFT, p.y]
+    case 'YZ': return [offset + LIFT, p.x, p.y]
   }
 }
 
@@ -29,25 +29,25 @@ export function snapPt(p: SketchPoint, grid = 0.5): SketchPoint {
   return { x: Math.round(p.x / grid) * grid, y: Math.round(p.y / grid) * grid }
 }
 
-export function linePts(a: SketchPoint, b: SketchPoint, plane: PlaneId) {
-  return [worldPt(a, plane), worldPt(b, plane)] as [number, number, number][]
+export function linePts(a: SketchPoint, b: SketchPoint, plane: PlaneId, offset = 0) {
+  return [worldPt(a, plane, offset), worldPt(b, plane, offset)] as [number, number, number][]
 }
 
-export function rectPts(a: SketchPoint, b: SketchPoint, plane: PlaneId) {
+export function rectPts(a: SketchPoint, b: SketchPoint, plane: PlaneId, offset = 0) {
   return [
-    worldPt(a, plane),
-    worldPt({ x: b.x, y: a.y }, plane),
-    worldPt(b, plane),
-    worldPt({ x: a.x, y: b.y }, plane),
-    worldPt(a, plane),
+    worldPt(a, plane, offset),
+    worldPt({ x: b.x, y: a.y }, plane, offset),
+    worldPt(b, plane, offset),
+    worldPt({ x: a.x, y: b.y }, plane, offset),
+    worldPt(a, plane, offset),
   ] as [number, number, number][]
 }
 
-export function circlePts(center: SketchPoint, radius: number, plane: PlaneId, segs = 64) {
+export function circlePts(center: SketchPoint, radius: number, plane: PlaneId, segs = 64, offset = 0) {
   const pts: [number, number, number][] = []
   for (let i = 0; i <= segs; i++) {
     const a = (i / segs) * Math.PI * 2
-    pts.push(worldPt({ x: center.x + Math.cos(a) * radius, y: center.y + Math.sin(a) * radius }, plane))
+    pts.push(worldPt({ x: center.x + Math.cos(a) * radius, y: center.y + Math.sin(a) * radius }, plane, offset))
   }
   return pts
 }
@@ -59,13 +59,14 @@ export function arcPts(
   endAngle: number,
   plane: PlaneId,
   segs = 64,
+  offset = 0,
 ) {
   const pts: [number, number, number][] = []
   const span = Math.max(0, endAngle - startAngle)
   const count = Math.max(1, Math.ceil((span / (Math.PI * 2)) * segs))
   for (let i = 0; i <= count; i++) {
     const a = startAngle + (span * i) / count
-    pts.push(worldPt({ x: center.x + Math.cos(a) * radius, y: center.y + Math.sin(a) * radius }, plane))
+    pts.push(worldPt({ x: center.x + Math.cos(a) * radius, y: center.y + Math.sin(a) * radius }, plane, offset))
   }
   return pts
 }

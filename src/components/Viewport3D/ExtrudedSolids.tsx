@@ -14,6 +14,18 @@ function normalToPlane(normal: Vector3): PlaneId {
   return 'YZ'
 }
 
+function offsetForPlane(plane: PlaneId, point: { x: number; y: number; z: number }): number {
+  if (plane === 'XY') return point.z
+  if (plane === 'XZ') return point.y
+  return point.x
+}
+
+function planeOffsetPosition(plane: PlaneId, offset: number): [number, number, number] {
+  if (plane === 'XY') return [0, 0, offset]
+  if (plane === 'XZ') return [0, offset, 0]
+  return [offset, 0, 0]
+}
+
 function ExtrudedSolid({ ext }: { ext: ExtrudeFeature }) {
   const { mode, newSketchArmed, startNewSketch, sketches } = useModelStore()
   const sketch = sketches.find((s) => s.id === ext.sketchId)
@@ -33,11 +45,13 @@ function ExtrudedSolid({ ext }: { ext: ExtrudeFeature }) {
     if (mode !== 'view' || !newSketchArmed || !e.face) return
     e.stopPropagation()
     const worldNormal = e.face.normal.clone().transformDirection(e.object.matrixWorld)
-    startNewSketch(normalToPlane(worldNormal))
+    const plane = normalToPlane(worldNormal)
+    startNewSketch(plane, offsetForPlane(plane, e.point))
   }
 
   return (
     <mesh
+      position={planeOffsetPosition(sketch.plane, sketch.offset)}
       rotation={EXTRUDE_ROTATION[sketch.plane]}
       onClick={onClick}
     >

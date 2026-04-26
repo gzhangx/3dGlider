@@ -3,6 +3,12 @@ import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { ExtrudeFeature, Sketch } from '../store/modelStore'
 import { sketchElementsToShape, EXTRUDE_ROTATION } from './sketchToShape'
 
+function planeOffsetPosition(plane: Sketch['plane'], offset: number): [number, number, number] {
+  if (plane === 'XY') return [0, 0, offset]
+  if (plane === 'XZ') return [0, offset, 0]
+  return [offset, 0, 0]
+}
+
 export function exportSTL(extrudes: ExtrudeFeature[], sketches: Sketch[]) {
   if (extrudes.length === 0) return
 
@@ -16,7 +22,9 @@ export function exportSTL(extrudes: ExtrudeFeature[], sketches: Sketch[]) {
     const geo = new ExtrudeGeometry(shapes, { depth: Math.abs(ext.depth), bevelEnabled: false })
     const mesh = new Mesh(geo)
     const [rx, ry, rz] = EXTRUDE_ROTATION[sketch.plane]
+    const [px, py, pz] = planeOffsetPosition(sketch.plane, sketch.offset)
     mesh.rotation.set(rx, ry, rz)
+    mesh.position.set(px, py, pz)
     group.add(mesh)
   }
 

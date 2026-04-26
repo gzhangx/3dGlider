@@ -23,6 +23,7 @@ export type SketchElement = SketchLine | SketchRect | SketchCircle | SketchArc
 export interface Sketch {
   id: string
   plane: PlaneId
+  offset: number
   elements: SketchElement[]
 }
 
@@ -35,6 +36,7 @@ export interface ExtrudeFeature {
 interface ModelState {
   mode: AppMode
   activePlane: PlaneId | null
+  activePlaneOffset: number
   hoveredPlane: PlaneId | null
   newSketchArmed: boolean
   activeTool: SketchTool
@@ -54,7 +56,7 @@ interface ModelState {
   deleteExtrude: (id: string) => void
   armNewSketch: () => void
   cancelNewSketch: () => void
-  startNewSketch: (plane: PlaneId) => void
+  startNewSketch: (plane: PlaneId, offset?: number) => void
   editSketch: (sketchId: string) => void
   exitSketch: () => void
 }
@@ -62,6 +64,7 @@ interface ModelState {
 export const useModelStore = create<ModelState>((set) => ({
   mode: 'view',
   activePlane: null,
+  activePlaneOffset: 0,
   hoveredPlane: null,
   newSketchArmed: false,
   activeTool: 'select',
@@ -104,10 +107,11 @@ export const useModelStore = create<ModelState>((set) => ({
 
   cancelNewSketch: () => set({ newSketchArmed: false }),
 
-  startNewSketch: (plane) =>
+  startNewSketch: (plane, offset = 0) =>
     set({
       mode: 'sketch',
       activePlane: plane,
+      activePlaneOffset: offset,
       newSketchArmed: false,
       activeTool: 'select',
       sketchElements: [],
@@ -122,6 +126,7 @@ export const useModelStore = create<ModelState>((set) => ({
       return {
         mode: 'sketch',
         activePlane: target.plane,
+        activePlaneOffset: target.offset,
         newSketchArmed: false,
         activeTool: 'select',
         sketchElements: target.elements,
@@ -138,12 +143,12 @@ export const useModelStore = create<ModelState>((set) => ({
           // Update existing sketch instead of creating a duplicate entry.
           sketches = sketches.map((sk) =>
             sk.id === s.editingSketchId
-              ? { ...sk, plane: s.activePlane!, elements: s.sketchElements }
+              ? { ...sk, plane: s.activePlane!, offset: s.activePlaneOffset, elements: s.sketchElements }
               : sk,
           )
         } else {
           // New sketch on this plane.
-          sketches = [...sketches, { id: crypto.randomUUID(), plane: s.activePlane, elements: s.sketchElements }]
+          sketches = [...sketches, { id: crypto.randomUUID(), plane: s.activePlane, offset: s.activePlaneOffset, elements: s.sketchElements }]
         }
       } else if (s.editingSketchId) {
         // If user cleared all elements while editing, delete the sketch.
@@ -153,6 +158,7 @@ export const useModelStore = create<ModelState>((set) => ({
       return {
         mode: 'view',
         activePlane: null,
+        activePlaneOffset: 0,
         newSketchArmed: false,
         activeTool: 'select',
         sketchElements: [],
