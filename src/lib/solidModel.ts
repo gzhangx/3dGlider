@@ -26,6 +26,7 @@ function featureGeometry(ext: ExtrudeFeature, sketch: Sketch): BufferGeometry | 
   m.makeRotationFromEuler(new Euler(rx, ry, rz, 'XYZ'))
   m.setPosition(px, py, pz)
   const baked = bakeGeometry(geo, m)
+  baked.computeVertexNormals()
   geo.dispose()
   return baked
 }
@@ -54,6 +55,7 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
 
       for (let i = 0; i < solids.length; i++) {
         const next = CSG.subtract(solids[i], featMesh)
+        next.geometry.computeVertexNormals()
         solids[i].geometry.dispose()
         solids[i] = next
       }
