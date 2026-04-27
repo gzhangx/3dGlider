@@ -14,6 +14,12 @@ function normalToPlane(normal: Vector3): PlaneId {
   return 'YZ'
 }
 
+function isFlatPrincipalFace(normal: Vector3, threshold = 0.9): boolean {
+  const n = normal.clone().normalize()
+  const maxComp = Math.max(Math.abs(n.x), Math.abs(n.y), Math.abs(n.z))
+  return maxComp >= threshold
+}
+
 function offsetForPlane(plane: PlaneId, point: { x: number; y: number; z: number }): number {
   if (plane === 'XY') return point.z
   if (plane === 'XZ') return point.y
@@ -25,7 +31,8 @@ function SolidMesh({ geometry }: { geometry: BufferGeometry }) {
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     if (mode !== 'view' || !newSketchArmed || !e.face) return
     e.stopPropagation()
-    const worldNormal = e.face.normal.clone().transformDirection(e.object.matrixWorld)
+    const worldNormal = e.face.normal.clone().transformDirection(e.object.matrixWorld).normalize()
+    if (!isFlatPrincipalFace(worldNormal)) return
     const plane = normalToPlane(worldNormal)
     startNewSketch(plane, offsetForPlane(plane, e.point))
   }

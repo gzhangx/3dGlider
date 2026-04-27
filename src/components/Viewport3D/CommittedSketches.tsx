@@ -5,11 +5,11 @@ import { useModelStore, Sketch, SketchElement, PlaneId } from '../../store/model
 import { linePts, rectPts, circlePts, arcPts } from '../../lib/sketchGeometry'
 
 function SketchEl({ el, plane, offset }: { el: SketchElement; plane: PlaneId; offset: number }) {
-  const { mode, activeTool, selectedElementId, selectElement } = useModelStore()
+  const { mode, activeTool, newSketchArmed, selectedElementId, selectElement } = useModelStore()
   const [hovered, setHovered] = useState(false)
 
   const isSelected = selectedElementId === el.id
-  const selectable = mode === 'view' || activeTool === 'select'
+  const selectable = (mode === 'view' || activeTool === 'select') && !newSketchArmed
   const color = isSelected ? '#ff8844' : hovered ? '#ffe888' : '#ffdd44'
   const width = isSelected || hovered ? 3 : 2
 
