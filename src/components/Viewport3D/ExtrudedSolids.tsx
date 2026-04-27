@@ -1,7 +1,6 @@
-import { useMemo, useEffect } from 'react'
-import { ThreeEvent } from '@react-three/fiber'
-import { Vector3, BufferGeometry } from 'three'
-import { DoubleSide } from 'three'
+import { useMemo, useEffect, useRef } from 'react'
+import { useThree } from '@react-three/fiber'
+import { Vector3, Vector2, Mesh, MeshStandardMaterial, DoubleSide, Raycaster } from 'three'
 import { useModelStore, PlaneId } from '../../store/modelStore'
 import { buildSolidMeshes, disposeSolidMeshes } from '../../lib/solidModel'
 
@@ -26,21 +25,53 @@ function offsetForPlane(plane: PlaneId, point: { x: number; y: number; z: number
   return point.x
 }
 
-function SolidMesh({ geometry }: { geometry: BufferGeometry }) {
+function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
   const { mode, newSketchArmed, startNewSketch } = useModelStore()
-  const onClick = (e: ThreeEvent<MouseEvent>) => {
-    if (mode !== 'view' || !newSketchArmed || !e.face) return
-    e.stopPropagation()
-    const worldNormal = e.face.normal.clone().transformDirection(e.object.matrixWorld).normalize()
-    if (!isFlatPrincipalFace(worldNormal)) return
-    const plane = normalToPlane(worldNormal)
-    startNewSketch(plane, offsetForPlane(plane, e.point))
-  }
+  const { camera } = useThree()
+  const meshRef = useRef<Mesh>(null)
+  const mouseRef = useRef(new Vector2())
+
+  useEffect(() => {
+    if (meshRef.current) {
+      meshRef.current.geometry = solidMesh.geometry
+      meshRef.current.material = new MeshStandardMaterial({ color: 0x4477bb, transparent: true, opacity: 0.82, side: DoubleSide })
+    }
+  }, [solidMesh])
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      mouseRef.current.x = (e.clientX / window.innerWidth) * 2 - 1
+      mouseRef.current.y = -(e.clientY / window.innerHeight) * 2 + 1
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    return () => window.removeEventListener('mousemove', handleMouseMove)
+  }, [])
+
+  useEffect(() => {
+    const handleClick = () => {
+      if (mode !== 'view' || !newSketchArmed || !meshRef.current) return
+
+      const raycaster = new Raycaster()
+      raycaster.setFromCamera(mouseRef.current, camera)
+      const intersects = raycaster.intersectObject(meshRef.current)
+
+      if (intersects.length > 0) {
+        const intersection = intersects[0]
+        if (intersection.face) {
+          const worldNormal = intersection.face.normal.clone().transformDirection(meshRef.current.matrixWorld).normalize()
+          if (!isFlatPrincipalFace(worldNormal)) return
+          const plane = normalToPlane(worldNormal)
+          startNewSketch(plane, offsetForPlane(plane, intersection.point))
+        }
+      }
+    }
+
+    window.addEventListener('click', handleClick)
+    return () => window.removeEventListener('click', handleClick)
+  }, [mode, newSketchArmed, camera, startNewSketch])
 
   return (
-    <mesh geometry={geometry} onClick={onClick}>
-      <meshStandardMaterial color="#4477bb" transparent opacity={0.82} side={DoubleSide} />
-    </mesh>
+    <mesh ref={meshRef} />
   )
 }
 
@@ -55,7 +86,7 @@ export function ExtrudedSolids() {
   return (
     <>
       {solids.map((mesh) => (
-        <SolidMesh key={mesh.uuid} geometry={mesh.geometry} />
+        <SolidMesh key={mesh.uuid} solidMesh={mesh} />
       ))}
     </>
   )
