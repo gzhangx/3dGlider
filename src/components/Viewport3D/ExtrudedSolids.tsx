@@ -1,17 +1,26 @@
 import { useMemo, useEffect, useRef, useState } from 'react'
-import { Line } from '@react-three/drei'
-import { useThree } from '@react-three/fiber'
+import { ThreeEvent, useThree } from '@react-three/fiber'
 import { Vector2, Vector3, Mesh, MeshStandardMaterial, DoubleSide, Raycaster } from 'three'
 import { useModelStore } from '../../store/modelStore'
 import { planePoseFromHit } from '../../lib/planePose'
 import { buildSolidMeshes, disposeSolidMeshes } from '../../lib/solidModel'
 
-interface PickDebug {
-  point: [number, number, number]
-  normalEnd: [number, number, number]
+interface HoverPreview {
+  position: [number, number, number]
+  rotation: [number, number, number]
 }
 
-function SolidMesh({ solidMesh, onPick }: { solidMesh: Mesh; onPick: (point: Vector3, normal: Vector3) => void }) {
+const noopRaycast: () => void = () => {}
+
+function SolidMesh({
+  solidMesh,
+  onHover,
+  onHoverOut,
+}: {
+  solidMesh: Mesh
+  onHover: (point: Vector3, normal: Vector3) => void
+  onHoverOut: () => void
+}) {
   const { mode, newSketchArmed, startNewSketch } = useModelStore()
   const { camera, gl } = useThree()
   const meshRef = useRef<Mesh>(null)
@@ -46,11 +55,6 @@ function SolidMesh({ solidMesh, onPick }: { solidMesh: Mesh; onPick: (point: Vec
         const intersection = intersects[0]
         if (intersection.face) {
           const worldNormal = intersection.face.normal.clone().transformDirection(meshRef.current.matrixWorld).normalize()
-          onPick(intersection.point.clone(), worldNormal.clone())
-          console.log('[pick] solid face hit', {
-            point: intersection.point.toArray(),
-            normal: worldNormal.toArray(),
-          })
           startNewSketch(planePoseFromHit(worldNormal, intersection.point))
         }
       }
@@ -60,23 +64,36 @@ function SolidMesh({ solidMesh, onPick }: { solidMesh: Mesh; onPick: (point: Vec
     return () => window.removeEventListener('click', handleClick)
   }, [mode, newSketchArmed, camera, startNewSketch])
 
+  const onPointerMove = (e: ThreeEvent<PointerEvent>) => {
+    if (mode !== 'view' || !newSketchArmed || !e.face) return
+    const worldNormal = e.face.normal.clone().transformDirection(e.object.matrixWorld).normalize()
+    onHover(e.point.clone(), worldNormal)
+  }
+
+  const onPointerOut = () => {
+    onHoverOut()
+  }
+
   return (
-    <mesh ref={meshRef} />
+    <mesh ref={meshRef} onPointerMove={onPointerMove} onPointerOut={onPointerOut} />
   )
 }
 
 export function ExtrudedSolids() {
   const { extrudes, sketches } = useModelStore()
-  const [pickDebug, setPickDebug] = useState<PickDebug | null>(null)
+  const [hoverPreview, setHoverPreview] = useState<HoverPreview | null>(null)
   const solids = useMemo(() => buildSolidMeshes(extrudes, sketches), [extrudes, sketches])
 
-  const handlePick = (point: Vector3, normal: Vector3) => {
-    const end = point.clone().add(normal.clone().multiplyScalar(1.2))
-    setPickDebug({
-      point: [point.x, point.y, point.z],
-      normalEnd: [end.x, end.y, end.z],
+  const handleHover = (point: Vector3, normal: Vector3) => {
+    const pose = planePoseFromHit(normal, point)
+    const lifted = point.clone().add(normal.clone().multiplyScalar(0.02))
+    setHoverPreview({
+      position: [lifted.x, lifted.y, lifted.z],
+      rotation: pose.rotation,
     })
   }
+
+  const clearHover = () => setHoverPreview(null)
 
   useEffect(() => {
     return () => disposeSolidMeshes(solids)
@@ -85,16 +102,13 @@ export function ExtrudedSolids() {
   return (
     <>
       {solids.map((mesh) => (
-        <SolidMesh key={mesh.uuid} solidMesh={mesh} onPick={handlePick} />
+        <SolidMesh key={mesh.uuid} solidMesh={mesh} onHover={handleHover} onHoverOut={clearHover} />
       ))}
-      {pickDebug && (
-        <>
-          <mesh position={pickDebug.point}>
-            <sphereGeometry args={[0.08, 12, 12]} />
-            <meshBasicMaterial color="#ff3355" depthTest={false} />
-          </mesh>
-          <Line points={[pickDebug.point, pickDebug.normalEnd]} color="#ff3355" lineWidth={3} />
-        </>
+      {hoverPreview && (
+        <mesh position={hoverPreview.position} rotation={hoverPreview.rotation} raycast={noopRaycast}>
+          <planeGeometry args={[2.5, 2.5]} />
+          <meshBasicMaterial color="#ffe866" transparent opacity={0.22} side={DoubleSide} depthWrite={false} />
+        </mesh>
       )}
     </>
   )
