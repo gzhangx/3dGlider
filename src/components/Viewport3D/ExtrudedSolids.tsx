@@ -1,11 +1,17 @@
-import { useMemo, useEffect, useRef } from 'react'
+import { useMemo, useEffect, useRef, useState } from 'react'
+import { Line } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { Vector2, Mesh, MeshStandardMaterial, DoubleSide, Raycaster } from 'three'
+import { Vector2, Vector3, Mesh, MeshStandardMaterial, DoubleSide, Raycaster } from 'three'
 import { useModelStore } from '../../store/modelStore'
 import { planePoseFromHit } from '../../lib/planePose'
 import { buildSolidMeshes, disposeSolidMeshes } from '../../lib/solidModel'
 
-function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
+interface PickDebug {
+  point: [number, number, number]
+  normalEnd: [number, number, number]
+}
+
+function SolidMesh({ solidMesh, onPick }: { solidMesh: Mesh; onPick: (point: Vector3, normal: Vector3) => void }) {
   const { mode, newSketchArmed, startNewSketch } = useModelStore()
   const { camera, gl } = useThree()
   const meshRef = useRef<Mesh>(null)
@@ -40,6 +46,11 @@ function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
         const intersection = intersects[0]
         if (intersection.face) {
           const worldNormal = intersection.face.normal.clone().transformDirection(meshRef.current.matrixWorld).normalize()
+          onPick(intersection.point.clone(), worldNormal.clone())
+          console.log('[pick] solid face hit', {
+            point: intersection.point.toArray(),
+            normal: worldNormal.toArray(),
+          })
           startNewSketch(planePoseFromHit(worldNormal, intersection.point))
         }
       }
@@ -56,7 +67,16 @@ function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
 
 export function ExtrudedSolids() {
   const { extrudes, sketches } = useModelStore()
+  const [pickDebug, setPickDebug] = useState<PickDebug | null>(null)
   const solids = useMemo(() => buildSolidMeshes(extrudes, sketches), [extrudes, sketches])
+
+  const handlePick = (point: Vector3, normal: Vector3) => {
+    const end = point.clone().add(normal.clone().multiplyScalar(1.2))
+    setPickDebug({
+      point: [point.x, point.y, point.z],
+      normalEnd: [end.x, end.y, end.z],
+    })
+  }
 
   useEffect(() => {
     return () => disposeSolidMeshes(solids)
@@ -65,8 +85,17 @@ export function ExtrudedSolids() {
   return (
     <>
       {solids.map((mesh) => (
-        <SolidMesh key={mesh.uuid} solidMesh={mesh} />
+        <SolidMesh key={mesh.uuid} solidMesh={mesh} onPick={handlePick} />
       ))}
+      {pickDebug && (
+        <>
+          <mesh position={pickDebug.point}>
+            <sphereGeometry args={[0.08, 12, 12]} />
+            <meshBasicMaterial color="#ff3355" depthTest={false} />
+          </mesh>
+          <Line points={[pickDebug.point, pickDebug.normalEnd]} color="#ff3355" lineWidth={3} />
+        </>
+      )}
     </>
   )
 }
