@@ -18,7 +18,13 @@ function featureGeometry(ext: ExtrudeFeature, sketch: Sketch): BufferGeometry | 
   const shapes = sketchElementsToShape(sketch.elements)
   if (shapes.length === 0) return null
 
-  const geo = new ExtrudeGeometry(shapes, { depth: Math.abs(ext.depth), bevelEnabled: false })
+  const depth = Math.abs(ext.depth)
+  const geo = new ExtrudeGeometry(shapes, { depth, bevelEnabled: false })
+  if (ext.depth < 0) {
+    // ExtrudeGeometry grows along local +Z. Shift negative features back so the
+    // sketch plane remains the reference face and the solid extends the other way.
+    geo.translate(0, 0, -depth)
+  }
   const [rx, ry, rz] = sketch.plane.rotation
   const [px, py, pz] = planeOffsetPosition(sketch.plane.rotation, sketch.plane.offset)
   const m = new Matrix4()
