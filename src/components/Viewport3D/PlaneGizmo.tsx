@@ -1,7 +1,9 @@
 import { useRef, useMemo } from 'react'
+import { ThreeEvent } from '@react-three/fiber'
 import { Mesh, DoubleSide, PlaneGeometry, EdgesGeometry } from 'three'
 import { Text } from '@react-three/drei'
 import { useModelStore, PlaneId } from '../../store/modelStore'
+import { planePoseFromHit } from '../../lib/planePose'
 
 interface PlaneGizmoProps {
   id: PlaneId
@@ -20,13 +22,20 @@ export function PlaneGizmo({ id, rotation, color, label }: PlaneGizmoProps) {
   const isHovered = hoveredPlane === id
   const isDisabled = mode === 'sketch' || !newSketchArmed
 
+  const onClick = (e: ThreeEvent<MouseEvent>) => {
+    if (isDisabled || !e.face) return
+    e.stopPropagation()
+    const worldNormal = e.face.normal.clone().transformDirection(e.object.matrixWorld).normalize()
+    startNewSketch(planePoseFromHit(worldNormal, e.point))
+  }
+
   return (
     <group rotation={rotation}>
       <mesh
         ref={ref}
         onPointerEnter={() => !isDisabled && setHoveredPlane(id)}
         onPointerLeave={() => setHoveredPlane(null)}
-        onClick={() => !isDisabled && startNewSketch(id, 0)}
+        onClick={onClick}
       >
         <planeGeometry args={[SIZE, SIZE]} />
         <meshStandardMaterial

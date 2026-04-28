@@ -1,17 +1,9 @@
 import { useMemo, useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Vector3, Vector2, Mesh, MeshStandardMaterial, DoubleSide, Raycaster } from 'three'
-import { useModelStore, PlaneId } from '../../store/modelStore'
+import { useModelStore } from '../../store/modelStore'
+import { planePoseFromHit } from '../../lib/planePose'
 import { buildSolidMeshes, disposeSolidMeshes } from '../../lib/solidModel'
-
-function normalToPlane(normal: Vector3): PlaneId {
-  const ax = Math.abs(normal.x)
-  const ay = Math.abs(normal.y)
-  const az = Math.abs(normal.z)
-  if (az >= ax && az >= ay) return 'XY'
-  if (ay >= ax && ay >= az) return 'XZ'
-  return 'YZ'
-}
 
 function isFlatPrincipalFace(normal: Vector3, threshold = 0.9): boolean {
   const n = normal.clone().normalize()
@@ -19,15 +11,9 @@ function isFlatPrincipalFace(normal: Vector3, threshold = 0.9): boolean {
   return maxComp >= threshold
 }
 
-function offsetForPlane(plane: PlaneId, point: { x: number; y: number; z: number }): number {
-  if (plane === 'XY') return point.z
-  if (plane === 'XZ') return point.y
-  return point.x
-}
-
 function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
   const { mode, newSketchArmed, startNewSketch } = useModelStore()
-  const { camera } = useThree()
+  const { camera, gl } = useThree()
   const meshRef = useRef<Mesh>(null)
   const mouseRef = useRef(new Vector2())
 
@@ -40,12 +26,13 @@ function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      mouseRef.current.x = (e.clientX / window.innerWidth) * 2 - 1
-      mouseRef.current.y = -(e.clientY / window.innerHeight) * 2 + 1
+      const rect = gl.domElement.getBoundingClientRect()
+      mouseRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+      mouseRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
     }
     window.addEventListener('mousemove', handleMouseMove)
     return () => window.removeEventListener('mousemove', handleMouseMove)
-  }, [])
+  }, [gl])
 
   useEffect(() => {
     const handleClick = () => {
@@ -60,8 +47,7 @@ function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
         if (intersection.face) {
           const worldNormal = intersection.face.normal.clone().transformDirection(meshRef.current.matrixWorld).normalize()
           if (!isFlatPrincipalFace(worldNormal)) return
-          const plane = normalToPlane(worldNormal)
-          startNewSketch(plane, offsetForPlane(plane, intersection.point))
+          startNewSketch(planePoseFromHit(worldNormal, intersection.point))
         }
       }
     }

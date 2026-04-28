@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useModelStore, Sketch, PlaneId } from '../../store/modelStore'
+import { planeIdFromPose } from '../../lib/planePose'
 import { sketchElementsToShape } from '../../lib/sketchToShape'
 import styles from './FeatureTree.module.css'
 
@@ -9,7 +10,8 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   const [operation, setOperation] = useState<'add' | 'cut'>('add')
 
   const existing = extrudes.filter((e) => e.sketchId === sketch.id)
-  const canExtrude = sketchElementsToShape(sketch.elements, sketch.plane).length > 0
+  const canExtrude = sketchElementsToShape(sketch.elements).length > 0
+  const planeLabel = planeIdFromPose(sketch.plane)
 
   const handleExtrude = () => {
     const d = parseFloat(depth)
@@ -21,7 +23,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
       <div className={styles.sketchRow}>
         <span className={styles.sketchIcon}>✏</span>
         <span className={styles.sketchLabel}>
-          Sketch ({sketch.plane})
+          Sketch ({planeLabel})
           <span className={styles.count}>{sketch.elements.length} el</span>
         </span>
         <button

@@ -1,9 +1,11 @@
 import { useModelStore } from '../../store/modelStore'
 import { exportSTL } from '../../lib/exportSTL'
+import { planeIdFromPose } from '../../lib/planePose'
 import styles from './Toolbar.module.css'
 
 export function Toolbar() {
   const { mode, activePlane, extrudes, sketches, exitSketch } = useModelStore()
+  const activePlaneLabel = activePlane ? planeIdFromPose(activePlane) : null
 
   return (
     <header className={styles.toolbar}>
@@ -15,7 +17,7 @@ export function Toolbar() {
         )}
         {mode === 'sketch' && (
           <>
-            <span className={styles.activeLabel}>Sketching on {activePlane}</span>
+            <span className={styles.activeLabel}>Sketching on {activePlaneLabel}</span>
             <button className={styles.exitBtn} onClick={exitSketch}>
               Exit Sketch
             </button>

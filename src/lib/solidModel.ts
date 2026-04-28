@@ -1,12 +1,11 @@
-import { Mesh, BufferGeometry, ExtrudeGeometry, Matrix4, Euler } from 'three'
+import { Mesh, BufferGeometry, ExtrudeGeometry, Matrix4, Euler, Vector3 } from 'three'
 import { CSG } from 'three-csg-ts'
 import { ExtrudeFeature, Sketch } from '../store/modelStore'
-import { sketchElementsToShape, EXTRUDE_ROTATION } from './sketchToShape'
+import { sketchElementsToShape } from './sketchToShape'
 
-function planeOffsetPosition(plane: Sketch['plane'], offset: number): [number, number, number] {
-  if (plane === 'XY') return [0, 0, offset]
-  if (plane === 'XZ') return [0, offset, 0]
-  return [offset, 0, 0]
+function planeOffsetPosition(rotation: [number, number, number], offset: number): [number, number, number] {
+  const n = new Vector3(0, 0, 1).applyEuler(new Euler(...rotation, 'XYZ')).normalize().multiplyScalar(offset)
+  return [n.x, n.y, n.z]
 }
 
 function bakeGeometry(geometry: BufferGeometry, matrix: Matrix4): BufferGeometry {
@@ -16,17 +15,19 @@ function bakeGeometry(geometry: BufferGeometry, matrix: Matrix4): BufferGeometry
 }
 
 function featureGeometry(ext: ExtrudeFeature, sketch: Sketch): BufferGeometry | null {
-  const shapes = sketchElementsToShape(sketch.elements, sketch.plane)
+  const shapes = sketchElementsToShape(sketch.elements)
   if (shapes.length === 0) return null
 
   const geo = new ExtrudeGeometry(shapes, { depth: Math.abs(ext.depth), bevelEnabled: false })
-  const [rx, ry, rz] = EXTRUDE_ROTATION[sketch.plane]
-  const [px, py, pz] = planeOffsetPosition(sketch.plane, sketch.offset)
+  const [rx, ry, rz] = sketch.plane.rotation
+  const [px, py, pz] = planeOffsetPosition(sketch.plane.rotation, sketch.plane.offset)
   const m = new Matrix4()
   m.makeRotationFromEuler(new Euler(rx, ry, rz, 'XYZ'))
   m.setPosition(px, py, pz)
   const baked = bakeGeometry(geo, m)
   baked.computeVertexNormals()
+  baked.computeBoundingBox()
+  baked.computeBoundingSphere()
   geo.dispose()
   return baked
 }
@@ -56,6 +57,8 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
       for (let i = 0; i < solids.length; i++) {
         const next = CSG.subtract(solids[i], featMesh)
         next.geometry.computeVertexNormals()
+        next.geometry.computeBoundingBox()
+        next.geometry.computeBoundingSphere()
         solids[i].geometry.dispose()
         solids[i] = next
       }

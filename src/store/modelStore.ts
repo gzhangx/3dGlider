@@ -4,6 +4,22 @@ export type PlaneId = 'XY' | 'XZ' | 'YZ'
 export type AppMode = 'view' | 'sketch'
 export type SketchTool = 'select' | 'line' | 'rect' | 'circle' | 'cut'
 
+export interface SketchPlanePose {
+  rotation: [number, number, number]
+  offset: number
+}
+
+export const PRESET_PLANE_ROTATION: Record<PlaneId, [number, number, number]> = {
+  XY: [0, 0, 0],
+  XZ: [-Math.PI / 2, 0, 0],
+  YZ: [0, Math.PI / 2, 0],
+}
+
+export function presetPlanePose(plane: PlaneId, offset = 0): SketchPlanePose {
+  const [rx, ry, rz] = PRESET_PLANE_ROTATION[plane]
+  return { rotation: [rx, ry, rz], offset }
+}
+
 export type SketchPoint = { x: number; y: number }
 
 export interface SketchLine {
@@ -22,8 +38,7 @@ export type SketchElement = SketchLine | SketchRect | SketchCircle | SketchArc
 
 export interface Sketch {
   id: string
-  plane: PlaneId
-  offset: number
+  plane: SketchPlanePose
   elements: SketchElement[]
 }
 
@@ -36,8 +51,7 @@ export interface ExtrudeFeature {
 
 interface ModelState {
   mode: AppMode
-  activePlane: PlaneId | null
-  activePlaneOffset: number
+  activePlane: SketchPlanePose | null
   hoveredPlane: PlaneId | null
   newSketchArmed: boolean
   activeTool: SketchTool
@@ -57,7 +71,7 @@ interface ModelState {
   deleteExtrude: (id: string) => void
   armNewSketch: () => void
   cancelNewSketch: () => void
-  startNewSketch: (plane: PlaneId, offset?: number) => void
+  startNewSketch: (plane: PlaneId | SketchPlanePose, offset?: number) => void
   editSketch: (sketchId: string) => void
   exitSketch: () => void
 }
@@ -65,7 +79,6 @@ interface ModelState {
 export const useModelStore = create<ModelState>((set) => ({
   mode: 'view',
   activePlane: null,
-  activePlaneOffset: 0,
   hoveredPlane: null,
   newSketchArmed: false,
   activeTool: 'select',
@@ -111,8 +124,7 @@ export const useModelStore = create<ModelState>((set) => ({
   startNewSketch: (plane, offset = 0) =>
     set({
       mode: 'sketch',
-      activePlane: plane,
-      activePlaneOffset: offset,
+      activePlane: typeof plane === 'string' ? presetPlanePose(plane, offset) : plane,
       newSketchArmed: false,
       activeTool: 'select',
       sketchElements: [],
@@ -127,7 +139,6 @@ export const useModelStore = create<ModelState>((set) => ({
       return {
         mode: 'sketch',
         activePlane: target.plane,
-        activePlaneOffset: target.offset,
         newSketchArmed: false,
         activeTool: 'select',
         sketchElements: target.elements,
@@ -144,12 +155,12 @@ export const useModelStore = create<ModelState>((set) => ({
           // Update existing sketch instead of creating a duplicate entry.
           sketches = sketches.map((sk) =>
             sk.id === s.editingSketchId
-              ? { ...sk, plane: s.activePlane!, offset: s.activePlaneOffset, elements: s.sketchElements }
+              ? { ...sk, plane: s.activePlane!, elements: s.sketchElements }
               : sk,
           )
         } else {
           // New sketch on this plane.
-          sketches = [...sketches, { id: crypto.randomUUID(), plane: s.activePlane, offset: s.activePlaneOffset, elements: s.sketchElements }]
+          sketches = [...sketches, { id: crypto.randomUUID(), plane: s.activePlane, elements: s.sketchElements }]
         }
       } else if (s.editingSketchId) {
         // If user cleared all elements while editing, delete the sketch.
@@ -159,7 +170,6 @@ export const useModelStore = create<ModelState>((set) => ({
       return {
         mode: 'view',
         activePlane: null,
-        activePlaneOffset: 0,
         newSketchArmed: false,
         activeTool: 'select',
         sketchElements: [],

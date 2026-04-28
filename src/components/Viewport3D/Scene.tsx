@@ -1,18 +1,13 @@
 import { useRef, useEffect } from 'react'
 import { Grid, CameraControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { useModelStore, PlaneId } from '../../store/modelStore'
+import { useModelStore } from '../../store/modelStore'
+import { planeNormalFromPose, planeOriginFromPose } from '../../lib/planePose'
 import { AxesHelper } from './AxesHelper'
 import { PlaneGizmo } from './PlaneGizmo'
 import { SketchPlane } from './SketchPlane'
 import { CommittedSketches } from './CommittedSketches'
 import { ExtrudedSolids } from './ExtrudedSolids'
-
-const PLANE_NORMAL: Record<PlaneId, [number, number, number]> = {
-  XY: [0, 0, 1],
-  XZ: [0, 1, 0],
-  YZ: [1, 0, 0],
-}
 
 // camera-controls ACTION enum values
 const ACTION_NONE = 0
@@ -20,7 +15,7 @@ const ACTION_ROTATE = 1
 const ACTION_TRUCK = 2
 
 export function Scene() {
-  const { activePlane, activePlaneOffset, mode, activeTool } = useModelStore()
+  const { activePlane, mode, activeTool } = useModelStore()
   const { camera } = useThree()
   const controlsRef = useRef<CameraControls>(null)
 
@@ -28,12 +23,16 @@ export function Scene() {
   useEffect(() => {
     if (!activePlane || !controlsRef.current) return
     const dist = camera.position.length() || 12
-    const [nx, ny, nz] = PLANE_NORMAL[activePlane]
-    const tx = nx * activePlaneOffset
-    const ty = ny * activePlaneOffset
-    const tz = nz * activePlaneOffset
+    const normal = planeNormalFromPose(activePlane)
+    const origin = planeOriginFromPose(activePlane)
+    const nx = normal.x
+    const ny = normal.y
+    const nz = normal.z
+    const tx = origin.x
+    const ty = origin.y
+    const tz = origin.z
     controlsRef.current.setLookAt(tx + nx * dist, ty + ny * dist, tz + nz * dist, tx, ty, tz, true)
-  }, [activePlane, activePlaneOffset, camera])
+  }, [activePlane, camera])
 
   // In sketch mode with a draw tool: disable left-button orbit so clicks reach the sketch plane.
   // Right-drag and scroll still pan/zoom freely.

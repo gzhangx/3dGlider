@@ -1,21 +1,8 @@
 import * as THREE from 'three'
-import { PlaneId, SketchElement, SketchLine, SketchRect, SketchCircle, SketchArc } from '../store/modelStore'
+import { SketchElement, SketchLine, SketchRect, SketchCircle, SketchArc } from '../store/modelStore'
 
-// Rotation applied to an ExtrudeGeometry mesh so it sits on the correct world plane.
-// ExtrudeGeometry lives in local XY, extrudes along local +Z.
-//   XY  → no rotation; extrudes along world +Z
-//   XZ  → Rx(-π/2); local Y becomes world Z (with v-flip below), extrudes along world +Y
-//   YZ  → Rx(π/2)*Ry(π/2); extrudes along world +X
-export const EXTRUDE_ROTATION: Record<PlaneId, [number, number, number]> = {
-  XY: [0, 0, 0],
-  XZ: [-Math.PI / 2, 0, 0],
-  YZ: [Math.PI / 2, Math.PI / 2, 0],
-}
-
-// For XZ plane the Rx(-π/2) rotation reflects the Y axis, so we pre-negate v
-// so the final world position is correct.
-function pt(u: number, v: number, plane: PlaneId): [number, number] {
-  return plane === 'XZ' ? [u, -v] : [u, v]
+function pt(u: number, v: number): [number, number] {
+  return [u, v]
 }
 
 // Extract one or more closed loops from a set of line segments.
@@ -165,7 +152,6 @@ function extractMixedLoops(segments: Array<SketchLine | SketchArc>) {
  */
 export function sketchElementsToShape(
   elements: SketchElement[],
-  plane: PlaneId,
 ): THREE.Shape[] {
   const rawShapes: THREE.Shape[] = []
 
@@ -174,10 +160,10 @@ export function sketchElementsToShape(
     const x0 = Math.min(r.start.x, r.end.x), x1 = Math.max(r.start.x, r.end.x)
     const y0 = Math.min(r.start.y, r.end.y), y1 = Math.max(r.start.y, r.end.y)
     const shape = new THREE.Shape()
-    shape.moveTo(...pt(x0, y0, plane))
-    shape.lineTo(...pt(x1, y0, plane))
-    shape.lineTo(...pt(x1, y1, plane))
-    shape.lineTo(...pt(x0, y1, plane))
+    shape.moveTo(...pt(x0, y0))
+    shape.lineTo(...pt(x1, y0))
+    shape.lineTo(...pt(x1, y1))
+    shape.lineTo(...pt(x0, y1))
     shape.closePath()
     rawShapes.push(shape)
   }
@@ -185,7 +171,7 @@ export function sketchElementsToShape(
   // ── Circles ───────────────────────────────────────────────────────────────
   for (const c of elements.filter((e): e is SketchCircle => e.type === 'circle')) {
     const shape = new THREE.Shape()
-    const [cx, cy] = pt(c.center.x, c.center.y, plane)
+    const [cx, cy] = pt(c.center.x, c.center.y)
     shape.absarc(cx, cy, c.radius, 0, Math.PI * 2, false)
     rawShapes.push(shape)
   }
@@ -202,7 +188,7 @@ export function sketchElementsToShape(
     const span = normSpan(a.startAngle, a.endAngle)
     if (Math.abs(span - TAU) > 1e-3) continue
     const shape = new THREE.Shape()
-    const [cx, cy] = pt(a.center.x, a.center.y, plane)
+    const [cx, cy] = pt(a.center.x, a.center.y)
     shape.absarc(cx, cy, a.radius, 0, TAU, false)
     rawShapes.push(shape)
   }
@@ -213,8 +199,8 @@ export function sketchElementsToShape(
     const loops = extractLoops(lines)
     for (const loop of loops) {
       const shape = new THREE.Shape()
-      shape.moveTo(...pt(loop[0].x, loop[0].y, plane))
-      for (let i = 1; i < loop.length; i++) shape.lineTo(...pt(loop[i].x, loop[i].y, plane))
+      shape.moveTo(...pt(loop[0].x, loop[0].y))
+      for (let i = 1; i < loop.length; i++) shape.lineTo(...pt(loop[i].x, loop[i].y))
       shape.closePath()
       rawShapes.push(shape)
     }
@@ -230,15 +216,15 @@ export function sketchElementsToShape(
       let cur = path[0].a
       const shape = new THREE.Shape()
       const p0 = rep.get(cur)!
-      shape.moveTo(...pt(p0.x, p0.y, plane))
+      shape.moveTo(...pt(p0.x, p0.y))
 
       for (const e of path) {
         const next = e.a === cur ? e.b : e.a
         if (e.kind === 'line') {
           const p = rep.get(next)!
-          shape.lineTo(...pt(p.x, p.y, plane))
+          shape.lineTo(...pt(p.x, p.y))
         } else {
-          const [cx, cy] = pt(e.seg.center.x, e.seg.center.y, plane)
+          const [cx, cy] = pt(e.seg.center.x, e.seg.center.y)
           const startNode = e.a
           const endNode = e.b
           const forward = cur === startNode && next === endNode
