@@ -43,58 +43,30 @@
 - [ ] Automatically detect plane from normal
 - [ ] Automatically detect offset from position
 - [ ] Use face click to set up sketch parameters
-
----
-
 ## Current Technical Status
 
 ### Technology Stack
 | Layer | Technology | Purpose | Version |
 |-------|-----------|---------|---------|
 | **React Framework** | React | Component rendering & state | 18.3.1 |
-| **State Management** | Zustand | Global app state | 5.0.12 |
-| **3D Rendering** | Three.js | WebGL abstraction | 0.172.0 |
-| **React-to-Three Bridge** | @react-three/fiber | React→Three.js | 8.18.0 |
-| **3D Utilities** | @react-three/drei | Pre-made 3D components | 9.120.3 |
-| **Boolean Operations** | three-csg-ts | CSG algebra | 2.5.0 |
-| **Language** | TypeScript | Type safety | 5.7.2 |
 | **Build Tool** | Vite | Fast bundler | 6.4.2 |
 
-### Data Model ✅
-```
 Zustand Store Structure:
 ├── mode: 'view' | 'sketch'
 ├── activePlane: 'XY' | 'XZ' | 'YZ' | null
 ├── activePlaneOffset: number (distance from origin)
-├── newSketchArmed: boolean (click-to-start mode)
-├── sketches: Sketch[]
-│   └── { id, plane, offset, elements: SketchElement[] }
 └── extrudes: ExtrudeFeature[]
     └── { id, sketchId, operation: 'add'|'cut', depth }
-```
-
-### Rendering Pipeline ✅
 1. **Data Layer** → Zustand store
 2. **Component Layer** → React components subscribe  
 3. **Geometry Layer** → sketchToShape + ExtrudeGeometry + Matrix4
 4. **Boolean Layer** → three-csg-ts CSG operations
-5. **Render Layer** → @react-three/fiber renders Three.js objects
-
 ### Coordinate Systems ✅
 | Plane | Normal | Extrude Direction | Storage |
-|-------|--------|-------------------|---------|
-| **XY** | [0,0,1] | +Z | (x, y) → world (x, y, offset+Z) |
-| **XZ** | [0,1,0] | +Y | (x, y) → world (x, offset+Y, y) |
 | **YZ** | [1,0,0] | +X | (x, y) → world (offset+X, x, y) |
-
----
-
-## The Blocking Issue: Cut Surface Raycasting
 
 ### Problem Statement
 **User cannot click cut/pocket surface faces to start new sketches.**
-
-Observable behavior:
 - ✅ Pocket geometry renders visually correct
 - ✅ Pocket geometry in STL export is correct
 - ✅ First extrude (non-cut) surfaces ARE clickable
@@ -115,11 +87,9 @@ console.log(intersects)  // ← [] (EMPTY! Should have hits)
 
 ### Root Cause Candidates
 
-1. **CSG Geometry Structure** (Most Likely)
    - CSG.subtract() may return geometry without proper .index (indexed triangles)
    - Raycaster needs index to test ray-triangle intersections
    - Fix: Verify geometry.index is populated after CSG operation
-
 2. **Missing Geometry Bounds**
    - Raycaster needs geometry.boundingSphere to pre-filter intersections
    - CSG output may have invalid/missing bounds

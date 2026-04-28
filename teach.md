@@ -100,8 +100,6 @@ YZ Plane:  front view,     normal is [1,0,0] (X-axis)
   └─ Sketch point (2, 3) with offset 5 → World (5+LIFT, 2, 3)
 ```
 
-### Coordinate Transformation: Sketch → World
-
 **File: `src/lib/sketchGeometry.ts`**
 
 ```typescript
@@ -126,20 +124,12 @@ function rectPts(a: SketchPoint, b: SketchPoint, plane: PlaneId, offset = 0) {
 ```
 
 **Key Concept: LIFT = 0.003**
-- Small Z-offset to prevent "Z-fighting" (flickering when surfaces touch)
-- Sketch geometry sits slightly above the plane it's on
-
----
-
 ## Part 4: Sketch Rendering (2D Drawing on 3D Plane)
 
 ### Component: src/components/Viewport3D/CommittedSketches.tsx
-
 This component renders **saved sketches** as 2D line drawings in 3D space.
-
 ```typescript
 export function CommittedSketches() {
-  const { sketches } = useModelStore()
   return (
     <>
       {sketches.map((sketch) => (
@@ -150,19 +140,15 @@ export function CommittedSketches() {
 }
 
 function SavedSketch({ sketch }: { sketch: Sketch }) {
-  // For each saved sketch, iterate its elements
   return (
     <>
       {sketch.elements.map((el) => (
         // Render each element as a line in 3D
-        <SketchEl key={el.id} el={el} plane={sketch.plane} offset={sketch.offset} />
       ))}
     </>
-  )
 }
 
 function SketchEl({ el, plane, offset }: { el: SketchElement; plane: PlaneId; offset: number }) {
-  // SketchEl is the actual renderer for one shape
   
   if (el.type === 'line')
     return <Line points={linePts(el.start, el.end, plane, offset)} color="#ffdd44" />
@@ -180,19 +166,16 @@ function SketchEl({ el, plane, offset }: { el: SketchElement; plane: PlaneId; of
 ```typescript
 // @react-three/drei's Line component
 // INPUT: array of 3D points and styling options
-// OUTPUT: A renderable 3D line that Three.js will draw
 <Line 
   points={[[0,0,3], [5,0,3], [5,5,3]]}  // Array of [x,y,z] tuples
   color="#ffdd44"                         // CSS color
   lineWidth={2}                           // Line thickness in pixels
 />
-
 // Under the hood, Line generates a THREE.BufferGeometry with positions
 // and renders it with THREE.LineBasicMaterial
 ```
 
 ---
-
 ## Part 5: Sketch-to-3D Solid Conversion
 
 ### Step A: Convert Sketch Elements to THREE.Shape
@@ -230,8 +213,6 @@ export function sketchElementsToShape(elements: SketchElement[], plane: PlaneId)
 
 // WHAT IT DOES:
 // Input:  [SketchRect at (0,0)-(5,5), SketchCircle at (7,5) r=2]
-// Output: [THREE.Shape representing closed rectangle, THREE.Shape representing circle]
-```
 
 ### Step B: Extrude Shape to 3D Geometry
 
@@ -247,9 +228,6 @@ function featureGeometry(ext: ExtrudeFeature, sketch: Sketch): BufferGeometry | 
   // Purpose: Convert 2D shape into 3D geometry by extruding along Z
   const geo = new ExtrudeGeometry(shapes, {
     depth: Math.abs(ext.depth),  // How far to extrude
-    bevelEnabled: false          // Don't round the edges
-  })
-  
   // STEP 3: ExtrudeGeometry creates geometry in LOCAL coordinate space:
   //   - XY plane sketch → extrudes along local +Z
   //   - But we need it on XZ or YZ planes → must ROTATE
@@ -259,10 +237,6 @@ function featureGeometry(ext: ExtrudeFeature, sketch: Sketch): BufferGeometry | 
     XZ: [-Math.PI / 2, 0, 0],           // Rotate around X by -90°
     YZ: [Math.PI / 2, Math.PI / 2, 0]   // Rotate around X by 90°, then Y by 90°
   }
-  
-  // STEP 4: Create transformation MATRIX
-  // LIBRARY: THREE.Matrix4
-  // Purpose: Combine rotation, position, and scale into one transform
   const matrix = new Matrix4()
   matrix.makeRotationFromEuler(new Euler(...EXTRUDE_ROTATION[sketch.plane]))
   matrix.setPosition(sketch.plane === 'XY' ? 0 : offset, ...)  // Position at offset
@@ -276,8 +250,6 @@ function featureGeometry(ext: ExtrudeFeature, sketch: Sketch): BufferGeometry | 
   
   return baked
 }
-
-// WHAT IT DOES:
 // Input:  ExtrudeFeature { depth: 5 }, Sketch with rectangle on XY plane at offset 3
 // Output: THREE.BufferGeometry representing a 5-unit-tall box sitting at Z=3
 ```
@@ -295,17 +267,11 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
   for (const ext of extrudes) {
     const featGeo = featureGeometry(ext, sketch)
     const featMesh = new Mesh(featGeo)
-    
     if (ext.operation === 'cut') {
-      // POCKET MODE: Subtract this geometry from all existing solids
       
-      for (let i = 0; i < solids.length; i++) {
         // LIBRARY: three-csg-ts CSG.subtract
-        // Purpose: Boolean subtraction (A - B = A with B cut out)
         // Input:   Two THREE.Mesh objects
-        // Output:  New THREE.Mesh with cutout geometry
         
-        const resultMesh = CSG.subtract(solids[i], featMesh)
         // INPUT MESHES:
         //   solids[i] = existing solid (e.g., a box)
         //   featMesh = pocket geometry (e.g., a small cylinder)
@@ -314,19 +280,16 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
         
         // Compute normals so faces can be lit and raycast
         resultMesh.geometry.computeVertexNormals()
-        
         // Clean up old geometry memory
         solids[i].geometry.dispose()
         
         // Replace with result
-        solids[i] = resultMesh
       }
     } else {
       // ADD MODE: Append this geometry to solids array
       solids.push(featMesh)
     }
   }
-  
   return solids  // All final solid meshes
 }
 
@@ -336,12 +299,9 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
 // Step 2: Create cylinder from circle
 // Step 3: Subtract cylinder from box → solids = [box-with-hole]
 // Return: [mesh representing box-with-hole]
-```
-
 ### CSG Library Details
 
 ```typescript
-// three-csg-ts: Boolean algebra for 3D meshes
 // 
 // API:
 //   CSG.union(mesh1, mesh2)     → mesh1 + mesh2 (combined volume)
@@ -368,30 +328,21 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
 export function ExtrudedSolids() {
   const { extrudes, sketches } = useModelStore()
   
-  // STEP 1: Compute solid meshes from all extrudes
   // Recomputes whenever extrudes/sketches change (via useMemo)
   const solids = useMemo(() => buildSolidMeshes(extrudes, sketches), [extrudes, sketches])
-  
   // STEP 2: Clean up geometry memory when solids change
   useEffect(() => {
-    return () => disposeSolidMeshes(solids)
-  }, [solids])
   
   // STEP 3: Render each solid mesh
-  return (
     <>
       {solids.map((mesh) => (
-        <SolidMesh key={mesh.uuid} solidMesh={mesh} />
       ))}
     </>
-  )
 }
 
 function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
   const { mode, newSketchArmed, startNewSketch } = useModelStore()
   const { camera } = useThree()  // Get camera for raycasting
-  const meshRef = useRef<Mesh>(null)
-  const mouseRef = useRef(new Vector2())
   
   // STEP 1: Assign CSG-generated geometry to React mesh
   useEffect(() => {

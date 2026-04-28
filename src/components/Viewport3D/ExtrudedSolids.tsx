@@ -1,15 +1,9 @@
 import { useMemo, useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
-import { Vector3, Vector2, Mesh, MeshStandardMaterial, DoubleSide, Raycaster } from 'three'
+import { Vector2, Mesh, MeshStandardMaterial, DoubleSide, Raycaster } from 'three'
 import { useModelStore } from '../../store/modelStore'
 import { planePoseFromHit } from '../../lib/planePose'
 import { buildSolidMeshes, disposeSolidMeshes } from '../../lib/solidModel'
-
-function isFlatPrincipalFace(normal: Vector3, threshold = 0.9): boolean {
-  const n = normal.clone().normalize()
-  const maxComp = Math.max(Math.abs(n.x), Math.abs(n.y), Math.abs(n.z))
-  return maxComp >= threshold
-}
 
 function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
   const { mode, newSketchArmed, startNewSketch } = useModelStore()
@@ -46,7 +40,6 @@ function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
         const intersection = intersects[0]
         if (intersection.face) {
           const worldNormal = intersection.face.normal.clone().transformDirection(meshRef.current.matrixWorld).normalize()
-          if (!isFlatPrincipalFace(worldNormal)) return
           startNewSketch(planePoseFromHit(worldNormal, intersection.point))
         }
       }
