@@ -49,6 +49,62 @@ export interface ExtrudeFeature {
   depth: number  // units along the plane's normal
 }
 
+export interface ModelData {
+  version: number
+  sketches: Sketch[]
+  extrudes: ExtrudeFeature[]
+}
+
+function isSketchPlanePose(value: unknown): value is SketchPlanePose {
+  if (!value || typeof value !== 'object') return false
+  const pose = value as SketchPlanePose
+  return Array.isArray(pose.rotation)
+    && pose.rotation.length === 3
+    && pose.rotation.every((n) => typeof n === 'number' && Number.isFinite(n))
+    && typeof pose.offset === 'number'
+    && Number.isFinite(pose.offset)
+}
+
+function isSketchElement(value: unknown): value is SketchElement {
+  if (!value || typeof value !== 'object') return false
+  const el = value as { type?: unknown }
+  return el.type === 'line' || el.type === 'rect' || el.type === 'circle' || el.type === 'arc'
+}
+
+function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: ExtrudeFeature[] } | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Partial<ModelData>
+  if (!Array.isArray(raw.sketches) || !Array.isArray(raw.extrudes)) return null
+
+  const sketches: Sketch[] = raw.sketches
+    .filter((s): s is Sketch => !!s
+      && typeof s.id === 'string'
+      && isSketchPlanePose(s.plane)
+      && Array.isArray(s.elements)
+      && s.elements.every(isSketchElement))
+    .map((s) => ({
+      id: s.id,
+      plane: {
+        rotation: [s.plane.rotation[0], s.plane.rotation[1], s.plane.rotation[2]],
+        offset: s.plane.offset,
+      },
+      elements: s.elements,
+    }))
+
+  const validSketchIds = new Set(sketches.map((s) => s.id))
+  const extrudes: ExtrudeFeature[] = raw.extrudes
+    .filter((e): e is ExtrudeFeature => !!e
+      && typeof e.id === 'string'
+      && typeof e.sketchId === 'string'
+      && (e.operation === 'add' || e.operation === 'cut')
+      && typeof e.depth === 'number'
+      && Number.isFinite(e.depth)
+      && validSketchIds.has(e.sketchId))
+    .map((e) => ({ id: e.id, sketchId: e.sketchId, operation: e.operation, depth: e.depth }))
+
+  return { sketches, extrudes }
+}
+
 interface ModelState {
   mode: AppMode
   activePlane: SketchPlanePose | null
@@ -74,6 +130,7 @@ interface ModelState {
   startNewSketch: (plane: PlaneId | SketchPlanePose, offset?: number) => void
   editSketch: (sketchId: string) => void
   exitSketch: () => void
+  loadModel: (data: unknown) => boolean
 }
 
 export const useModelStore = create<ModelState>((set) => ({
@@ -178,4 +235,22 @@ export const useModelStore = create<ModelState>((set) => ({
         sketches,
       }
     }),
+
+  loadModel: (data) => {
+    const parsed = sanitizeModelData(data)
+    if (!parsed) return false
+    set({
+      mode: 'view',
+      activePlane: null,
+      hoveredPlane: null,
+      newSketchArmed: false,
+      activeTool: 'select',
+      sketchElements: [],
+      selectedElementId: null,
+      editingSketchId: null,
+      sketches: parsed.sketches,
+      extrudes: parsed.extrudes,
+    })
+    return true
+  },
 }))

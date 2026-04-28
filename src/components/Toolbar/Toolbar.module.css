@@ -53,6 +53,35 @@
   background: #5a2222;
 }
 
+.saveBtn,
+.loadBtn {
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  border: 1px solid #335577;
+  transition: background 0.15s;
+}
+
+.saveBtn {
+  background: #1d2c44;
+  color: #9fd0ff;
+}
+
+.saveBtn:hover {
+  background: #243652;
+}
+
+.loadBtn {
+  background: #1f3a2a;
+  color: #9ff0b8;
+  border-color: #2f6a47;
+}
+
+.loadBtn:hover {
+  background: #274a35;
+}
+
 .exportBtn {
   padding: 5px 14px;
   background: #1a3a1a;
