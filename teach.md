@@ -88,12 +88,6 @@ const { extrudes, sketches, mode } = useModelStore()
 ### Understanding the Three Planes
 
 All sketches live in one of three coordinate planes:
-
-```
-XY Plane:  top-down view,  normal is [0,0,1] (Z-axis)
-  └─ Sketch point (2, 3) with offset 5 → World (2, 3, 5+LIFT)
-
-XZ Plane:  side view,      normal is [0,1,0] (Y-axis)  
   └─ Sketch point (2, 3) with offset 5 → World (2, 5+LIFT, 3)
 
 YZ Plane:  front view,     normal is [1,0,0] (X-axis)
@@ -110,14 +104,9 @@ function worldPt(p: SketchPoint, plane: PlaneId, offset = 0): [number, number, n
     case 'XZ': return [p.x, offset + LIFT, p.y]
     case 'YZ': return [offset + LIFT, p.x, p.y]
   }
-}
-
 // STEP 2: Generate world positions for a complete shape
 // For a rectangle from (0,0) to (5,5) on XY plane at offset 3:
 function rectPts(a: SketchPoint, b: SketchPoint, plane: PlaneId, offset = 0) {
-  // Returns [[0, 0, 3], [5, 0, 3], [5, 5, 3], [0, 5, 3], [0, 0, 3]]
-  // These are used to render the outline as a line in 3D space
-}
 
 // STEP 3: Render these points using @react-three/drei's Line component
 <Line points={rectPts(rect.start, rect.end, plane, offset)} />
@@ -125,25 +114,12 @@ function rectPts(a: SketchPoint, b: SketchPoint, plane: PlaneId, offset = 0) {
 
 **Key Concept: LIFT = 0.003**
 ## Part 4: Sketch Rendering (2D Drawing on 3D Plane)
-
-### Component: src/components/Viewport3D/CommittedSketches.tsx
-This component renders **saved sketches** as 2D line drawings in 3D space.
-```typescript
-export function CommittedSketches() {
-  return (
     <>
       {sketches.map((sketch) => (
         <SavedSketch key={sketch.id} sketch={sketch} />
-      ))}
-    </>
-  )
-}
-
 function SavedSketch({ sketch }: { sketch: Sketch }) {
   return (
     <>
-      {sketch.elements.map((el) => (
-        // Render each element as a line in 3D
       ))}
     </>
 }
@@ -151,13 +127,9 @@ function SavedSketch({ sketch }: { sketch: Sketch }) {
 function SketchEl({ el, plane, offset }: { el: SketchElement; plane: PlaneId; offset: number }) {
   
   if (el.type === 'line')
-    return <Line points={linePts(el.start, el.end, plane, offset)} color="#ffdd44" />
   if (el.type === 'rect')
-    return <Line points={rectPts(el.start, el.end, plane, offset)} color="#ffdd44" />
   if (el.type === 'circle')
-    return <Line points={circlePts(el.center, el.radius, plane, 64, offset)} color="#ffdd44" />
   if (el.type === 'arc')
-    return <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64, offset)} color="#ffdd44" />
 }
 ```
 
@@ -174,11 +146,8 @@ function SketchEl({ el, plane, offset }: { el: SketchElement; plane: PlaneId; of
 // Under the hood, Line generates a THREE.BufferGeometry with positions
 // and renders it with THREE.LineBasicMaterial
 ```
-
 ---
-## Part 5: Sketch-to-3D Solid Conversion
 
-### Step A: Convert Sketch Elements to THREE.Shape
 
 **File: `src/lib/sketchToShape.ts`**
 
@@ -214,8 +183,6 @@ export function sketchElementsToShape(elements: SketchElement[], plane: PlaneId)
 // WHAT IT DOES:
 // Input:  [SketchRect at (0,0)-(5,5), SketchCircle at (7,5) r=2]
 
-### Step B: Extrude Shape to 3D Geometry
-
 **File: `src/lib/solidModel.ts`**
 
 ```typescript
@@ -224,15 +191,11 @@ function featureGeometry(ext: ExtrudeFeature, sketch: Sketch): BufferGeometry | 
   const shapes = sketchElementsToShape(sketch.elements, sketch.plane)
   if (shapes.length === 0) return null
   
-  // STEP 2: LIBRARY CALL - THREE.ExtrudeGeometry
-  // Purpose: Convert 2D shape into 3D geometry by extruding along Z
   const geo = new ExtrudeGeometry(shapes, {
     depth: Math.abs(ext.depth),  // How far to extrude
   // STEP 3: ExtrudeGeometry creates geometry in LOCAL coordinate space:
   //   - XY plane sketch → extrudes along local +Z
   //   - But we need it on XZ or YZ planes → must ROTATE
-  
-  const EXTRUDE_ROTATION: Record<PlaneId, [rx, ry, rz]> = {
     XY: [0, 0, 0],                      // No rotation needed
     XZ: [-Math.PI / 2, 0, 0],           // Rotate around X by -90°
     YZ: [Math.PI / 2, Math.PI / 2, 0]   // Rotate around X by 90°, then Y by 90°
@@ -252,8 +215,6 @@ function featureGeometry(ext: ExtrudeFeature, sketch: Sketch): BufferGeometry | 
 }
 // Input:  ExtrudeFeature { depth: 5 }, Sketch with rectangle on XY plane at offset 3
 // Output: THREE.BufferGeometry representing a 5-unit-tall box sitting at Z=3
-```
-
 ---
 
 ## Part 6: Boolean Operations (CSG for Pockets)
@@ -270,20 +231,11 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
     if (ext.operation === 'cut') {
       
         // LIBRARY: three-csg-ts CSG.subtract
-        // Input:   Two THREE.Mesh objects
-        
-        // INPUT MESHES:
-        //   solids[i] = existing solid (e.g., a box)
-        //   featMesh = pocket geometry (e.g., a small cylinder)
-        // OUTPUT:
-        //   resultMesh = box with cylinder-shaped hole
         
         // Compute normals so faces can be lit and raycast
         resultMesh.geometry.computeVertexNormals()
         // Clean up old geometry memory
         solids[i].geometry.dispose()
-        
-        // Replace with result
       }
     } else {
       // ADD MODE: Append this geometry to solids array
@@ -310,11 +262,6 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
 //
 // Requirements:
 //   - Both input meshes must have valid BufferGeometry
-//   - Geometry should be indexed (triangles)
-//   - Geometry should have vertex normals (call computeVertexNormals())
-//
-// Limitation (CURRENT PROBLEM):
-//   - CSG-generated meshes sometimes don't have proper face data for raycasting
 //   - The resulting geometry may lose face information or face normals
 ```
 
@@ -326,8 +273,6 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
 
 ```typescript
 export function ExtrudedSolids() {
-  const { extrudes, sketches } = useModelStore()
-  
   // Recomputes whenever extrudes/sketches change (via useMemo)
   const solids = useMemo(() => buildSolidMeshes(extrudes, sketches), [extrudes, sketches])
   // STEP 2: Clean up geometry memory when solids change
