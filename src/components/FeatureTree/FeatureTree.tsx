@@ -15,7 +15,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
 
   // ── create-new-extrude form state ────────────────────────────────────────
   const [showExtrude, setShowExtrude] = useState(false)
-  const [depth, setDepth] = useState('5')
+  const [depth, setDepth] = useState('10')
   const [operation, setOperation] = useState<'add' | 'cut'>('add')
   const [symmetric, setSymmetric] = useState(false)
   const [useCustomDir, setUseCustomDir] = useState(false)
@@ -25,7 +25,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
 
   // ── edit-existing-extrude state ──────────────────────────────────────────
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [eDepth, setEDepth] = useState('5')
+  const [eDepth, setEDepth] = useState('10')
   const [eOperation, setEOperation] = useState<'add' | 'cut'>('add')
   const [eSymmetric, setESymmetric] = useState(false)
   const [eUseDir, setEUseDir] = useState(false)
@@ -45,7 +45,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   // Live-preview: push edit state into store whenever it changes
   useEffect(() => {
     if (!editingId) return
-    const d = parseFloat(eDepth)
+    const d = parseFloat(eDepth) / 10  // convert mm input → scene units
     if (isNaN(d) || d === 0) return
     let direction: [number, number, number] | undefined
     if (eUseDir) {
@@ -61,7 +61,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   // Create-form preview: push a draft extrude into the store so the 3D view shows a live ghost
   useEffect(() => {
     if (!showExtrude) { setPreviewExtrude(null); return }
-    const d = parseFloat(depth)
+    const d = parseFloat(depth) / 10  // convert mm input → scene units
     if (isNaN(d) || d === 0) { setPreviewExtrude(null); return }
     let direction: [number, number, number] | undefined
     if (useCustomDir) {
@@ -81,7 +81,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     originalRef.current = { ...ext }
     setEditingId(ext.id)
     setEditingExtrudeId(ext.id)
-    setEDepth(ext.depth.toString())
+    setEDepth((ext.depth * 10).toString())
     setEOperation(ext.operation)
     setESymmetric(ext.symmetric ?? false)
     if (ext.direction) {
@@ -128,7 +128,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   }
 
   const handleExtrude = () => {
-    const d = parseFloat(depth)
+    const d = parseFloat(depth) / 10  // convert mm → scene units
     if (!isNaN(d) && d !== 0) {
       let direction: [number, number, number] | undefined
       if (useCustomDir) {
@@ -219,7 +219,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
                 onClick={() => setAppearanceExtrudeId(appearanceExtrudeId === ext.id ? null : ext.id)}
               />
               <span className={styles.extrudeLabel}>
-                {ext.operation === 'cut' ? 'Pocket' : 'Extrude'} {ext.depth} mm
+                {ext.operation === 'cut' ? 'Pocket' : 'Extrude'} {+(ext.depth * 10).toFixed(2)} mm
                 {ext.symmetric && <span className={styles.dirLabel}> ⇔sym</span>}
                 {ext.direction && (
                   <span className={styles.dirLabel}> [{ext.direction.map((n) => n.toFixed(2)).join(',')}]</span>

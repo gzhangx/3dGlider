@@ -13,6 +13,8 @@ export function exportSTL(extrudes: ExtrudeFeature[], sketches: Sketch[]) {
     group.add(new Mesh(solid.geometry))
   }
 
+  // Scene units are centimetres; STL is expected in millimetres by slicers.
+  group.scale.set(10, 10, 10)
   group.updateMatrixWorld(true)
 
   const exporter = new STLExporter()
