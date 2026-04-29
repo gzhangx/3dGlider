@@ -109,6 +109,18 @@
 
 .sketchIcon { font-size: 13px; }
 
+.sketchIconBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+  color: #557;
+  line-height: 1;
+}
+.sketchIconBtn:hover { color: #88aaff; }
+.sketchIconActive { color: #ffcc44 !important; }
+
 .sketchLabel {
   flex: 1;
   font-size: 12px;

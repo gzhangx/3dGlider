@@ -8,6 +8,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   const { extrudes, addExtrude, updateExtrude, deleteExtrude, editSketch } = useModelStore()
 
   // ── create-new-extrude form state ────────────────────────────────────────
+  const [showExtrude, setShowExtrude] = useState(false)
   const [depth, setDepth] = useState('5')
   const [operation, setOperation] = useState<'add' | 'cut'>('add')
   const [useCustomDir, setUseCustomDir] = useState(false)
@@ -111,7 +112,13 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   return (
     <div className={styles.sketchGroup}>
       <div className={styles.sketchRow}>
-        <span className={styles.sketchIcon}>✏</span>
+        <button
+          className={`${styles.sketchIconBtn} ${showExtrude ? styles.sketchIconActive : ''}`}
+          title="Add extrude / pocket"
+          onClick={() => setShowExtrude((v) => !v)}
+        >
+          ✏
+        </button>
         <span className={styles.sketchLabel}>
           Sketch ({planeLabel})
           <span className={styles.count}>{sketch.elements.length} el</span>
@@ -199,7 +206,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
         </div>
       ))}
 
-      {canExtrude && (
+      {showExtrude && canExtrude && (
         <div className={styles.extrudeForm}>
           <div className={styles.extrudeFormRow}>
             <select
@@ -245,7 +252,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
         </div>
       )}
 
-      {!canExtrude && (
+      {showExtrude && !canExtrude && (
         <div className={styles.noProfile}>
           No closed profile — draw a rect, circle, or closed lines
         </div>
