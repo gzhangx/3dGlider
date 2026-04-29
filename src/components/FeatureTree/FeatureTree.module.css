@@ -327,6 +327,56 @@
 }
 .cancelEditBtn:hover { background: #3a2020; }
 
+.colorSwatch {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  border: 1px solid #445;
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.colorSwatch:hover { border-color: #88aaff; }
+.colorSwatchActive { border-color: #ffcc44 !important; }
+
+.appearanceForm {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 6px 6px 20px;
+  background: #0f0f20;
+  border-left: 2px solid #334466;
+  border-radius: 0 0 4px 4px;
+  margin-top: -2px;
+}
+
+.appearanceRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.appearanceLabel {
+  font-size: 10px;
+  color: #668;
+  min-width: 42px;
+}
+
+.opacitySlider {
+  flex: 1;
+  height: 4px;
+  cursor: pointer;
+  accent-color: #4488ff;
+}
+
+.opacityValue {
+  font-size: 10px;
+  color: #557;
+  min-width: 30px;
+  text-align: right;
+}
+
 /* ── No profile warning ── */
 .noProfile {
   padding: 4px 6px 4px 20px;

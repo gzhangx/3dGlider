@@ -4,8 +4,14 @@ import { planeIdFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { sketchElementsToShape } from '../../lib/sketchToShape'
 import styles from './FeatureTree.module.css'
 
+function extrudeDefaultColor(op: 'add' | 'cut') { return op === 'cut' ? '#ff4422' : '#4477bb' }
+function extrudeDefaultOpacity(op: 'add' | 'cut') { return op === 'cut' ? 0.22 : 0.82 }
+
 function SketchRow({ sketch }: { sketch: Sketch }) {
-  const { extrudes, addExtrude, updateExtrude, deleteExtrude, editSketch } = useModelStore()
+  const {
+    extrudes, addExtrude, updateExtrude, deleteExtrude, editSketch,
+    setSketchAppearance, setExtrudeAppearance,
+  } = useModelStore()
 
   // ── create-new-extrude form state ────────────────────────────────────────
   const [showExtrude, setShowExtrude] = useState(false)
@@ -25,6 +31,10 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   const [eDirY, setEDirY] = useState('0')
   const [eDirZ, setEDirZ] = useState('1')
   const originalRef = useRef<ExtrudeFeature | null>(null)
+
+  // ── appearance state ─────────────────────────────────────────────────────
+  const [showSketchAppearance, setShowSketchAppearance] = useState(false)
+  const [appearanceExtrudeId, setAppearanceExtrudeId] = useState<string | null>(null)
 
   const existing = extrudes.filter((e) => e.sketchId === sketch.id)
   const canExtrude = sketchElementsToShape(sketch.elements).length > 0
@@ -83,7 +93,6 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     setEUseDir(on)
   }
 
-  // ── create-form handlers ─────────────────────────────────────────────────
   const handleToggleCustomDir = (on: boolean) => {
     if (on) {
       const n = planeNormalFromPose(sketch.plane)
@@ -109,6 +118,9 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     }
   }
 
+  const sketchColor = sketch.color ?? '#ffdd44'
+  const sketchOpacity = sketch.opacity ?? 1
+
   return (
     <div className={styles.sketchGroup}>
       <div className={styles.sketchRow}>
@@ -119,6 +131,12 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
         >
           ✏
         </button>
+        <button
+          className={`${styles.colorSwatch} ${showSketchAppearance ? styles.colorSwatchActive : ''}`}
+          style={{ background: sketchColor }}
+          title="Appearance"
+          onClick={() => setShowSketchAppearance((v) => !v)}
+        />
         <span className={styles.sketchLabel}>
           Sketch ({planeLabel})
           <span className={styles.count}>{sketch.elements.length} el</span>
@@ -132,79 +150,137 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
         </button>
       </div>
 
-      {existing.map((ext) => (
-        <div key={ext.id} className={styles.sketchGroup}>
-          <div className={styles.extrudeRow}>
-            <button
-              className={`${styles.extrudeIconBtn} ${editingId === ext.id ? styles.extrudeIconActive : ''}`}
-              title="Edit extrude"
-              onClick={() => editingId === ext.id ? applyEdit() : startEdit(ext)}
-            >
-              {ext.operation === 'cut' ? '▼' : '▲'}
-            </button>
-            <span className={styles.extrudeLabel}>
-              {ext.operation === 'cut' ? 'Pocket' : 'Extrude'} {ext.depth} u
-              {ext.direction && (
-                <span className={styles.dirLabel}> [{ext.direction.map((n) => n.toFixed(2)).join(',')}]</span>
-              )}
-            </span>
-            <button
-              className={styles.deleteBtn}
-              title="Delete extrude"
-              onClick={() => { if (editingId === ext.id) cancelEdit(); deleteExtrude(ext.id) }}
-            >
-              ✕
-            </button>
+      {showSketchAppearance && (
+        <div className={styles.appearanceForm}>
+          <div className={styles.appearanceRow}>
+            <span className={styles.appearanceLabel}>Color</span>
+            <input
+              type="color"
+              value={sketchColor}
+              onChange={(e) => setSketchAppearance(sketch.id, e.target.value, sketchOpacity)}
+            />
           </div>
-
-          {editingId === ext.id && (
-            <div className={styles.editExtrudeForm}>
-              <div className={styles.extrudeFormRow}>
-                <select
-                  className={styles.opSelect}
-                  value={eOperation}
-                  onChange={(e) => setEOperation(e.target.value as 'add' | 'cut')}
-                >
-                  <option value="add">Add</option>
-                  <option value="cut">Cut</option>
-                </select>
-                <input
-                  type="number"
-                  className={styles.depthInput}
-                  value={eDepth}
-                  step="0.5"
-                  onChange={(e) => setEDepth(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && applyEdit()}
-                  autoFocus
-                />
-                <span className={styles.unit}>u</span>
-              </div>
-              <label className={styles.dirToggle}>
-                <input
-                  type="checkbox"
-                  checked={eUseDir}
-                  onChange={(e) => handleToggleEditDir(e.target.checked)}
-                />
-                Custom dir
-              </label>
-              {eUseDir && (
-                <div className={styles.dirInputs}>
-                  <span className={styles.dirAxisLabel}>X</span>
-                  <input type="number" className={styles.dirInput} value={eDirX} step="0.1" onChange={(e) => setEDirX(e.target.value)} />
-                  <span className={styles.dirAxisLabel}>Y</span>
-                  <input type="number" className={styles.dirInput} value={eDirY} step="0.1" onChange={(e) => setEDirY(e.target.value)} />
-                  <span className={styles.dirAxisLabel}>Z</span>
-                  <input type="number" className={styles.dirInput} value={eDirZ} step="0.1" onChange={(e) => setEDirZ(e.target.value)} />
-                </div>
-              )}
-              <div className={styles.editActions}>
-                <button className={styles.applyBtn} onClick={applyEdit}>✓ Apply</button>
-                <button className={styles.cancelEditBtn} onClick={cancelEdit}>✗ Cancel</button>
-              </div>
-            </div>
-          )}
+          <div className={styles.appearanceRow}>
+            <span className={styles.appearanceLabel}>Opacity</span>
+            <input
+              type="range" min={0} max={100}
+              value={Math.round(sketchOpacity * 100)}
+              className={styles.opacitySlider}
+              onChange={(e) => setSketchAppearance(sketch.id, sketchColor, Number(e.target.value) / 100)}
+            />
+            <span className={styles.opacityValue}>{Math.round(sketchOpacity * 100)}%</span>
+          </div>
         </div>
-      ))}
+      )}
+
+      {existing.map((ext) => {
+        const defColor = extrudeDefaultColor(ext.operation)
+        const defOpacity = extrudeDefaultOpacity(ext.operation)
+        const extColor = ext.color ?? defColor
+        const extOpacity = ext.opacity ?? defOpacity
+        return (
+          <div key={ext.id} className={styles.sketchGroup}>
+            <div className={styles.extrudeRow}>
+              <button
+                className={`${styles.extrudeIconBtn} ${editingId === ext.id ? styles.extrudeIconActive : ''}`}
+                title="Edit extrude"
+                onClick={() => editingId === ext.id ? applyEdit() : startEdit(ext)}
+              >
+                {ext.operation === 'cut' ? '▼' : '▲'}
+              </button>
+              <button
+                className={`${styles.colorSwatch} ${appearanceExtrudeId === ext.id ? styles.colorSwatchActive : ''}`}
+                style={{ background: extColor }}
+                title="Appearance"
+                onClick={() => setAppearanceExtrudeId(appearanceExtrudeId === ext.id ? null : ext.id)}
+              />
+              <span className={styles.extrudeLabel}>
+                {ext.operation === 'cut' ? 'Pocket' : 'Extrude'} {ext.depth} u
+                {ext.direction && (
+                  <span className={styles.dirLabel}> [{ext.direction.map((n) => n.toFixed(2)).join(',')}]</span>
+                )}
+              </span>
+              <button
+                className={styles.deleteBtn}
+                title="Delete extrude"
+                onClick={() => { if (editingId === ext.id) cancelEdit(); deleteExtrude(ext.id) }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {appearanceExtrudeId === ext.id && (
+              <div className={styles.appearanceForm}>
+                <div className={styles.appearanceRow}>
+                  <span className={styles.appearanceLabel}>Color</span>
+                  <input
+                    type="color"
+                    value={extColor}
+                    onChange={(e) => setExtrudeAppearance(ext.id, e.target.value, extOpacity)}
+                  />
+                </div>
+                <div className={styles.appearanceRow}>
+                  <span className={styles.appearanceLabel}>Opacity</span>
+                  <input
+                    type="range" min={0} max={100}
+                    value={Math.round(extOpacity * 100)}
+                    className={styles.opacitySlider}
+                    onChange={(e) => setExtrudeAppearance(ext.id, extColor, Number(e.target.value) / 100)}
+                  />
+                  <span className={styles.opacityValue}>{Math.round(extOpacity * 100)}%</span>
+                </div>
+              </div>
+            )}
+
+            {editingId === ext.id && (
+              <div className={styles.editExtrudeForm}>
+                <div className={styles.extrudeFormRow}>
+                  <select
+                    className={styles.opSelect}
+                    value={eOperation}
+                    onChange={(e) => setEOperation(e.target.value as 'add' | 'cut')}
+                  >
+                    <option value="add">Add</option>
+                    <option value="cut">Cut</option>
+                  </select>
+                  <input
+                    type="number"
+                    className={styles.depthInput}
+                    value={eDepth}
+                    step="0.5"
+                    onChange={(e) => setEDepth(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && applyEdit()}
+                    autoFocus
+                  />
+                  <span className={styles.unit}>u</span>
+                </div>
+                <label className={styles.dirToggle}>
+                  <input
+                    type="checkbox"
+                    checked={eUseDir}
+                    onChange={(e) => handleToggleEditDir(e.target.checked)}
+                  />
+                  Custom dir
+                </label>
+                {eUseDir && (
+                  <div className={styles.dirInputs}>
+                    <span className={styles.dirAxisLabel}>X</span>
+                    <input type="number" className={styles.dirInput} value={eDirX} step="0.1" onChange={(e) => setEDirX(e.target.value)} />
+                    <span className={styles.dirAxisLabel}>Y</span>
+                    <input type="number" className={styles.dirInput} value={eDirY} step="0.1" onChange={(e) => setEDirY(e.target.value)} />
+                    <span className={styles.dirAxisLabel}>Z</span>
+                    <input type="number" className={styles.dirInput} value={eDirZ} step="0.1" onChange={(e) => setEDirZ(e.target.value)} />
+                  </div>
+                )}
+                <div className={styles.editActions}>
+                  <button className={styles.applyBtn} onClick={applyEdit}>✓ Apply</button>
+                  <button className={styles.cancelEditBtn} onClick={cancelEdit}>✗ Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
 
       {showExtrude && canExtrude && (
         <div className={styles.extrudeForm}>

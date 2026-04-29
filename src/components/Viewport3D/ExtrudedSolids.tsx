@@ -14,10 +14,14 @@ const noopRaycast: () => void = () => {}
 
 function SolidMesh({
   solidMesh,
+  color,
+  opacity,
   onHover,
   onHoverOut,
 }: {
   solidMesh: Mesh
+  color: string
+  opacity: number
   onHover: (point: Vector3, normal: Vector3) => void
   onHoverOut: () => void
 }) {
@@ -29,9 +33,9 @@ function SolidMesh({
   useEffect(() => {
     if (meshRef.current) {
       meshRef.current.geometry = solidMesh.geometry
-      meshRef.current.material = new MeshStandardMaterial({ color: 0x4477bb, transparent: true, opacity: 0.82, side: DoubleSide })
+      meshRef.current.material = new MeshStandardMaterial({ color, transparent: true, opacity, side: DoubleSide })
     }
-  }, [solidMesh])
+  }, [solidMesh, color, opacity])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -79,14 +83,14 @@ function SolidMesh({
   )
 }
 
-function CutVolumeMesh({ geo }: { geo: BufferGeometry }) {
+function CutVolumeMesh({ geo, color, opacity }: { geo: BufferGeometry; color: string; opacity: number }) {
   const meshRef = useRef<Mesh>(null)
   useEffect(() => {
     if (meshRef.current) meshRef.current.geometry = geo
   }, [geo])
   return (
     <mesh ref={meshRef} raycast={noopRaycast}>
-      <meshBasicMaterial color="#ff4422" transparent opacity={0.22} side={DoubleSide} depthWrite={false} />
+      <meshBasicMaterial color={color} transparent opacity={opacity} side={DoubleSide} depthWrite={false} />
     </mesh>
   )
 }
@@ -94,6 +98,9 @@ function CutVolumeMesh({ geo }: { geo: BufferGeometry }) {
 export function ExtrudedSolids() {
   const { extrudes, sketches } = useModelStore()
   const [hoverPreview, setHoverPreview] = useState<HoverPreview | null>(null)
+
+  const addExtrudes = useMemo(() => extrudes.filter((e) => e.operation === 'add'), [extrudes])
+  const cutExtrudes = useMemo(() => extrudes.filter((e) => e.operation === 'cut'), [extrudes])
   const solids = useMemo(() => buildSolidMeshes(extrudes, sketches), [extrudes, sketches])
   const cutGeos = useMemo(() => buildCutGeometries(extrudes, sketches), [extrudes, sketches])
 
@@ -118,11 +125,23 @@ export function ExtrudedSolids() {
 
   return (
     <>
-      {solids.map((mesh) => (
-        <SolidMesh key={mesh.uuid} solidMesh={mesh} onHover={handleHover} onHoverOut={clearHover} />
+      {solids.map((mesh, i) => (
+        <SolidMesh
+          key={mesh.uuid}
+          solidMesh={mesh}
+          color={addExtrudes[i]?.color ?? '#4477bb'}
+          opacity={addExtrudes[i]?.opacity ?? 0.82}
+          onHover={handleHover}
+          onHoverOut={clearHover}
+        />
       ))}
-      {cutGeos.map((geo) => (
-        <CutVolumeMesh key={geo.uuid} geo={geo} />
+      {cutGeos.map((geo, i) => (
+        <CutVolumeMesh
+          key={geo.uuid}
+          geo={geo}
+          color={cutExtrudes[i]?.color ?? '#ff4422'}
+          opacity={cutExtrudes[i]?.opacity ?? 0.22}
+        />
       ))}
       {hoverPreview && (
         <mesh position={hoverPreview.position} rotation={hoverPreview.rotation} raycast={noopRaycast}>

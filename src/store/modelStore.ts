@@ -40,6 +40,8 @@ export interface Sketch {
   id: string
   plane: SketchPlanePose
   elements: SketchElement[]
+  color?: string
+  opacity?: number
 }
 
 export interface ExtrudeFeature {
@@ -48,6 +50,8 @@ export interface ExtrudeFeature {
   operation: 'add' | 'cut'
   depth: number  // units along the extrusion direction
   direction?: [number, number, number]  // world-space unit vector; omit = plane normal
+  color?: string
+  opacity?: number
 }
 
 export interface ModelData {
@@ -83,14 +87,19 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
       && isSketchPlanePose(s.plane)
       && Array.isArray(s.elements)
       && s.elements.every(isSketchElement))
-    .map((s) => ({
-      id: s.id,
-      plane: {
-        rotation: [s.plane.rotation[0], s.plane.rotation[1], s.plane.rotation[2]],
-        offset: s.plane.offset,
-      },
-      elements: s.elements,
-    }))
+    .map((s) => {
+      const r = s as Sketch & { color?: unknown; opacity?: unknown }
+      return {
+        id: s.id,
+        plane: {
+          rotation: [s.plane.rotation[0], s.plane.rotation[1], s.plane.rotation[2]],
+          offset: s.plane.offset,
+        },
+        elements: s.elements,
+        ...(typeof r.color === 'string' ? { color: r.color } : {}),
+        ...(typeof r.opacity === 'number' && Number.isFinite(r.opacity) ? { opacity: r.opacity } : {}),
+      }
+    })
 
   const validSketchIds = new Set(sketches.map((s) => s.id))
   const extrudes: ExtrudeFeature[] = raw.extrudes
@@ -102,13 +111,18 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
       && Number.isFinite(e.depth)
       && validSketchIds.has(e.sketchId))
     .map((e) => {
-      const raw = e as ExtrudeFeature & { direction?: unknown }
-      const dir = Array.isArray(raw.direction)
-        && raw.direction.length === 3
-        && raw.direction.every((n) => typeof n === 'number' && Number.isFinite(n))
-        ? raw.direction as [number, number, number]
+      const rawE = e as ExtrudeFeature & { direction?: unknown; color?: unknown; opacity?: unknown }
+      const dir = Array.isArray(rawE.direction)
+        && rawE.direction.length === 3
+        && rawE.direction.every((n) => typeof n === 'number' && Number.isFinite(n))
+        ? rawE.direction as [number, number, number]
         : undefined
-      return { id: e.id, sketchId: e.sketchId, operation: e.operation, depth: e.depth, ...(dir ? { direction: dir } : {}) }
+      return {
+        id: e.id, sketchId: e.sketchId, operation: e.operation, depth: e.depth,
+        ...(dir ? { direction: dir } : {}),
+        ...(typeof rawE.color === 'string' ? { color: rawE.color } : {}),
+        ...(typeof rawE.opacity === 'number' && Number.isFinite(rawE.opacity) ? { opacity: rawE.opacity } : {}),
+      }
     })
 
   return { sketches, extrudes }
@@ -135,6 +149,8 @@ interface ModelState {
   addExtrude: (sketchId: string, depth: number, operation?: 'add' | 'cut', direction?: [number, number, number]) => void
   updateExtrude: (id: string, depth: number, operation: 'add' | 'cut', direction?: [number, number, number]) => void
   deleteExtrude: (id: string) => void
+  setSketchAppearance: (id: string, color: string, opacity: number) => void
+  setExtrudeAppearance: (id: string, color: string, opacity: number) => void
   armNewSketch: () => void
   cancelNewSketch: () => void
   startNewSketch: (plane: PlaneId | SketchPlanePose, offset?: number) => void
@@ -184,13 +200,19 @@ export const useModelStore = create<ModelState>((set) => ({
     set((s) => ({
       extrudes: s.extrudes.map((e) =>
         e.id === id
-          ? { id: e.id, sketchId: e.sketchId, operation, depth, ...(direction ? { direction } : {}) }
+          ? { ...e, operation, depth, ...(direction ? { direction } : { direction: undefined }) }
           : e
       ),
     })),
 
   deleteExtrude: (id) =>
     set((s) => ({ extrudes: s.extrudes.filter((e) => e.id !== id) })),
+
+  setSketchAppearance: (id, color, opacity) =>
+    set((s) => ({ sketches: s.sketches.map((sk) => sk.id === id ? { ...sk, color, opacity } : sk) })),
+
+  setExtrudeAppearance: (id, color, opacity) =>
+    set((s) => ({ extrudes: s.extrudes.map((e) => e.id === id ? { ...e, color, opacity } : e) })),
 
   armNewSketch: () =>
     set((s) => (s.mode === 'view' ? { newSketchArmed: true } : s)),
