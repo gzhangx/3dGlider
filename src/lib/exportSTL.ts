@@ -34,7 +34,7 @@ export function exportSTL(extrudes: ExtrudeFeature[], sketches: Sketch[]) {
     payload = new TextEncoder().encode(String(binary))
   }
 
-  const blob = new Blob([payload], { type: 'application/octet-stream' })
+  const blob = new Blob([payload.buffer as ArrayBuffer], { type: 'application/octet-stream' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
