@@ -139,6 +139,8 @@ interface ModelState {
   extrudes: ExtrudeFeature[]
   selectedElementId: string | null
   editingSketchId: string | null
+  editingExtrudeId: string | null
+  previewExtrude: ExtrudeFeature | null
 
   setHoveredPlane: (plane: PlaneId | null) => void
   setActiveTool: (tool: SketchTool) => void
@@ -151,6 +153,8 @@ interface ModelState {
   deleteExtrude: (id: string) => void
   setSketchAppearance: (id: string, color: string, opacity: number) => void
   setExtrudeAppearance: (id: string, color: string, opacity: number) => void
+  setEditingExtrudeId: (id: string | null) => void
+  setPreviewExtrude: (preview: ExtrudeFeature | null) => void
   armNewSketch: () => void
   cancelNewSketch: () => void
   startNewSketch: (plane: PlaneId | SketchPlanePose, offset?: number) => void
@@ -170,6 +174,8 @@ export const useModelStore = create<ModelState>((set) => ({
   extrudes: [],
   selectedElementId: null,
   editingSketchId: null,
+  editingExtrudeId: null,
+  previewExtrude: null,
 
   setHoveredPlane: (hoveredPlane) => set({ hoveredPlane }),
   setActiveTool: (activeTool) => set({ activeTool, selectedElementId: null }),
@@ -213,6 +219,10 @@ export const useModelStore = create<ModelState>((set) => ({
 
   setExtrudeAppearance: (id, color, opacity) =>
     set((s) => ({ extrudes: s.extrudes.map((e) => e.id === id ? { ...e, color, opacity } : e) })),
+
+  setEditingExtrudeId: (editingExtrudeId) => set({ editingExtrudeId }),
+
+  setPreviewExtrude: (previewExtrude) => set({ previewExtrude }),
 
   armNewSketch: () =>
     set((s) => (s.mode === 'view' ? { newSketchArmed: true } : s)),

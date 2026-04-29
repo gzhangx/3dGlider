@@ -96,6 +96,12 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
   return solids
 }
 
+export function buildPreviewGeometry(extrude: ExtrudeFeature, sketches: Sketch[]): BufferGeometry | null {
+  const sketch = sketches.find((s) => s.id === extrude.sketchId)
+  if (!sketch) return null
+  return featureGeometry(extrude, sketch)
+}
+
 export function buildCutGeometries(extrudes: ExtrudeFeature[], sketches: Sketch[]): BufferGeometry[] {
   return extrudes
     .filter((e) => e.operation === 'cut')

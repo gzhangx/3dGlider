@@ -10,7 +10,7 @@ function extrudeDefaultOpacity(op: 'add' | 'cut') { return op === 'cut' ? 0.22 :
 function SketchRow({ sketch }: { sketch: Sketch }) {
   const {
     extrudes, addExtrude, updateExtrude, deleteExtrude, editSketch,
-    setSketchAppearance, setExtrudeAppearance,
+    setSketchAppearance, setExtrudeAppearance, setEditingExtrudeId, setPreviewExtrude,
   } = useModelStore()
 
   // ── create-new-extrude form state ────────────────────────────────────────
@@ -56,9 +56,29 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     updateExtrude(editingId, d, eOperation, direction)
   }, [editingId, eDepth, eOperation, eUseDir, eDirX, eDirY, eDirZ]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Create-form preview: push a draft extrude into the store so the 3D view shows a live ghost
+  useEffect(() => {
+    if (!showExtrude) { setPreviewExtrude(null); return }
+    const d = parseFloat(depth)
+    if (isNaN(d) || d === 0) { setPreviewExtrude(null); return }
+    let direction: [number, number, number] | undefined
+    if (useCustomDir) {
+      const dx = parseFloat(dirX), dy = parseFloat(dirY), dz = parseFloat(dirZ)
+      if (isNaN(dx) || isNaN(dy) || isNaN(dz)) return
+      const len = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      if (len < 1e-6) return
+      direction = [dx / len, dy / len, dz / len]
+    }
+    setPreviewExtrude({ id: 'preview', sketchId: sketch.id, operation, depth: d, direction })
+  }, [showExtrude, depth, operation, useCustomDir, dirX, dirY, dirZ]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear preview on unmount
+  useEffect(() => () => { setPreviewExtrude(null) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const startEdit = (ext: ExtrudeFeature) => {
     originalRef.current = { ...ext }
     setEditingId(ext.id)
+    setEditingExtrudeId(ext.id)
     setEDepth(ext.depth.toString())
     setEOperation(ext.operation)
     if (ext.direction) {
@@ -75,12 +95,13 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     }
   }
 
-  const applyEdit = () => setEditingId(null)
+  const applyEdit = () => { setEditingId(null); setEditingExtrudeId(null) }
 
   const cancelEdit = () => {
     const orig = originalRef.current
     if (orig) updateExtrude(orig.id, orig.depth, orig.operation, orig.direction)
     setEditingId(null)
+    setEditingExtrudeId(null)
   }
 
   const handleToggleEditDir = (on: boolean) => {

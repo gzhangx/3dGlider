@@ -3,7 +3,7 @@ import { ThreeEvent, useThree } from '@react-three/fiber'
 import { Vector2, Vector3, Mesh, BufferGeometry, MeshStandardMaterial, DoubleSide, Raycaster } from 'three'
 import { useModelStore } from '../../store/modelStore'
 import { planePoseFromHit } from '../../lib/planePose'
-import { buildSolidMeshes, buildCutGeometries, disposeSolidMeshes } from '../../lib/solidModel'
+import { buildSolidMeshes, buildCutGeometries, buildPreviewGeometry, disposeSolidMeshes } from '../../lib/solidModel'
 
 interface HoverPreview {
   position: [number, number, number]
@@ -95,14 +95,32 @@ function CutVolumeMesh({ geo, color, opacity }: { geo: BufferGeometry; color: st
   )
 }
 
+function PreviewMesh({ geo, operation }: { geo: BufferGeometry; operation: 'add' | 'cut' }) {
+  const meshRef = useRef<Mesh>(null)
+  useEffect(() => {
+    if (meshRef.current) meshRef.current.geometry = geo
+  }, [geo])
+  const color = operation === 'cut' ? '#ff4422' : '#88aaff'
+  const opacity = operation === 'cut' ? 0.28 : 0.38
+  return (
+    <mesh ref={meshRef} raycast={noopRaycast}>
+      <meshBasicMaterial color={color} transparent opacity={opacity} side={DoubleSide} depthWrite={false} />
+    </mesh>
+  )
+}
+
 export function ExtrudedSolids() {
-  const { extrudes, sketches } = useModelStore()
+  const { extrudes, sketches, editingExtrudeId, previewExtrude } = useModelStore()
   const [hoverPreview, setHoverPreview] = useState<HoverPreview | null>(null)
 
   const addExtrudes = useMemo(() => extrudes.filter((e) => e.operation === 'add'), [extrudes])
   const cutExtrudes = useMemo(() => extrudes.filter((e) => e.operation === 'cut'), [extrudes])
   const solids = useMemo(() => buildSolidMeshes(extrudes, sketches), [extrudes, sketches])
   const cutGeos = useMemo(() => buildCutGeometries(extrudes, sketches), [extrudes, sketches])
+  const previewGeo = useMemo(
+    () => previewExtrude ? buildPreviewGeometry(previewExtrude, sketches) : null,
+    [previewExtrude, sketches],
+  )
 
   const handleHover = (point: Vector3, normal: Vector3) => {
     const pose = planePoseFromHit(normal, point)
@@ -123,6 +141,10 @@ export function ExtrudedSolids() {
     return () => cutGeos.forEach((g) => g.dispose())
   }, [cutGeos])
 
+  useEffect(() => {
+    return () => { previewGeo?.dispose() }
+  }, [previewGeo])
+
   return (
     <>
       {solids.map((mesh, i) => (
@@ -135,14 +157,20 @@ export function ExtrudedSolids() {
           onHoverOut={clearHover}
         />
       ))}
-      {cutGeos.map((geo, i) => (
-        <CutVolumeMesh
-          key={geo.uuid}
-          geo={geo}
-          color={cutExtrudes[i]?.color ?? '#ff4422'}
-          opacity={cutExtrudes[i]?.opacity ?? 0.22}
-        />
-      ))}
+      {cutGeos.map((geo, i) => {
+        if (cutExtrudes[i]?.id !== editingExtrudeId) return null
+        return (
+          <CutVolumeMesh
+            key={geo.uuid}
+            geo={geo}
+            color={cutExtrudes[i]?.color ?? '#ff4422'}
+            opacity={cutExtrudes[i]?.opacity ?? 0.22}
+          />
+        )
+      })}
+      {previewGeo && previewExtrude && (
+        <PreviewMesh geo={previewGeo} operation={previewExtrude.operation} />
+      )}
       {hoverPreview && (
         <mesh position={hoverPreview.position} rotation={hoverPreview.rotation} raycast={noopRaycast}>
           <planeGeometry args={[2.5, 2.5]} />
