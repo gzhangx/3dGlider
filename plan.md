@@ -93,58 +93,26 @@ console.log(intersects)  // ← [] (EMPTY! Should have hits)
 2. **Missing Geometry Bounds**
    - Raycaster needs geometry.boundingSphere to pre-filter intersections
    - CSG output may have invalid/missing bounds
-   - Fix: Call geometry.computeBoundingSphere() after CSG
 
 3. **Normals Not Computed**
    - THREE docs: raycasting works better with computed normals
    - CSG output may have undefined normals
    - Status: Already calling computeVertexNormals() in solidModel.ts
-   - But still not working → not the root cause
 
 4. **Mesh Transform Issues**
    - If mesh.matrixWorld is identity and mesh not in scene, raycaster can't see it
    - Fix: Verify meshRef.current is actually rendered in Three.js scene
 
-### Attempted Solutions & Results
-
-| Attempt | Approach | Result |
-|---------|----------|--------|
-| #1 | Added computeVertexNormals() to CSG | ✗ No effect |
-| #2 | Switch from `<primitive>` to `<mesh>` | ✗ No effect |
-| #3 | Manual Raycaster vs event propagation | ✗ No effect |
-| #4 | (Next) Debug CSG output structure | ? Pending |
-
 ---
-
-## File Structure & Responsibilities
-
-### Core State
 - **src/store/modelStore.ts** (200 lines)
   - Zustand store definition
-  - All state mutations (add/delete/edit)
-  - Subscribe mechanism for components
-
-### Geometry Generation Pipeline
-- **src/lib/sketchToShape.ts** (250 lines)
-  - Converts SketchElement[] → THREE.Shape[]
-  - Extracts closed loops from line segments
   - Handles rectangles, circles, arcs, mixed paths
 
-- **src/lib/sketchGeometry.ts** (70 lines)
-  - Sketch coordinate → World coordinate transformation
-  - Plane-specific transforms (XY/XZ/YZ)
-  - Offset handling (LIFT + plane-offset)
   - Helper functions for rendering sketch outlines
 
 - **src/lib/solidModel.ts** (100 lines)
   - featureGeometry() → ExtrudeGeometry + Matrix4 transform
   - buildSolidMeshes() → CSG operations for cut features
-  - disposeSolidMeshes() → Memory cleanup
-
-### 3D Viewport Components
-- **src/components/Viewport3D/Viewport3D.tsx** (20 lines)
-  - Canvas setup (@react-three/fiber)
-  - Camera initial position
 
 - **src/components/Viewport3D/Scene.tsx** (80 lines)
   - Main scene orchestration
@@ -152,7 +120,6 @@ console.log(intersects)  // ← [] (EMPTY! Should have hits)
   - Lights and grid
   - Conditional rendering (view vs sketch mode)
   - Plane gizmos for sketch mode
-
 - **src/components/Viewport3D/ExtrudedSolids.tsx** (70 lines) **← PROBLEM COMPONENT**
   - Renders CSG meshes from buildSolidMeshes()
   - Manages raycasting for face detection
@@ -160,70 +127,52 @@ console.log(intersects)  // ← [] (EMPTY! Should have hits)
   - Issue: raycaster.intersectObject() fails on cut meshes
 
 - **src/components/Viewport3D/CommittedSketches.tsx** (60 lines)
-  - Renders saved sketches as 2D line outlines
   - Uses @react-three/drei's Line component
   - Uses sketchGeometry.ts helpers for world positioning
-  - Selectable when not in new-sketch mode
 
 - **src/components/Viewport3D/SketchPlane.tsx** (custom interaction)
   - Active sketch editing surface
   - Plane-specific raycast for drawing tools
   - Cursor position tracking
-
-- **src/components/Viewport3D/PlaneGizmo.tsx**
   - Clickable plane buttons (XY/XZ/YZ)
   - Starting point for new sketches (when click through feature tree)
 
 - **src/components/Viewport3D/AxesHelper.tsx**
   - Visual XYZ axis labels
-
-### UI Components
 - **src/components/FeatureTree/FeatureTree.tsx** (140 lines)
   - New Sketch button and plane selector
   - Sketch list with elements count
   - Extrude form (depth input, Add/Cut selector)
   - Edit/Delete buttons
-
-- **src/components/Toolbar/Toolbar.tsx**
   - Mode indicator, Exit Sketch, STL Export
 
 - **src/components/SketchSidebar/SketchSidebar.tsx**
   - Tool palette (Select, Line, Rect, Circle, Cut)
   - Keyboard shortcuts reference
-
 ### Entry Points
 - **src/App.tsx** (30 lines) - Root component
 - **src/main.tsx** - React bootstrap
 - **index.html** - HTML container
-
 ---
 
-## Feature Implementation Flow
 
 ### Example: Creating a Pocket
-
 ```
 1. User clicks "New Sketch" 
-   → FeatureTree.tsx → armNewSketch()
    → Store: newSketchArmed = true
 
 2. User clicks solid face OR selects plane
    → startNewSketch(plane, offset)
-   → Store: mode='sketch', activePlane=plane, activePlaneOffset=offset
    → Scene.tsx: Camera animates to plane
 
 3. User draws rectangle on sketch plane
    → SketchPlane.tsx captures input
-   → Sketch elements added to store.sketchElements
    → CommittedSketches.tsx re-renders with <Line> components
 
-4. User clicks "Exit Sketch" or exits sketch mode
    → exitSketch()
    → Store: Creates new Sketch with elements and saves to store.sketches
 
 5. User selects operation "Cut" and depth "2" in feature tree
-   → FeatureTree.tsx: operation = 'cut', depth = '2'
-   → User clicks "Pocket ▶"
    → addExtrude(sketchId, 2, 'cut')
 
 6. ExtrudedSolids component re-renders (extrudes changed)
