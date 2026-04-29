@@ -17,6 +17,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   const [showExtrude, setShowExtrude] = useState(false)
   const [depth, setDepth] = useState('5')
   const [operation, setOperation] = useState<'add' | 'cut'>('add')
+  const [symmetric, setSymmetric] = useState(false)
   const [useCustomDir, setUseCustomDir] = useState(false)
   const [dirX, setDirX] = useState('0')
   const [dirY, setDirY] = useState('0')
@@ -26,6 +27,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [eDepth, setEDepth] = useState('5')
   const [eOperation, setEOperation] = useState<'add' | 'cut'>('add')
+  const [eSymmetric, setESymmetric] = useState(false)
   const [eUseDir, setEUseDir] = useState(false)
   const [eDirX, setEDirX] = useState('0')
   const [eDirY, setEDirY] = useState('0')
@@ -53,8 +55,8 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
       if (len < 1e-6) return
       direction = [dx / len, dy / len, dz / len]
     }
-    updateExtrude(editingId, d, eOperation, direction)
-  }, [editingId, eDepth, eOperation, eUseDir, eDirX, eDirY, eDirZ]) // eslint-disable-line react-hooks/exhaustive-deps
+    updateExtrude(editingId, d, eOperation, direction, eSymmetric)
+  }, [editingId, eDepth, eOperation, eSymmetric, eUseDir, eDirX, eDirY, eDirZ]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Create-form preview: push a draft extrude into the store so the 3D view shows a live ghost
   useEffect(() => {
@@ -69,8 +71,8 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
       if (len < 1e-6) return
       direction = [dx / len, dy / len, dz / len]
     }
-    setPreviewExtrude({ id: 'preview', sketchId: sketch.id, operation, depth: d, direction })
-  }, [showExtrude, depth, operation, useCustomDir, dirX, dirY, dirZ]) // eslint-disable-line react-hooks/exhaustive-deps
+    setPreviewExtrude({ id: 'preview', sketchId: sketch.id, operation, depth: d, direction, ...(symmetric ? { symmetric: true } : {}) })
+  }, [showExtrude, depth, operation, symmetric, useCustomDir, dirX, dirY, dirZ]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Clear preview on unmount
   useEffect(() => () => { setPreviewExtrude(null) }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -81,6 +83,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     setEditingExtrudeId(ext.id)
     setEDepth(ext.depth.toString())
     setEOperation(ext.operation)
+    setESymmetric(ext.symmetric ?? false)
     if (ext.direction) {
       setEUseDir(true)
       setEDirX(ext.direction[0].toString())
@@ -135,7 +138,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
           if (len > 1e-6) direction = [dx / len, dy / len, dz / len]
         }
       }
-      addExtrude(sketch.id, d, operation, direction)
+      addExtrude(sketch.id, d, operation, direction, symmetric)
     }
   }
 
@@ -217,6 +220,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
               />
               <span className={styles.extrudeLabel}>
                 {ext.operation === 'cut' ? 'Pocket' : 'Extrude'} {ext.depth} u
+                {ext.symmetric && <span className={styles.dirLabel}> ⇔sym</span>}
                 {ext.direction && (
                   <span className={styles.dirLabel}> [{ext.direction.map((n) => n.toFixed(2)).join(',')}]</span>
                 )}
@@ -278,6 +282,14 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
                 <label className={styles.dirToggle}>
                   <input
                     type="checkbox"
+                    checked={eSymmetric}
+                    onChange={(e) => setESymmetric(e.target.checked)}
+                  />
+                  Symmetric
+                </label>
+                <label className={styles.dirToggle}>
+                  <input
+                    type="checkbox"
                     checked={eUseDir}
                     onChange={(e) => handleToggleEditDir(e.target.checked)}
                   />
@@ -325,6 +337,14 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
             />
             <span className={styles.unit}>u</span>
           </div>
+          <label className={styles.dirToggle}>
+            <input
+              type="checkbox"
+              checked={symmetric}
+              onChange={(e) => setSymmetric(e.target.checked)}
+            />
+            Symmetric
+          </label>
           <label className={styles.dirToggle}>
             <input
               type="checkbox"

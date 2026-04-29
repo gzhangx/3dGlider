@@ -20,7 +20,10 @@ function featureGeometry(ext: ExtrudeFeature, sketch: Sketch): BufferGeometry | 
 
   const depth = Math.abs(ext.depth)
   const geo = new ExtrudeGeometry(shapes, { depth, bevelEnabled: false })
-  if (ext.depth < 0) {
+  if (ext.symmetric) {
+    // Center geometry on the sketch plane: shift back by half depth.
+    geo.translate(0, 0, -depth / 2)
+  } else if (ext.depth < 0) {
     // ExtrudeGeometry grows along local +Z. Shift negative features back so the
     // sketch plane remains the reference face and the solid extends the other way.
     geo.translate(0, 0, -depth)

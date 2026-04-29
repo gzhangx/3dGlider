@@ -50,6 +50,7 @@ export interface ExtrudeFeature {
   operation: 'add' | 'cut'
   depth: number  // units along the extrusion direction
   direction?: [number, number, number]  // world-space unit vector; omit = plane normal
+  symmetric?: boolean  // extrude depth/2 on each side of the sketch plane
   color?: string
   opacity?: number
 }
@@ -120,6 +121,7 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
       return {
         id: e.id, sketchId: e.sketchId, operation: e.operation, depth: e.depth,
         ...(dir ? { direction: dir } : {}),
+        ...(rawE.symmetric === true ? { symmetric: true } : {}),
         ...(typeof rawE.color === 'string' ? { color: rawE.color } : {}),
         ...(typeof rawE.opacity === 'number' && Number.isFinite(rawE.opacity) ? { opacity: rawE.opacity } : {}),
       }
@@ -148,8 +150,8 @@ interface ModelState {
   addSketchElement: (el: SketchElement) => void
   deleteSketchElement: (id: string) => void
   cutSketchElement: (id: string, replacements: SketchElement[]) => void
-  addExtrude: (sketchId: string, depth: number, operation?: 'add' | 'cut', direction?: [number, number, number]) => void
-  updateExtrude: (id: string, depth: number, operation: 'add' | 'cut', direction?: [number, number, number]) => void
+  addExtrude: (sketchId: string, depth: number, operation?: 'add' | 'cut', direction?: [number, number, number], symmetric?: boolean) => void
+  updateExtrude: (id: string, depth: number, operation: 'add' | 'cut', direction?: [number, number, number], symmetric?: boolean) => void
   deleteExtrude: (id: string) => void
   setSketchAppearance: (id: string, color: string, opacity: number) => void
   setExtrudeAppearance: (id: string, color: string, opacity: number) => void
@@ -197,16 +199,16 @@ export const useModelStore = create<ModelState>((set) => ({
       sketchElements: [...s.sketchElements.filter((el) => el.id !== id), ...replacements],
     })),
 
-  addExtrude: (sketchId, depth, operation = 'add', direction) =>
+  addExtrude: (sketchId, depth, operation = 'add', direction, symmetric) =>
     set((s) => ({
-      extrudes: [...s.extrudes, { id: crypto.randomUUID(), sketchId, operation, depth, ...(direction ? { direction } : {}) }],
+      extrudes: [...s.extrudes, { id: crypto.randomUUID(), sketchId, operation, depth, ...(direction ? { direction } : {}), ...(symmetric ? { symmetric } : {}) }],
     })),
 
-  updateExtrude: (id, depth, operation, direction) =>
+  updateExtrude: (id, depth, operation, direction, symmetric) =>
     set((s) => ({
       extrudes: s.extrudes.map((e) =>
         e.id === id
-          ? { ...e, operation, depth, ...(direction ? { direction } : { direction: undefined }) }
+          ? { ...e, operation, depth, ...(direction ? { direction } : { direction: undefined }), ...(symmetric ? { symmetric: true } : { symmetric: undefined }) }
           : e
       ),
     })),
