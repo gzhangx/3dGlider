@@ -24,15 +24,19 @@ export type SketchPoint = { x: number; y: number }
 
 export interface SketchLine {
   type: 'line'; id: string; start: SketchPoint; end: SketchPoint
+  construction?: boolean
 }
 export interface SketchRect {
   type: 'rect'; id: string; start: SketchPoint; end: SketchPoint
+  construction?: boolean
 }
 export interface SketchCircle {
   type: 'circle'; id: string; center: SketchPoint; radius: number
+  construction?: boolean
 }
 export interface SketchArc {
   type: 'arc'; id: string; center: SketchPoint; radius: number; startAngle: number; endAngle: number
+  construction?: boolean
 }
 export type SketchElement = SketchLine | SketchRect | SketchCircle | SketchArc
 
@@ -55,10 +59,23 @@ export interface ExtrudeFeature {
   opacity?: number
 }
 
+export type RevolveAxis = 'x' | 'y' | 'z' | 'element'
+
+export interface RevolveFeature {
+  id: string
+  sketchId: string
+  axisType: RevolveAxis
+  axisElementId?: string  // line element id within the sketch, only when axisType === 'element'
+  angle: number           // degrees, 1–360
+  color?: string
+  opacity?: number
+}
+
 export interface ModelData {
   version: number
   sketches: Sketch[]
   extrudes: ExtrudeFeature[]
+  revolves: RevolveFeature[]
 }
 
 function isSketchPlanePose(value: unknown): value is SketchPlanePose {
@@ -77,7 +94,7 @@ function isSketchElement(value: unknown): value is SketchElement {
   return el.type === 'line' || el.type === 'rect' || el.type === 'circle' || el.type === 'arc'
 }
 
-function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: ExtrudeFeature[] } | null {
+function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: ExtrudeFeature[]; revolves: RevolveFeature[] } | null {
   if (!value || typeof value !== 'object') return null
   const raw = value as Partial<ModelData>
   if (!Array.isArray(raw.sketches) || !Array.isArray(raw.extrudes)) return null
@@ -127,7 +144,27 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
       }
     })
 
-  return { sketches, extrudes }
+  const revolves: RevolveFeature[] = Array.isArray(raw.revolves)
+    ? raw.revolves
+        .filter((r): r is RevolveFeature => !!r
+          && typeof r.id === 'string'
+          && typeof r.sketchId === 'string'
+          && (r.axisType === 'x' || r.axisType === 'y' || r.axisType === 'z' || r.axisType === 'element')
+          && typeof r.angle === 'number'
+          && Number.isFinite(r.angle)
+          && validSketchIds.has(r.sketchId))
+        .map((r) => {
+          const rawR = r as RevolveFeature & { color?: unknown; opacity?: unknown }
+          return {
+            id: r.id, sketchId: r.sketchId, axisType: r.axisType, angle: r.angle,
+            ...(r.axisType === 'element' && typeof r.axisElementId === 'string' ? { axisElementId: r.axisElementId } : {}),
+            ...(typeof rawR.color === 'string' ? { color: rawR.color } : {}),
+            ...(typeof rawR.opacity === 'number' && Number.isFinite(rawR.opacity) ? { opacity: rawR.opacity } : {}),
+          }
+        })
+    : []
+
+  return { sketches, extrudes, revolves }
 }
 
 interface ModelState {
@@ -136,9 +173,11 @@ interface ModelState {
   hoveredPlane: PlaneId | null
   newSketchArmed: boolean
   activeTool: SketchTool
+  constructionMode: boolean
   sketchElements: SketchElement[]
   sketches: Sketch[]
   extrudes: ExtrudeFeature[]
+  revolves: RevolveFeature[]
   selectedElementId: string | null
   editingSketchId: string | null
   editingExtrudeId: string | null
@@ -146,6 +185,7 @@ interface ModelState {
 
   setHoveredPlane: (plane: PlaneId | null) => void
   setActiveTool: (tool: SketchTool) => void
+  setConstructionMode: (on: boolean) => void
   selectElement: (id: string | null) => void
   addSketchElement: (el: SketchElement) => void
   deleteSketchElement: (id: string) => void
@@ -157,6 +197,10 @@ interface ModelState {
   setExtrudeAppearance: (id: string, color: string, opacity: number) => void
   setEditingExtrudeId: (id: string | null) => void
   setPreviewExtrude: (preview: ExtrudeFeature | null) => void
+  addRevolve: (sketchId: string, axisType: RevolveAxis, angle: number, axisElementId?: string) => void
+  updateRevolve: (id: string, axisType: RevolveAxis, angle: number, axisElementId?: string) => void
+  deleteRevolve: (id: string) => void
+  setRevolveAppearance: (id: string, color: string, opacity: number) => void
   armNewSketch: () => void
   cancelNewSketch: () => void
   startNewSketch: (plane: PlaneId | SketchPlanePose, offset?: number) => void
@@ -171,9 +215,11 @@ export const useModelStore = create<ModelState>((set) => ({
   hoveredPlane: null,
   newSketchArmed: false,
   activeTool: 'select',
+  constructionMode: false,
   sketchElements: [],
   sketches: [],
   extrudes: [],
+  revolves: [],
   selectedElementId: null,
   editingSketchId: null,
   editingExtrudeId: null,
@@ -181,6 +227,7 @@ export const useModelStore = create<ModelState>((set) => ({
 
   setHoveredPlane: (hoveredPlane) => set({ hoveredPlane }),
   setActiveTool: (activeTool) => set({ activeTool, selectedElementId: null }),
+  setConstructionMode: (constructionMode) => set({ constructionMode }),
   selectElement: (selectedElementId) => set({ selectedElementId }),
 
   addSketchElement: (el) => set((s) => ({ sketchElements: [...s.sketchElements, el] })),
@@ -226,6 +273,29 @@ export const useModelStore = create<ModelState>((set) => ({
 
   setPreviewExtrude: (previewExtrude) => set({ previewExtrude }),
 
+  addRevolve: (sketchId, axisType, angle, axisElementId) =>
+    set((s) => ({
+      revolves: [...s.revolves, {
+        id: crypto.randomUUID(), sketchId, axisType, angle,
+        ...(axisType === 'element' && axisElementId ? { axisElementId } : {}),
+      }],
+    })),
+
+  updateRevolve: (id, axisType, angle, axisElementId) =>
+    set((s) => ({
+      revolves: s.revolves.map((r) =>
+        r.id === id
+          ? { ...r, axisType, angle, ...(axisType === 'element' && axisElementId ? { axisElementId } : { axisElementId: undefined }) }
+          : r
+      ),
+    })),
+
+  deleteRevolve: (id) =>
+    set((s) => ({ revolves: s.revolves.filter((r) => r.id !== id) })),
+
+  setRevolveAppearance: (id, color, opacity) =>
+    set((s) => ({ revolves: s.revolves.map((r) => r.id === id ? { ...r, color, opacity } : r) })),
+
   armNewSketch: () =>
     set((s) => (s.mode === 'view' ? { newSketchArmed: true } : s)),
 
@@ -237,6 +307,7 @@ export const useModelStore = create<ModelState>((set) => ({
       activePlane: typeof plane === 'string' ? presetPlanePose(plane, offset) : plane,
       newSketchArmed: false,
       activeTool: 'select',
+      constructionMode: false,
       sketchElements: [],
       selectedElementId: null,
       editingSketchId: null,
@@ -251,6 +322,7 @@ export const useModelStore = create<ModelState>((set) => ({
         activePlane: target.plane,
         newSketchArmed: false,
         activeTool: 'select',
+        constructionMode: false,
         sketchElements: target.elements,
         selectedElementId: null,
         editingSketchId: target.id,
@@ -262,18 +334,15 @@ export const useModelStore = create<ModelState>((set) => ({
       let sketches = s.sketches
       if (s.activePlane && s.sketchElements.length > 0) {
         if (s.editingSketchId) {
-          // Update existing sketch instead of creating a duplicate entry.
           sketches = sketches.map((sk) =>
             sk.id === s.editingSketchId
               ? { ...sk, plane: s.activePlane!, elements: s.sketchElements }
               : sk,
           )
         } else {
-          // New sketch on this plane.
           sketches = [...sketches, { id: crypto.randomUUID(), plane: s.activePlane, elements: s.sketchElements }]
         }
       } else if (s.editingSketchId) {
-        // If user cleared all elements while editing, delete the sketch.
         sketches = sketches.filter((sk) => sk.id !== s.editingSketchId)
       }
 
@@ -282,6 +351,7 @@ export const useModelStore = create<ModelState>((set) => ({
         activePlane: null,
         newSketchArmed: false,
         activeTool: 'select',
+        constructionMode: false,
         sketchElements: [],
         selectedElementId: null,
         editingSketchId: null,
@@ -298,11 +368,13 @@ export const useModelStore = create<ModelState>((set) => ({
       hoveredPlane: null,
       newSketchArmed: false,
       activeTool: 'select',
+      constructionMode: false,
       sketchElements: [],
       selectedElementId: null,
       editingSketchId: null,
       sketches: parsed.sketches,
       extrudes: parsed.extrudes,
+      revolves: parsed.revolves,
     })
     return true
   },

@@ -52,8 +52,10 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: Sketch
   const { activeTool, selectedElementId, selectElement } = useModelStore()
   const [hovered, setHovered] = useState(false)
 
+  const isConstruction = !!el.construction
   const isSelected = selectedElementId === el.id
-  const color = highlighted ? '#ff8844' : isSelected ? '#ff8844' : hovered ? '#ffe888' : '#ffdd44'
+  const baseColor = isConstruction ? '#4488aa' : '#ffdd44'
+  const color = highlighted ? '#ff8844' : isSelected ? '#ff8844' : hovered ? '#ffe888' : baseColor
   const width = highlighted || isSelected || hovered ? 3 : 2
 
   const selectProps = activeTool === 'select'
@@ -67,15 +69,16 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: Sketch
   // In non-select modes, pointer events must go to the invisible hit-test plane,
   // not to rendered sketch geometry (which would shift e.point off-plane).
   const hitPlanePassthrough = activeTool !== 'select' ? { raycast: noopRaycast } : {}
+  const dashProps = isConstruction ? { dashed: true, dashSize: 0.18, gapSize: 0.12 } : {}
 
   if (el.type === 'line')
-    return <Line points={linePts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
+    return <Line points={linePts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
   if (el.type === 'rect')
-    return <Line points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
+    return <Line points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
   if (el.type === 'circle')
-    return <Line points={circlePts(el.center, el.radius, plane, 64)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
+    return <Line points={circlePts(el.center, el.radius, plane, 64)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
   if (el.type === 'arc')
-    return <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} />
+    return <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
   return null
 }
 
@@ -83,7 +86,7 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: Sketch
 
 export function SketchPlane() {
   const {
-    activePlane, activeTool, sketchElements,
+    activePlane, activeTool, constructionMode, sketchElements,
     selectedElementId, selectElement,
     addSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
   } = useModelStore()
@@ -247,13 +250,14 @@ export function SketchPlane() {
     }
 
     const id = crypto.randomUUID()
+    const cFlag = constructionMode ? { construction: true as const } : {}
     if (activeTool === 'line') {
-      addSketchElement({ type: 'line', id, start: startPt, end: pt } satisfies SketchLine)
+      addSketchElement({ type: 'line', id, start: startPt, end: pt, ...cFlag } satisfies SketchLine)
     } else if (activeTool === 'rect') {
-      addSketchElement({ type: 'rect', id, start: startPt, end: pt } satisfies SketchRect)
+      addSketchElement({ type: 'rect', id, start: startPt, end: pt, ...cFlag } satisfies SketchRect)
     } else if (activeTool === 'circle') {
       const r = Math.hypot(pt.x - startPt.x, pt.y - startPt.y)
-      if (r > 0) addSketchElement({ type: 'circle', id, center: startPt, radius: r } satisfies SketchCircle)
+      if (r > 0) addSketchElement({ type: 'circle', id, center: startPt, radius: r, ...cFlag } satisfies SketchCircle)
     }
     setStartPt(null)
   }

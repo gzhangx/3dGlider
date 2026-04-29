@@ -8,6 +8,7 @@ import { PlaneGizmo } from './PlaneGizmo'
 import { SketchPlane } from './SketchPlane'
 import { CommittedSketches } from './CommittedSketches'
 import { ExtrudedSolids } from './ExtrudedSolids'
+import { RevolvedSolids } from './RevolvedSolids'
 
 // camera-controls ACTION enum values
 const ACTION_NONE = 0
@@ -77,6 +78,7 @@ export function Scene() {
       )}
 
       <ExtrudedSolids />
+      <RevolvedSolids />
       <CommittedSketches />
 
       {mode === 'sketch' && <SketchPlane />}

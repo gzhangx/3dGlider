@@ -19,10 +19,13 @@ function SketchEl({
   const [hovered, setHovered] = useState(false)
   const lineRef = useRef<any>(null)
 
+  const isConstruction = !!el.construction
   const isSelected = selectedElementId === el.id
   const selectable = (mode === 'view' || activeTool === 'select') && !newSketchArmed
-  const color = isSelected ? '#ff8844' : hovered ? '#ffe888' : sketchColor
+  const baseColor = isConstruction ? '#4488aa' : sketchColor
+  const color = isSelected ? '#ff8844' : hovered ? '#ffe888' : baseColor
   const width = isSelected || hovered ? 3 : 2
+  const dashProps = isConstruction ? { dashed: true, dashSize: 0.18, gapSize: 0.12 } : {}
 
   // Re-apply opacity after every render — drei may reset material when color changes
   useEffect(() => {
@@ -42,13 +45,13 @@ function SketchEl({
     : {}
 
   if (el.type === 'line')
-    return <Line ref={lineRef} points={linePts(el.start, el.end, plane)} color={color} lineWidth={width} {...selectProps} />
+    return <Line ref={lineRef} points={linePts(el.start, el.end, plane)} color={color} lineWidth={width} {...selectProps} {...dashProps} />
   if (el.type === 'rect')
-    return <Line ref={lineRef} points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...selectProps} />
+    return <Line ref={lineRef} points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...selectProps} {...dashProps} />
   if (el.type === 'circle')
-    return <Line ref={lineRef} points={circlePts(el.center, el.radius, plane, 64)} color={color} lineWidth={width} {...selectProps} />
+    return <Line ref={lineRef} points={circlePts(el.center, el.radius, plane, 64)} color={color} lineWidth={width} {...selectProps} {...dashProps} />
   if (el.type === 'arc')
-    return <Line ref={lineRef} points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64)} color={color} lineWidth={width} {...selectProps} />
+    return <Line ref={lineRef} points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64)} color={color} lineWidth={width} {...selectProps} {...dashProps} />
   return null
 }
 

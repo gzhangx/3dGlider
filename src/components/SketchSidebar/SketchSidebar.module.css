@@ -78,3 +78,23 @@
   line-height: 1.5;
   padding: 4px;
 }
+
+.divider {
+  height: 1px;
+  background: #2a2a4a;
+  margin: 4px 0;
+}
+
+.constructionBtn {
+  color: #5588aa;
+  border-color: transparent;
+}
+.constructionBtn:hover {
+  background: #111a28;
+  color: #77aacc;
+}
+.constructionActive {
+  background: #0e1e2e !important;
+  border-color: #2266aa !important;
+  color: #5599dd !important;
+}

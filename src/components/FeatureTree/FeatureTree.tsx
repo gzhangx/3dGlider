@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useModelStore, Sketch, PlaneId, ExtrudeFeature } from '../../store/modelStore'
+import { useModelStore, Sketch, PlaneId, ExtrudeFeature, RevolveFeature, RevolveAxis } from '../../store/modelStore'
 import { planeIdFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { sketchElementsToShape } from '../../lib/sketchToShape'
 import { SCENE_TO_MM } from '../../lib/units'
@@ -10,8 +10,10 @@ function extrudeDefaultOpacity(op: 'add' | 'cut') { return op === 'cut' ? 0.22 :
 
 function SketchRow({ sketch }: { sketch: Sketch }) {
   const {
-    extrudes, addExtrude, updateExtrude, deleteExtrude, editSketch,
+    extrudes, revolves, addExtrude, updateExtrude, deleteExtrude, editSketch,
+    addRevolve, updateRevolve, deleteRevolve, setRevolveAppearance,
     setSketchAppearance, setExtrudeAppearance, setEditingExtrudeId, setPreviewExtrude,
+    selectedElementId, selectElement,
   } = useModelStore()
 
   // ── create-new-extrude form state ────────────────────────────────────────
@@ -35,13 +37,51 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   const [eDirZ, setEDirZ] = useState('1')
   const originalRef = useRef<ExtrudeFeature | null>(null)
 
+  // ── create-new-revolve form state ────────────────────────────────────────
+  const [showRevolve, setShowRevolve] = useState(false)
+  const [revolveAxis, setRevolveAxis] = useState<RevolveAxis>('y')
+  const [revolveAngle, setRevolveAngle] = useState('360')
+  const [revolveLineId, setRevolveLineId] = useState<string | null>(null)
+  const [pickingAxis, setPickingAxis] = useState(false)
+
+  // ── edit-existing-revolve state ──────────────────────────────────────────
+  const [editingRevolveId, setEditingRevolveId] = useState<string | null>(null)
+  const [eRevolveAxis, setERevolveAxis] = useState<RevolveAxis>('y')
+  const [eRevolveAngle, setERevolveAngle] = useState('360')
+  const [eRevolveLineId, setERevolveLineId] = useState<string | null>(null)
+  const [ePickingAxis, setEPickingAxis] = useState(false)
+
   // ── appearance state ─────────────────────────────────────────────────────
   const [showSketchAppearance, setShowSketchAppearance] = useState(false)
   const [appearanceExtrudeId, setAppearanceExtrudeId] = useState<string | null>(null)
+  const [appearanceRevolveId, setAppearanceRevolveId] = useState<string | null>(null)
 
-  const existing = extrudes.filter((e) => e.sketchId === sketch.id)
+  const existingExtrudes = extrudes.filter((e) => e.sketchId === sketch.id)
+  const existingRevolves = revolves.filter((r) => r.sketchId === sketch.id)
   const canExtrude = sketchElementsToShape(sketch.elements).length > 0
   const planeLabel = planeIdFromPose(sketch.plane)
+
+  // Capture axis element from viewport selection (create form)
+  useEffect(() => {
+    if (!pickingAxis || !selectedElementId) return
+    const el = sketch.elements.find((e) => e.id === selectedElementId && e.type === 'line')
+    if (el) {
+      setRevolveLineId(selectedElementId)
+      setRevolveAxis('element')
+      setPickingAxis(false)
+    }
+  }, [pickingAxis, selectedElementId, sketch.elements])
+
+  // Capture axis element from viewport selection (edit form)
+  useEffect(() => {
+    if (!ePickingAxis || !selectedElementId) return
+    const el = sketch.elements.find((e) => e.id === selectedElementId && e.type === 'line')
+    if (el) {
+      setERevolveLineId(selectedElementId)
+      setERevolveAxis('element')
+      setEPickingAxis(false)
+    }
+  }, [ePickingAxis, selectedElementId, sketch.elements])
 
   // Live-preview: push edit state into store whenever it changes
   useEffect(() => {
@@ -59,7 +99,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     updateExtrude(editingId, d, eOperation, direction, eSymmetric)
   }, [editingId, eDepth, eOperation, eSymmetric, eUseDir, eDirX, eDirY, eDirZ]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Create-form preview: push a draft extrude into the store so the 3D view shows a live ghost
+  // Create-form preview
   useEffect(() => {
     if (!showExtrude) { setPreviewExtrude(null); return }
     const d = parseFloat(depth) / SCENE_TO_MM  // convert mm input → scene units
@@ -143,6 +183,37 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     }
   }
 
+  const handleRevolve = () => {
+    const angle = Math.max(1, Math.min(360, parseFloat(revolveAngle)))
+    if (isNaN(angle)) return
+    if (revolveAxis === 'element' && !revolveLineId) return
+    addRevolve(sketch.id, revolveAxis, angle, revolveAxis === 'element' ? revolveLineId! : undefined)
+    setShowRevolve(false)
+    setPickingAxis(false)
+  }
+
+  const startEditRevolve = (rev: RevolveFeature) => {
+    setEditingRevolveId(rev.id)
+    setERevolveAxis(rev.axisType)
+    setERevolveAngle(rev.angle.toString())
+    setERevolveLineId(rev.axisElementId ?? null)
+    setEPickingAxis(false)
+  }
+
+  const applyEditRevolve = () => {
+    if (!editingRevolveId) return
+    const angle = Math.max(1, Math.min(360, parseFloat(eRevolveAngle)))
+    if (isNaN(angle)) return
+    updateRevolve(editingRevolveId, eRevolveAxis, angle, eRevolveAxis === 'element' ? eRevolveLineId ?? undefined : undefined)
+    setEditingRevolveId(null)
+    setEPickingAxis(false)
+  }
+
+  const cancelEditRevolve = () => { setEditingRevolveId(null); setEPickingAxis(false) }
+
+  const axisLabel = (axisType: RevolveAxis, axisElementId?: string) =>
+    axisType === 'element' ? `line ${axisElementId?.slice(0, 6)}…` : axisType.toUpperCase()
+
   const sketchColor = sketch.color ?? '#ffdd44'
   const sketchOpacity = sketch.opacity ?? 1
 
@@ -152,9 +223,16 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
         <button
           className={`${styles.sketchIconBtn} ${showExtrude ? styles.sketchIconActive : ''}`}
           title="Add extrude / pocket"
-          onClick={() => setShowExtrude((v) => !v)}
+          onClick={() => { setShowExtrude((v) => !v); setShowRevolve(false) }}
         >
           ✏
+        </button>
+        <button
+          className={`${styles.sketchIconBtn} ${showRevolve ? styles.revolveIconActive : ''}`}
+          title="Add revolve"
+          onClick={() => { setShowRevolve((v) => !v); setShowExtrude(false) }}
+        >
+          ⟳
         </button>
         <button
           className={`${styles.colorSwatch} ${showSketchAppearance ? styles.colorSwatchActive : ''}`}
@@ -198,7 +276,8 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
         </div>
       )}
 
-      {existing.map((ext) => {
+      {/* ── Extrude rows ── */}
+      {existingExtrudes.map((ext) => {
         const defColor = extrudeDefaultColor(ext.operation)
         const defOpacity = extrudeDefaultOpacity(ext.operation)
         const extColor = ext.color ?? defColor
@@ -316,6 +395,109 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
         )
       })}
 
+      {/* ── Revolve rows ── */}
+      {existingRevolves.map((rev) => {
+        const revColor = rev.color ?? '#7755cc'
+        const revOpacity = rev.opacity ?? 0.82
+        return (
+          <div key={rev.id} className={styles.sketchGroup}>
+            <div className={styles.revolveRow}>
+              <button
+                className={`${styles.revolveIconBtn} ${editingRevolveId === rev.id ? styles.revolveIconActive : ''}`}
+                title="Edit revolve"
+                onClick={() => editingRevolveId === rev.id ? applyEditRevolve() : startEditRevolve(rev)}
+              >
+                ⟳
+              </button>
+              <button
+                className={`${styles.colorSwatch} ${appearanceRevolveId === rev.id ? styles.colorSwatchActive : ''}`}
+                style={{ background: revColor }}
+                title="Appearance"
+                onClick={() => setAppearanceRevolveId(appearanceRevolveId === rev.id ? null : rev.id)}
+              />
+              <span className={styles.revolveLabel}>
+                Revolve {axisLabel(rev.axisType, rev.axisElementId)}
+                {rev.angle < 360 && <span className={styles.dirLabel}> {rev.angle}°</span>}
+              </span>
+              <button
+                className={styles.deleteBtn}
+                title="Delete revolve"
+                onClick={() => { if (editingRevolveId === rev.id) cancelEditRevolve(); deleteRevolve(rev.id) }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {appearanceRevolveId === rev.id && (
+              <div className={styles.appearanceForm}>
+                <div className={styles.appearanceRow}>
+                  <span className={styles.appearanceLabel}>Color</span>
+                  <input
+                    type="color"
+                    value={revColor}
+                    onChange={(e) => setRevolveAppearance(rev.id, e.target.value, revOpacity)}
+                  />
+                </div>
+                <div className={styles.appearanceRow}>
+                  <span className={styles.appearanceLabel}>Opacity</span>
+                  <input
+                    type="range" min={0} max={100}
+                    value={Math.round(revOpacity * 100)}
+                    className={styles.opacitySlider}
+                    onChange={(e) => setRevolveAppearance(rev.id, revColor, Number(e.target.value) / 100)}
+                  />
+                  <span className={styles.opacityValue}>{Math.round(revOpacity * 100)}%</span>
+                </div>
+              </div>
+            )}
+
+            {editingRevolveId === rev.id && (
+              <div className={styles.editExtrudeForm}>
+                <div className={styles.axisRow}>
+                  <span className={styles.axisLabel}>Axis:</span>
+                  {(['x', 'y', 'z'] as RevolveAxis[]).map((a) => (
+                    <button
+                      key={a}
+                      className={`${styles.axisBtn} ${eRevolveAxis === a ? styles.axisBtnActive : ''}`}
+                      onClick={() => { setERevolveAxis(a); setERevolveLineId(null) }}
+                    >
+                      {a.toUpperCase()}
+                    </button>
+                  ))}
+                  <button
+                    className={`${styles.axisBtn} ${ePickingAxis ? styles.axisBtnPicking : eRevolveAxis === 'element' ? styles.axisBtnActive : ''}`}
+                    onClick={() => { selectElement(null); setEPickingAxis(true) }}
+                    title="Click a line in the viewport"
+                  >
+                    {eRevolveAxis === 'element' && eRevolveLineId ? '✓ line' : 'line…'}
+                  </button>
+                </div>
+                {ePickingAxis && (
+                  <div className={styles.pickAxisHint}>Click a line in the viewport</div>
+                )}
+                <div className={styles.extrudeFormRow}>
+                  <span className={styles.axisLabel}>Angle:</span>
+                  <input
+                    type="number"
+                    className={styles.depthInput}
+                    value={eRevolveAngle}
+                    min={1} max={360} step={15}
+                    onChange={(e) => setERevolveAngle(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && applyEditRevolve()}
+                  />
+                  <span className={styles.unit}>°</span>
+                </div>
+                <div className={styles.editActions}>
+                  <button className={styles.applyBtn} onClick={applyEditRevolve}>✓ Apply</button>
+                  <button className={styles.cancelEditBtn} onClick={cancelEditRevolve}>✗ Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {/* ── Extrude create form ── */}
       {showExtrude && canExtrude && (
         <div className={styles.extrudeForm}>
           <div className={styles.extrudeFormRow}>
@@ -371,6 +553,59 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
       )}
 
       {showExtrude && !canExtrude && (
+        <div className={styles.noProfile}>
+          No closed profile — draw a rect, circle, or closed lines
+        </div>
+      )}
+
+      {/* ── Revolve create form ── */}
+      {showRevolve && canExtrude && (
+        <div className={styles.revolveForm}>
+          <div className={styles.axisRow}>
+            <span className={styles.axisLabel}>Axis:</span>
+            {(['x', 'y', 'z'] as RevolveAxis[]).map((a) => (
+              <button
+                key={a}
+                className={`${styles.axisBtn} ${revolveAxis === a ? styles.axisBtnActive : ''}`}
+                onClick={() => { setRevolveAxis(a); setRevolveLineId(null); setPickingAxis(false) }}
+              >
+                {a.toUpperCase()}
+              </button>
+            ))}
+            <button
+              className={`${styles.axisBtn} ${pickingAxis ? styles.axisBtnPicking : revolveAxis === 'element' ? styles.axisBtnActive : ''}`}
+              onClick={() => { selectElement(null); setPickingAxis(true) }}
+              title="Click a sketch line in the viewport to use as axis"
+            >
+              {revolveAxis === 'element' && revolveLineId ? '✓ line' : 'line…'}
+            </button>
+          </div>
+          {pickingAxis && (
+            <div className={styles.pickAxisHint}>Click a line in the viewport</div>
+          )}
+          <div className={styles.extrudeFormRow}>
+            <span className={styles.axisLabel}>Angle:</span>
+            <input
+              type="number"
+              className={styles.depthInput}
+              value={revolveAngle}
+              min={1} max={360} step={15}
+              onChange={(e) => setRevolveAngle(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleRevolve()}
+            />
+            <span className={styles.unit}>°</span>
+          </div>
+          <button
+            className={styles.revolveBtn}
+            onClick={handleRevolve}
+            disabled={revolveAxis === 'element' && !revolveLineId}
+          >
+            Revolve ▶
+          </button>
+        </div>
+      )}
+
+      {showRevolve && !canExtrude && (
         <div className={styles.noProfile}>
           No closed profile — draw a rect, circle, or closed lines
         </div>

@@ -384,3 +384,103 @@
   color: #554;
   line-height: 1.4;
 }
+
+/* ── Revolve row ── */
+.revolveRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 20px;
+  background: #171428;
+  border-radius: 4px;
+  border: 1px solid #2d2050;
+}
+
+.revolveIconBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  color: #7755aa;
+  font-size: 11px;
+  line-height: 1;
+}
+.revolveIconBtn:hover { color: #bb88ff; }
+.revolveIconActive { color: #ffcc44 !important; }
+
+.revolveLabel {
+  flex: 1;
+  font-size: 12px;
+  color: #bb88ff;
+}
+
+/* ── Revolve form ── */
+.revolveForm {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 6px 4px 20px;
+}
+
+.revolveBtn {
+  padding: 3px 8px;
+  background: #2a1a50;
+  border: 1px solid #5533aa;
+  border-radius: 3px;
+  color: #bb88ff;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  align-self: flex-start;
+}
+.revolveBtn:hover { background: #3a2470; }
+
+/* ── Axis selector ── */
+.axisRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.axisLabel {
+  font-size: 10px;
+  color: #668;
+  min-width: 36px;
+}
+
+.axisBtn {
+  padding: 2px 6px;
+  background: #1a1a38;
+  border: 1px solid #334;
+  border-radius: 3px;
+  color: #88aacc;
+  font-size: 11px;
+  cursor: pointer;
+}
+.axisBtn:hover { background: #252550; }
+
+.axisBtnActive {
+  background: #2a1a50 !important;
+  border-color: #7755cc !important;
+  color: #cc99ff !important;
+}
+
+.axisBtnPicking {
+  background: #1a2a1a !important;
+  border-color: #44aa44 !important;
+  color: #88ee88 !important;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.pickAxisHint {
+  font-size: 10px;
+  color: #44aa44;
+  padding: 2px 0;
+  line-height: 1.4;
+}

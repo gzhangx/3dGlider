@@ -17,7 +17,7 @@ const TOOLS: ToolBtn[] = [
 ]
 
 export function SketchSidebar() {
-  const { mode, activeTool, setActiveTool } = useModelStore()
+  const { mode, activeTool, constructionMode, setActiveTool, setConstructionMode } = useModelStore()
 
   if (mode !== 'sketch') return null
 
@@ -36,9 +36,22 @@ export function SketchSidebar() {
           <span className={styles.key}>{t.key}</span>
         </button>
       ))}
+
+      <div className={styles.divider} />
+
+      <button
+        className={`${styles.btn} ${styles.constructionBtn} ${constructionMode ? styles.constructionActive : ''}`}
+        onClick={() => setConstructionMode(!constructionMode)}
+        title="Construction geometry — dashed lines not used for extrude/revolve"
+      >
+        <span className={styles.icon}>- -</span>
+        <span className={styles.label}>Construction</span>
+      </button>
+
       <div className={styles.hint}>
         {activeTool === 'select' && 'Right-drag to pan · Scroll to zoom'}
-        {activeTool !== 'select' && 'Click 1st point · Click 2nd point · Esc cancel'}
+        {activeTool !== 'select' && !constructionMode && 'Click 1st point · Click 2nd point · Esc cancel'}
+        {activeTool !== 'select' && constructionMode && 'Drawing construction geometry'}
       </div>
     </aside>
   )

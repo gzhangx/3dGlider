@@ -153,10 +153,12 @@ function extractMixedLoops(segments: Array<SketchLine | SketchArc>) {
 export function sketchElementsToShape(
   elements: SketchElement[],
 ): THREE.Shape[] {
+  // Construction geometry is visual only — exclude it from all profiles.
+  const elements_ = elements.filter((e) => !e.construction)
   const rawShapes: THREE.Shape[] = []
 
   // ── Rectangles ───────────────────────────────────────────────────────────
-  for (const r of elements.filter((e): e is SketchRect => e.type === 'rect')) {
+  for (const r of elements_.filter((e): e is SketchRect => e.type === 'rect')) {
     const x0 = Math.min(r.start.x, r.end.x), x1 = Math.max(r.start.x, r.end.x)
     const y0 = Math.min(r.start.y, r.end.y), y1 = Math.max(r.start.y, r.end.y)
     const shape = new THREE.Shape()
@@ -169,7 +171,7 @@ export function sketchElementsToShape(
   }
 
   // ── Circles ───────────────────────────────────────────────────────────────
-  for (const c of elements.filter((e): e is SketchCircle => e.type === 'circle')) {
+  for (const c of elements_.filter((e): e is SketchCircle => e.type === 'circle')) {
     const shape = new THREE.Shape()
     const [cx, cy] = pt(c.center.x, c.center.y)
     shape.absarc(cx, cy, c.radius, 0, Math.PI * 2, false)
@@ -184,7 +186,7 @@ export function sketchElementsToShape(
     s = ((s % TAU) + TAU) % TAU
     return s
   }
-  for (const a of elements.filter((e): e is SketchArc => e.type === 'arc')) {
+  for (const a of elements_.filter((e): e is SketchArc => e.type === 'arc')) {
     const span = normSpan(a.startAngle, a.endAngle)
     if (Math.abs(span - TAU) > 1e-3) continue
     const shape = new THREE.Shape()
@@ -194,7 +196,7 @@ export function sketchElementsToShape(
   }
 
   // ── Closed line loop ──────────────────────────────────────────────────────
-  const lines = elements.filter((e): e is SketchLine => e.type === 'line')
+  const lines = elements_.filter((e): e is SketchLine => e.type === 'line')
   if (lines.length >= 3) {
     const loops = extractLoops(lines)
     for (const loop of loops) {
@@ -207,7 +209,7 @@ export function sketchElementsToShape(
   }
 
   // ── Mixed loop (lines + arcs) ─────────────────────────────────────────────
-  const segs = elements.filter((e): e is SketchLine | SketchArc => e.type === 'line' || e.type === 'arc')
+  const segs = elements_.filter((e): e is SketchLine | SketchArc => e.type === 'line' || e.type === 'arc')
   if (segs.length >= 2) {
     const { loops, rep } = extractMixedLoops(segs)
     for (const path of loops) {
