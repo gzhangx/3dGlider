@@ -1,4 +1,4 @@
-import { Mesh, BufferGeometry, ExtrudeGeometry, Matrix4, Euler, Vector3 } from 'three'
+import { Mesh, BufferGeometry, ExtrudeGeometry, Matrix4, Euler, Vector3, Quaternion } from 'three'
 import { CSG } from 'three-csg-ts'
 import { ExtrudeFeature, Sketch } from '../store/modelStore'
 import { sketchElementsToShape } from './sketchToShape'
@@ -31,10 +31,28 @@ function featureGeometry(ext: ExtrudeFeature, sketch: Sketch): BufferGeometry | 
   m.makeRotationFromEuler(new Euler(rx, ry, rz, 'XYZ'))
   m.setPosition(px, py, pz)
   const baked = bakeGeometry(geo, m)
+  geo.dispose()
+
+  // Redirect extrusion: rotate solid around the plane's world-space origin so the
+  // extrusion axis points along `direction` instead of the plane normal.
+  if (ext.direction) {
+    const dir = new Vector3(...ext.direction)
+    if (dir.length() > 1e-6) {
+      dir.normalize()
+      const planeNormal = new Vector3(0, 0, 1).applyEuler(new Euler(rx, ry, rz, 'XYZ')).normalize()
+      if (1 - Math.abs(planeNormal.dot(dir)) > 1e-6) {
+        const q = new Quaternion().setFromUnitVectors(planeNormal, dir)
+        const rotM = new Matrix4().makeRotationFromQuaternion(q)
+        const toOrigin = new Matrix4().makeTranslation(-px, -py, -pz)
+        const fromOrigin = new Matrix4().makeTranslation(px, py, pz)
+        baked.applyMatrix4(fromOrigin.multiply(rotM).multiply(toOrigin))
+      }
+    }
+  }
+
   baked.computeVertexNormals()
   baked.computeBoundingBox()
   baked.computeBoundingSphere()
-  geo.dispose()
   return baked
 }
 

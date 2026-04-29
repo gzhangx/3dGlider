@@ -46,7 +46,8 @@ export interface ExtrudeFeature {
   id: string
   sketchId: string
   operation: 'add' | 'cut'
-  depth: number  // units along the plane's normal
+  depth: number  // units along the extrusion direction
+  direction?: [number, number, number]  // world-space unit vector; omit = plane normal
 }
 
 export interface ModelData {
@@ -100,7 +101,15 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
       && typeof e.depth === 'number'
       && Number.isFinite(e.depth)
       && validSketchIds.has(e.sketchId))
-    .map((e) => ({ id: e.id, sketchId: e.sketchId, operation: e.operation, depth: e.depth }))
+    .map((e) => {
+      const raw = e as ExtrudeFeature & { direction?: unknown }
+      const dir = Array.isArray(raw.direction)
+        && raw.direction.length === 3
+        && raw.direction.every((n) => typeof n === 'number' && Number.isFinite(n))
+        ? raw.direction as [number, number, number]
+        : undefined
+      return { id: e.id, sketchId: e.sketchId, operation: e.operation, depth: e.depth, ...(dir ? { direction: dir } : {}) }
+    })
 
   return { sketches, extrudes }
 }
@@ -123,7 +132,7 @@ interface ModelState {
   addSketchElement: (el: SketchElement) => void
   deleteSketchElement: (id: string) => void
   cutSketchElement: (id: string, replacements: SketchElement[]) => void
-  addExtrude: (sketchId: string, depth: number, operation?: 'add' | 'cut') => void
+  addExtrude: (sketchId: string, depth: number, operation?: 'add' | 'cut', direction?: [number, number, number]) => void
   deleteExtrude: (id: string) => void
   armNewSketch: () => void
   cancelNewSketch: () => void
@@ -165,9 +174,9 @@ export const useModelStore = create<ModelState>((set) => ({
       sketchElements: [...s.sketchElements.filter((el) => el.id !== id), ...replacements],
     })),
 
-  addExtrude: (sketchId, depth, operation = 'add') =>
+  addExtrude: (sketchId, depth, operation = 'add', direction) =>
     set((s) => ({
-      extrudes: [...s.extrudes, { id: crypto.randomUUID(), sketchId, operation, depth }],
+      extrudes: [...s.extrudes, { id: crypto.randomUUID(), sketchId, operation, depth, ...(direction ? { direction } : {}) }],
     })),
 
   deleteExtrude: (id) =>

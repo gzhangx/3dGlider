@@ -165,9 +165,15 @@
 /* ── Extrude form ── */
 .extrudeForm {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 4px;
   padding: 4px 6px 4px 20px;
+}
+
+.extrudeFormRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .depthInput {
@@ -210,8 +216,52 @@
   font-size: 11px;
   cursor: pointer;
   white-space: nowrap;
+  align-self: flex-start;
 }
 .extrudeBtn:hover { background: #224080; }
+
+.dirToggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #668;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dirToggle input[type='checkbox'] {
+  cursor: pointer;
+  accent-color: #4488ff;
+}
+
+.dirInputs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.dirAxisLabel {
+  font-size: 10px;
+  color: #557;
+  min-width: 8px;
+}
+
+.dirInput {
+  width: 36px;
+  padding: 2px 3px;
+  background: #0e0e24;
+  border: 1px solid #334;
+  border-radius: 3px;
+  color: #ccd;
+  font-size: 11px;
+}
+.dirInput:focus { outline: none; border-color: #4488ff; }
+
+.dirLabel {
+  font-size: 10px;
+  color: #4477bb;
+}
 
 /* ── No profile warning ── */
 .noProfile {
