@@ -2,6 +2,7 @@ import { Group, Mesh } from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { ExtrudeFeature, Sketch } from '../store/modelStore'
 import { buildSolidMeshes, disposeSolidMeshes } from './solidModel'
+import { SCENE_TO_MM } from './units'
 
 export function exportSTL(extrudes: ExtrudeFeature[], sketches: Sketch[]) {
   if (extrudes.length === 0) return
@@ -13,8 +14,8 @@ export function exportSTL(extrudes: ExtrudeFeature[], sketches: Sketch[]) {
     group.add(new Mesh(solid.geometry))
   }
 
-  // Scene units are centimetres; STL is expected in millimetres by slicers.
-  group.scale.set(10, 10, 10)
+  // Scale scene units → mm so slicers (PrusaSlicer, etc.) import at the correct size.
+  group.scale.set(SCENE_TO_MM, SCENE_TO_MM, SCENE_TO_MM)
   group.updateMatrixWorld(true)
 
   const exporter = new STLExporter()
