@@ -228,11 +228,11 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
           ✏
         </button>
         <button
-          className={`${styles.sketchIconBtn} ${showRevolve ? styles.revolveIconActive : ''}`}
+          className={`${styles.revolveSketchBtn} ${showRevolve ? styles.revolveSketchActive : ''}`}
           title="Add revolve"
           onClick={() => { setShowRevolve((v) => !v); setShowExtrude(false) }}
         >
-          ⟳
+          ↻
         </button>
         <button
           className={`${styles.colorSwatch} ${showSketchAppearance ? styles.colorSwatchActive : ''}`}

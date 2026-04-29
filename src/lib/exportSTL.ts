@@ -1,17 +1,23 @@
 import { Group, Mesh } from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import { ExtrudeFeature, Sketch } from '../store/modelStore'
+import { ExtrudeFeature, RevolveFeature, Sketch } from '../store/modelStore'
 import { buildSolidMeshes, disposeSolidMeshes } from './solidModel'
+import { buildRevolveGeometry } from './revolveModel'
 import { SCENE_TO_MM } from './units'
 
-export function exportSTL(extrudes: ExtrudeFeature[], sketches: Sketch[]) {
-  if (extrudes.length === 0) return
+export function exportSTL(extrudes: ExtrudeFeature[], revolves: RevolveFeature[], sketches: Sketch[]) {
+  if (extrudes.length === 0 && revolves.length === 0) return
 
   const group = new Group()
   const solids = buildSolidMeshes(extrudes, sketches)
 
   for (const solid of solids) {
     group.add(new Mesh(solid.geometry))
+  }
+
+  const revolveGeos = revolves.map((r) => buildRevolveGeometry(r, sketches)).filter(Boolean)
+  for (const geo of revolveGeos) {
+    group.add(new Mesh(geo!))
   }
 
   // Scale scene units → mm so slicers (PrusaSlicer, etc.) import at the correct size.
@@ -47,4 +53,5 @@ export function exportSTL(extrudes: ExtrudeFeature[], sketches: Sketch[]) {
 
   // Dispose temporary geometry
   disposeSolidMeshes(solids)
+  revolveGeos.forEach((g) => g?.dispose())
 }

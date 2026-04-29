@@ -5,7 +5,7 @@ import { planeIdFromPose } from '../../lib/planePose'
 import styles from './Toolbar.module.css'
 
 export function Toolbar() {
-  const { mode, activePlane, extrudes, sketches, exitSketch, loadModel } = useModelStore()
+  const { mode, activePlane, extrudes, revolves, sketches, exitSketch, loadModel } = useModelStore()
   const activePlaneLabel = activePlane ? planeIdFromPose(activePlane) : null
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -91,7 +91,7 @@ export function Toolbar() {
       {extrudes.length > 0 && (
         <button
           className={styles.exportBtn}
-          onClick={() => exportSTL(extrudes, sketches)}
+          onClick={() => exportSTL(extrudes, revolves, sketches)}
           title="Export all extruded solids as binary STL"
         >
           ⬇ Export STL

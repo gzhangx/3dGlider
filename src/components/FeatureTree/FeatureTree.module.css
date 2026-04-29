@@ -113,13 +113,25 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 0;
+  padding: 0 2px;
   font-size: 13px;
   color: #557;
   line-height: 1;
 }
 .sketchIconBtn:hover { color: #88aaff; }
 .sketchIconActive { color: #ffcc44 !important; }
+
+.revolveSketchBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 12px;
+  color: #9966cc;
+  line-height: 1;
+}
+.revolveSketchBtn:hover { color: #cc88ff; }
+.revolveSketchActive { color: #ffcc44 !important; }
 
 .sketchLabel {
   flex: 1;
