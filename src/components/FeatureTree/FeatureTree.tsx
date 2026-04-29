@@ -219,7 +219,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
                 onClick={() => setAppearanceExtrudeId(appearanceExtrudeId === ext.id ? null : ext.id)}
               />
               <span className={styles.extrudeLabel}>
-                {ext.operation === 'cut' ? 'Pocket' : 'Extrude'} {ext.depth} u
+                {ext.operation === 'cut' ? 'Pocket' : 'Extrude'} {ext.depth} mm
                 {ext.symmetric && <span className={styles.dirLabel}> ⇔sym</span>}
                 {ext.direction && (
                   <span className={styles.dirLabel}> [{ext.direction.map((n) => n.toFixed(2)).join(',')}]</span>
@@ -277,7 +277,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
                     onKeyDown={(e) => e.key === 'Enter' && applyEdit()}
                     autoFocus
                   />
-                  <span className={styles.unit}>u</span>
+                  <span className={styles.unit}>mm</span>
                 </div>
                 <label className={styles.dirToggle}>
                   <input
@@ -335,7 +335,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
               onChange={(e) => setDepth(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleExtrude()}
             />
-            <span className={styles.unit}>u</span>
+            <span className={styles.unit}>mm</span>
           </div>
           <label className={styles.dirToggle}>
             <input
