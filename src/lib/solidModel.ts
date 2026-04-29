@@ -96,6 +96,17 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
   return solids
 }
 
+export function buildCutGeometries(extrudes: ExtrudeFeature[], sketches: Sketch[]): BufferGeometry[] {
+  return extrudes
+    .filter((e) => e.operation === 'cut')
+    .flatMap((e) => {
+      const sketch = sketches.find((s) => s.id === e.sketchId)
+      if (!sketch) return []
+      const geo = featureGeometry(e, sketch)
+      return geo ? [geo] : []
+    })
+}
+
 export function disposeSolidMeshes(meshes: Mesh[]) {
   for (const mesh of meshes) {
     mesh.geometry.dispose()

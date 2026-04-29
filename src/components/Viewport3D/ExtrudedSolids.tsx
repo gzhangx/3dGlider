@@ -1,9 +1,9 @@
 import { useMemo, useEffect, useRef, useState } from 'react'
 import { ThreeEvent, useThree } from '@react-three/fiber'
-import { Vector2, Vector3, Mesh, MeshStandardMaterial, DoubleSide, Raycaster } from 'three'
+import { Vector2, Vector3, Mesh, BufferGeometry, MeshStandardMaterial, DoubleSide, Raycaster } from 'three'
 import { useModelStore } from '../../store/modelStore'
 import { planePoseFromHit } from '../../lib/planePose'
-import { buildSolidMeshes, disposeSolidMeshes } from '../../lib/solidModel'
+import { buildSolidMeshes, buildCutGeometries, disposeSolidMeshes } from '../../lib/solidModel'
 
 interface HoverPreview {
   position: [number, number, number]
@@ -79,10 +79,23 @@ function SolidMesh({
   )
 }
 
+function CutVolumeMesh({ geo }: { geo: BufferGeometry }) {
+  const meshRef = useRef<Mesh>(null)
+  useEffect(() => {
+    if (meshRef.current) meshRef.current.geometry = geo
+  }, [geo])
+  return (
+    <mesh ref={meshRef} raycast={noopRaycast}>
+      <meshBasicMaterial color="#ff4422" transparent opacity={0.22} side={DoubleSide} depthWrite={false} />
+    </mesh>
+  )
+}
+
 export function ExtrudedSolids() {
   const { extrudes, sketches } = useModelStore()
   const [hoverPreview, setHoverPreview] = useState<HoverPreview | null>(null)
   const solids = useMemo(() => buildSolidMeshes(extrudes, sketches), [extrudes, sketches])
+  const cutGeos = useMemo(() => buildCutGeometries(extrudes, sketches), [extrudes, sketches])
 
   const handleHover = (point: Vector3, normal: Vector3) => {
     const pose = planePoseFromHit(normal, point)
@@ -99,10 +112,17 @@ export function ExtrudedSolids() {
     return () => disposeSolidMeshes(solids)
   }, [solids])
 
+  useEffect(() => {
+    return () => cutGeos.forEach((g) => g.dispose())
+  }, [cutGeos])
+
   return (
     <>
       {solids.map((mesh) => (
         <SolidMesh key={mesh.uuid} solidMesh={mesh} onHover={handleHover} onHoverOut={clearHover} />
+      ))}
+      {cutGeos.map((geo) => (
+        <CutVolumeMesh key={geo.uuid} geo={geo} />
       ))}
       {hoverPreview && (
         <mesh position={hoverPreview.position} rotation={hoverPreview.rotation} raycast={noopRaycast}>
