@@ -1,11 +1,13 @@
-import { useState } from 'react'
-import { useModelStore, Sketch, PlaneId } from '../../store/modelStore'
+import { useState, useRef, useEffect } from 'react'
+import { useModelStore, Sketch, PlaneId, ExtrudeFeature } from '../../store/modelStore'
 import { planeIdFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { sketchElementsToShape } from '../../lib/sketchToShape'
 import styles from './FeatureTree.module.css'
 
 function SketchRow({ sketch }: { sketch: Sketch }) {
-  const { extrudes, addExtrude, deleteExtrude, editSketch } = useModelStore()
+  const { extrudes, addExtrude, updateExtrude, deleteExtrude, editSketch } = useModelStore()
+
+  // ── create-new-extrude form state ────────────────────────────────────────
   const [depth, setDepth] = useState('5')
   const [operation, setOperation] = useState<'add' | 'cut'>('add')
   const [useCustomDir, setUseCustomDir] = useState(false)
@@ -13,10 +15,74 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   const [dirY, setDirY] = useState('0')
   const [dirZ, setDirZ] = useState('1')
 
+  // ── edit-existing-extrude state ──────────────────────────────────────────
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [eDepth, setEDepth] = useState('5')
+  const [eOperation, setEOperation] = useState<'add' | 'cut'>('add')
+  const [eUseDir, setEUseDir] = useState(false)
+  const [eDirX, setEDirX] = useState('0')
+  const [eDirY, setEDirY] = useState('0')
+  const [eDirZ, setEDirZ] = useState('1')
+  const originalRef = useRef<ExtrudeFeature | null>(null)
+
   const existing = extrudes.filter((e) => e.sketchId === sketch.id)
   const canExtrude = sketchElementsToShape(sketch.elements).length > 0
   const planeLabel = planeIdFromPose(sketch.plane)
 
+  // Live-preview: push edit state into store whenever it changes
+  useEffect(() => {
+    if (!editingId) return
+    const d = parseFloat(eDepth)
+    if (isNaN(d) || d === 0) return
+    let direction: [number, number, number] | undefined
+    if (eUseDir) {
+      const dx = parseFloat(eDirX), dy = parseFloat(eDirY), dz = parseFloat(eDirZ)
+      if (isNaN(dx) || isNaN(dy) || isNaN(dz)) return
+      const len = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      if (len < 1e-6) return
+      direction = [dx / len, dy / len, dz / len]
+    }
+    updateExtrude(editingId, d, eOperation, direction)
+  }, [editingId, eDepth, eOperation, eUseDir, eDirX, eDirY, eDirZ]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startEdit = (ext: ExtrudeFeature) => {
+    originalRef.current = { ...ext }
+    setEditingId(ext.id)
+    setEDepth(ext.depth.toString())
+    setEOperation(ext.operation)
+    if (ext.direction) {
+      setEUseDir(true)
+      setEDirX(ext.direction[0].toString())
+      setEDirY(ext.direction[1].toString())
+      setEDirZ(ext.direction[2].toString())
+    } else {
+      setEUseDir(false)
+      const n = planeNormalFromPose(sketch.plane)
+      setEDirX(parseFloat(n.x.toFixed(3)).toString())
+      setEDirY(parseFloat(n.y.toFixed(3)).toString())
+      setEDirZ(parseFloat(n.z.toFixed(3)).toString())
+    }
+  }
+
+  const applyEdit = () => setEditingId(null)
+
+  const cancelEdit = () => {
+    const orig = originalRef.current
+    if (orig) updateExtrude(orig.id, orig.depth, orig.operation, orig.direction)
+    setEditingId(null)
+  }
+
+  const handleToggleEditDir = (on: boolean) => {
+    if (on) {
+      const n = planeNormalFromPose(sketch.plane)
+      setEDirX(parseFloat(n.x.toFixed(3)).toString())
+      setEDirY(parseFloat(n.y.toFixed(3)).toString())
+      setEDirZ(parseFloat(n.z.toFixed(3)).toString())
+    }
+    setEUseDir(on)
+  }
+
+  // ── create-form handlers ─────────────────────────────────────────────────
   const handleToggleCustomDir = (on: boolean) => {
     if (on) {
       const n = planeNormalFromPose(sketch.plane)
@@ -60,21 +126,76 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
       </div>
 
       {existing.map((ext) => (
-        <div key={ext.id} className={styles.extrudeRow}>
-          <span className={styles.extrudeIcon}>{ext.operation === 'cut' ? '▼' : '▲'}</span>
-          <span className={styles.extrudeLabel}>
-            {ext.operation === 'cut' ? 'Pocket' : 'Extrude'} {ext.depth} u
-            {ext.direction && (
-              <span className={styles.dirLabel}> [{ext.direction.map((n) => n.toFixed(2)).join(',')}]</span>
-            )}
-          </span>
-          <button
-            className={styles.deleteBtn}
-            title="Delete extrude"
-            onClick={() => deleteExtrude(ext.id)}
-          >
-            ✕
-          </button>
+        <div key={ext.id} className={styles.sketchGroup}>
+          <div className={styles.extrudeRow}>
+            <button
+              className={`${styles.extrudeIconBtn} ${editingId === ext.id ? styles.extrudeIconActive : ''}`}
+              title="Edit extrude"
+              onClick={() => editingId === ext.id ? applyEdit() : startEdit(ext)}
+            >
+              {ext.operation === 'cut' ? '▼' : '▲'}
+            </button>
+            <span className={styles.extrudeLabel}>
+              {ext.operation === 'cut' ? 'Pocket' : 'Extrude'} {ext.depth} u
+              {ext.direction && (
+                <span className={styles.dirLabel}> [{ext.direction.map((n) => n.toFixed(2)).join(',')}]</span>
+              )}
+            </span>
+            <button
+              className={styles.deleteBtn}
+              title="Delete extrude"
+              onClick={() => { if (editingId === ext.id) cancelEdit(); deleteExtrude(ext.id) }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {editingId === ext.id && (
+            <div className={styles.editExtrudeForm}>
+              <div className={styles.extrudeFormRow}>
+                <select
+                  className={styles.opSelect}
+                  value={eOperation}
+                  onChange={(e) => setEOperation(e.target.value as 'add' | 'cut')}
+                >
+                  <option value="add">Add</option>
+                  <option value="cut">Cut</option>
+                </select>
+                <input
+                  type="number"
+                  className={styles.depthInput}
+                  value={eDepth}
+                  step="0.5"
+                  onChange={(e) => setEDepth(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && applyEdit()}
+                  autoFocus
+                />
+                <span className={styles.unit}>u</span>
+              </div>
+              <label className={styles.dirToggle}>
+                <input
+                  type="checkbox"
+                  checked={eUseDir}
+                  onChange={(e) => handleToggleEditDir(e.target.checked)}
+                />
+                Custom dir
+              </label>
+              {eUseDir && (
+                <div className={styles.dirInputs}>
+                  <span className={styles.dirAxisLabel}>X</span>
+                  <input type="number" className={styles.dirInput} value={eDirX} step="0.1" onChange={(e) => setEDirX(e.target.value)} />
+                  <span className={styles.dirAxisLabel}>Y</span>
+                  <input type="number" className={styles.dirInput} value={eDirY} step="0.1" onChange={(e) => setEDirY(e.target.value)} />
+                  <span className={styles.dirAxisLabel}>Z</span>
+                  <input type="number" className={styles.dirInput} value={eDirZ} step="0.1" onChange={(e) => setEDirZ(e.target.value)} />
+                </div>
+              )}
+              <div className={styles.editActions}>
+                <button className={styles.applyBtn} onClick={applyEdit}>✓ Apply</button>
+                <button className={styles.cancelEditBtn} onClick={cancelEdit}>✗ Cancel</button>
+              </div>
+            </div>
+          )}
         </div>
       ))}
 

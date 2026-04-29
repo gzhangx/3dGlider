@@ -144,7 +144,17 @@
   border: 1px solid #224;
 }
 
-.extrudeIcon { color: #4477bb; font-size: 11px; }
+.extrudeIconBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  color: #4477bb;
+  font-size: 11px;
+  line-height: 1;
+}
+.extrudeIconBtn:hover { color: #88bbff; }
+.extrudeIconActive { color: #ffcc44 !important; }
 
 .extrudeLabel {
   flex: 1;
@@ -262,6 +272,48 @@
   font-size: 10px;
   color: #4477bb;
 }
+
+/* ── Edit extrude form (inline, below extrude row) ── */
+.editExtrudeForm {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 6px 6px 20px;
+  background: #0f0f20;
+  border-left: 2px solid #886622;
+  border-radius: 0 0 4px 4px;
+  margin-top: -2px;
+}
+
+.editActions {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.applyBtn {
+  flex: 1;
+  padding: 3px 6px;
+  background: #1a3a1a;
+  border: 1px solid #336633;
+  border-radius: 3px;
+  color: #88cc88;
+  font-size: 11px;
+  cursor: pointer;
+}
+.applyBtn:hover { background: #234a23; }
+
+.cancelEditBtn {
+  flex: 1;
+  padding: 3px 6px;
+  background: #2a1b1b;
+  border: 1px solid #4d2b2b;
+  border-radius: 3px;
+  color: #cc8888;
+  font-size: 11px;
+  cursor: pointer;
+}
+.cancelEditBtn:hover { background: #3a2020; }
 
 /* ── No profile warning ── */
 .noProfile {

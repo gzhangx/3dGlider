@@ -133,6 +133,7 @@ interface ModelState {
   deleteSketchElement: (id: string) => void
   cutSketchElement: (id: string, replacements: SketchElement[]) => void
   addExtrude: (sketchId: string, depth: number, operation?: 'add' | 'cut', direction?: [number, number, number]) => void
+  updateExtrude: (id: string, depth: number, operation: 'add' | 'cut', direction?: [number, number, number]) => void
   deleteExtrude: (id: string) => void
   armNewSketch: () => void
   cancelNewSketch: () => void
@@ -177,6 +178,15 @@ export const useModelStore = create<ModelState>((set) => ({
   addExtrude: (sketchId, depth, operation = 'add', direction) =>
     set((s) => ({
       extrudes: [...s.extrudes, { id: crypto.randomUUID(), sketchId, operation, depth, ...(direction ? { direction } : {}) }],
+    })),
+
+  updateExtrude: (id, depth, operation, direction) =>
+    set((s) => ({
+      extrudes: s.extrudes.map((e) =>
+        e.id === id
+          ? { id: e.id, sketchId: e.sketchId, operation, depth, ...(direction ? { direction } : {}) }
+          : e
+      ),
     })),
 
   deleteExtrude: (id) =>
