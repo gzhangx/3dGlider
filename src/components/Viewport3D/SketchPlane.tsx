@@ -161,9 +161,10 @@ export function SketchPlane() {
   >(null)
   const [dragTarget, setDragTarget] = useState<{ elementId: string; pointType: 'start' | 'end' | 'center' } | null>(null)
   const [dragSnapTarget, setDragSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef } | null>(null)
+  const [startSnapRef, setStartSnapRef] = useState<PointRef | null>(null)
 
   useEffect(() => {
-    setStartPt(null); setCursorPt(null); setCutPreview(null); setCutTarget(null); setSnapTarget(null)
+    setStartPt(null); setCursorPt(null); setCutPreview(null); setCutTarget(null); setSnapTarget(null); setStartSnapRef(null)
   }, [activeTool])
 
   const handleKey = useCallback(
@@ -362,6 +363,7 @@ export function SketchPlane() {
 
     if (startPt === null) {
       setStartPt(pt)
+      setStartSnapRef(snapTarget ? snapTarget.ref : null)
       return
     }
 
@@ -370,11 +372,18 @@ export function SketchPlane() {
 
     if (activeTool === 'line') {
       addSketchElement({ type: 'line', id, start: startPt, end: pt, ...cFlag } satisfies SketchLine)
-      // Auto-coincident if end point snapped to existing endpoint
+      // Auto-coincident for start point if it snapped
+      if (startSnapRef) {
+        addSketchConstraint({
+          id: crypto.randomUUID(), type: 'coincident',
+          p1: startSnapRef,
+          p2: { elementId: id, which: 'start' },
+        })
+      }
+      // Auto-coincident for end point if it snapped
       if (snapTarget) {
         addSketchConstraint({
-          id: crypto.randomUUID(),
-          type: 'coincident',
+          id: crypto.randomUUID(), type: 'coincident',
           p1: snapTarget.ref,
           p2: { elementId: id, which: 'end' },
         })
@@ -410,6 +419,7 @@ export function SketchPlane() {
     }
 
     setStartPt(null)
+    setStartSnapRef(null)
     setSnapTarget(null)
   }
 
