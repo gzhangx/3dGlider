@@ -31,8 +31,8 @@ const ENDPOINT_PAIRS: EndpointPair[] = [
 
 export function SketchSidebar() {
   const {
-    mode, activeTool, constructionMode, snapToGrid, showSketchNavigator,
-    setActiveTool, setConstructionMode, setSnapToGrid, setShowSketchNavigator,
+    mode, activeTool, constructionMode, snapToGrid, snapToOtherPlanes, showSketchNavigator,
+    setActiveTool, setConstructionMode, setSnapToGrid, setSnapToOtherPlanes, setShowSketchNavigator,
     sketchElements, sketchConstraints,
     selectedElementId, selectedElementId2, selectElement2,
     updateSketchElement, addSketchConstraint, deleteSketchConstraint,
@@ -214,6 +214,15 @@ export function SketchSidebar() {
       >
         <span className={styles.icon}>⊞</span>
         <span className={styles.label}>Snap Grid</span>
+      </button>
+
+      <button
+        className={`${styles.btn} ${styles.snapBtn} ${snapToOtherPlanes ? styles.snapActive : ''}`}
+        onClick={() => setSnapToOtherPlanes(!snapToOtherPlanes)}
+        title="Snap to endpoints on other sketch planes"
+      >
+        <span className={styles.icon}>⊕</span>
+        <span className={styles.label}>Snap Planes</span>
       </button>
 
       <button

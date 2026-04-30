@@ -212,6 +212,7 @@ interface ModelState {
   activeTool: SketchTool
   constructionMode: boolean
   snapToGrid: boolean
+  snapToOtherPlanes: boolean
   sketchElements: SketchElement[]
   sketchConstraints: SketchConstraint[]   // constraints for current working sketch
   sketches: Sketch[]
@@ -231,6 +232,7 @@ interface ModelState {
   setActiveTool: (tool: SketchTool) => void
   setConstructionMode: (on: boolean) => void
   setSnapToGrid: (on: boolean) => void
+  setSnapToOtherPlanes: (on: boolean) => void
   selectElement: (id: string | null) => void
   selectElement2: (id: string | null) => void
   setIsDraggingPoint: (v: boolean) => void
@@ -272,6 +274,7 @@ export const useModelStore = create<ModelState>((set) => ({
   activeTool: 'select',
   constructionMode: false,
   snapToGrid: true,
+  snapToOtherPlanes: false,
   sketchElements: [],
   sketchConstraints: [],
   sketches: [],
@@ -291,6 +294,7 @@ export const useModelStore = create<ModelState>((set) => ({
   setActiveTool: (activeTool) => set({ activeTool, selectedElementId: null, selectedElementId2: null }),
   setConstructionMode: (constructionMode) => set({ constructionMode }),
   setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
+  setSnapToOtherPlanes: (snapToOtherPlanes) => set({ snapToOtherPlanes }),
   selectElement: (selectedElementId) => set({ selectedElementId, selectedElementId2: null, highlightElementIds: [] }),
   selectElement2: (selectedElementId2) => set({ selectedElementId2 }),
   setIsDraggingPoint: (isDraggingPoint) => set({ isDraggingPoint }),

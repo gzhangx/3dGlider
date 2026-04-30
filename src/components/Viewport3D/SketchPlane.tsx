@@ -142,7 +142,8 @@ const SNAP_ENDPOINT_THRESHOLD = 0.3
 
 export function SketchPlane() {
   const {
-    activePlane, activeTool, constructionMode, snapToGrid, sketchElements, sketchConstraints,
+    activePlane, activeTool, constructionMode, snapToGrid, snapToOtherPlanes,
+    sketchElements, sketchConstraints, sketches, editingSketchId,
     selectedElementId, selectElement,
     addSketchElement, updateSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
     addSketchConstraint, setIsDraggingPoint, setHighlightElementIds,
@@ -150,7 +151,7 @@ export function SketchPlane() {
 
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
   const [cursorPt, setCursorPt] = useState<SketchPoint | null>(null)
-  const [snapTarget, setSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef } | null>(null)
+  const [snapTarget, setSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef | null } | null>(null)
   const [cutPreview, setCutPreview] = useState<CutResult | CircleCutResult | ArcCutResult | null>(null)
   const [cutTarget, setCutTarget] = useState<
     | { kind: 'line'; line: SketchLine }
@@ -160,7 +161,7 @@ export function SketchPlane() {
     | null
   >(null)
   const [dragTarget, setDragTarget] = useState<{ elementId: string; pointType: 'start' | 'end' | 'center' } | null>(null)
-  const [dragSnapTarget, setDragSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef } | null>(null)
+  const [dragSnapTarget, setDragSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef | null } | null>(null)
   const [startSnapRef, setStartSnapRef] = useState<PointRef | null>(null)
 
   useEffect(() => {
@@ -194,14 +195,29 @@ export function SketchPlane() {
   const getRaw = (e: ThreeEvent<PointerEvent | MouseEvent>) => toSketch(e.point, plane)
   const doSnap = (p: SketchPoint) => snapToGrid ? snapPt(p) : p
 
-  // Find nearest endpoint within snap threshold
-  const findSnapTarget = (raw: SketchPoint): { pt: SketchPoint; ref: PointRef } | null => {
-    let best: { pt: SketchPoint; ref: PointRef; dist: number } | null = null
+  // Find nearest endpoint within snap threshold (current plane + optionally other planes)
+  const findSnapTarget = (raw: SketchPoint): { pt: SketchPoint; ref: PointRef | null } | null => {
+    let best: { pt: SketchPoint; ref: PointRef | null; dist: number } | null = null
     for (const el of sketchElements) {
       for (const { pt, ref } of elementEndpoints(el)) {
         const d = Math.hypot(raw.x - pt.x, raw.y - pt.y)
         if (d < SNAP_ENDPOINT_THRESHOLD && (!best || d < best.dist)) {
           best = { pt, ref, dist: d }
+        }
+      }
+    }
+    if (snapToOtherPlanes) {
+      for (const sketch of sketches) {
+        if (sketch.id === editingSketchId) continue
+        for (const el of sketch.elements) {
+          for (const { pt } of elementEndpoints(el)) {
+            const w = worldPt(pt, sketch.plane)
+            const localPt = toSketch({ x: w[0], y: w[1], z: w[2] }, plane)
+            const d = Math.hypot(raw.x - localPt.x, raw.y - localPt.y)
+            if (d < SNAP_ENDPOINT_THRESHOLD && (!best || d < best.dist)) {
+              best = { pt: localPt, ref: null, dist: d }
+            }
+          }
         }
       }
     }
@@ -216,7 +232,7 @@ export function SketchPlane() {
     if (dragTarget) {
       const key = dragTarget.pointType
       // Check for snap to another element's endpoint (excluding dragged element)
-      let snap: { pt: SketchPoint; ref: PointRef } | null = null
+      let snap: { pt: SketchPoint; ref: PointRef | null } | null = null
       if (key === 'start' || key === 'end') {
         let bestDist = SNAP_ENDPOINT_THRESHOLD
         for (const el of sketchElements) {
@@ -224,6 +240,19 @@ export function SketchPlane() {
           for (const { pt, ref } of elementEndpoints(el)) {
             const d = Math.hypot(raw.x - pt.x, raw.y - pt.y)
             if (d < bestDist) { bestDist = d; snap = { pt, ref } }
+          }
+        }
+        if (snapToOtherPlanes) {
+          for (const sketch of sketches) {
+            if (sketch.id === editingSketchId) continue
+            for (const el of sketch.elements) {
+              for (const { pt } of elementEndpoints(el)) {
+                const w = worldPt(pt, sketch.plane)
+                const localPt = toSketch({ x: w[0], y: w[1], z: w[2] }, plane)
+                const d = Math.hypot(raw.x - localPt.x, raw.y - localPt.y)
+                if (d < bestDist) { bestDist = d; snap = { pt: localPt, ref: null } }
+              }
+            }
           }
         }
       }
@@ -372,7 +401,7 @@ export function SketchPlane() {
 
     if (activeTool === 'line') {
       addSketchElement({ type: 'line', id, start: startPt, end: pt, ...cFlag } satisfies SketchLine)
-      // Auto-coincident for start point if it snapped
+      // Auto-coincident for start point if it snapped (same-plane only)
       if (startSnapRef) {
         addSketchConstraint({
           id: crypto.randomUUID(), type: 'coincident',
@@ -380,8 +409,8 @@ export function SketchPlane() {
           p2: { elementId: id, which: 'start' },
         })
       }
-      // Auto-coincident for end point if it snapped
-      if (snapTarget) {
+      // Auto-coincident for end point if it snapped (same-plane only)
+      if (snapTarget?.ref) {
         addSketchConstraint({
           id: crypto.randomUUID(), type: 'coincident',
           p1: snapTarget.ref,
@@ -426,7 +455,7 @@ export function SketchPlane() {
   const onPointerUp = () => {
     if (dragTarget) {
       // If snapped to another endpoint, add a coincident constraint (unless already linked)
-      if (dragSnapTarget && (dragTarget.pointType === 'start' || dragTarget.pointType === 'end')) {
+      if (dragSnapTarget?.ref && (dragTarget.pointType === 'start' || dragTarget.pointType === 'end')) {
         const p1: PointRef = { elementId: dragTarget.elementId, which: dragTarget.pointType }
         const p2 = dragSnapTarget.ref
         const alreadyLinked = sketchConstraints.some(
