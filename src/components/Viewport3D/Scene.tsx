@@ -16,7 +16,7 @@ const ACTION_ROTATE = 1
 const ACTION_TRUCK = 2
 
 export function Scene() {
-  const { activePlane, mode, activeTool, isDraggingPoint } = useModelStore()
+  const { activePlane, mode, activeTool, isDraggingPoint, sketchViewResetCounter } = useModelStore()
   const { camera } = useThree()
   const controlsRef = useRef<CameraControls>(null)
 
@@ -34,6 +34,18 @@ export function Scene() {
     const tz = origin.z
     controlsRef.current.setLookAt(tx + nx * dist, ty + ny * dist, tz + nz * dist, tx, ty, tz, true)
   }, [activePlane, camera])
+
+  // Reset sketch view on demand (same logic as entering sketch mode)
+  useEffect(() => {
+    if (!sketchViewResetCounter || !activePlane || !controlsRef.current) return
+    const normal = planeNormalFromPose(activePlane)
+    const origin = planeOriginFromPose(activePlane)
+    controlsRef.current.setLookAt(
+      origin.x + normal.x * 12, origin.y + normal.y * 12, origin.z + normal.z * 12,
+      origin.x, origin.y, origin.z,
+      true,
+    )
+  }, [sketchViewResetCounter, activePlane])
 
   // In sketch mode with a draw tool: disable left-button orbit so clicks reach the sketch plane.
   // Right-drag and scroll still pan/zoom freely.

@@ -6,7 +6,7 @@ import { ParametersDialog } from '../ParametersDialog/ParametersDialog'
 import styles from './Toolbar.module.css'
 
 export function Toolbar() {
-  const { mode, activePlane, extrudes, revolves, sketches, parameters, exitSketch, loadModel } = useModelStore()
+  const { mode, activePlane, extrudes, revolves, sketches, parameters, exitSketch, loadModel, resetSketchView } = useModelStore()
   const activePlaneLabel = activePlane ? planeIdFromPose(activePlane) : null
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showParams, setShowParams] = useState(false)
@@ -62,6 +62,9 @@ export function Toolbar() {
           {mode === 'sketch' && (
             <>
               <span className={styles.activeLabel}>Sketching on {activePlaneLabel}</span>
+              <button className={styles.exitBtn} onClick={resetSketchView} title="Reset view perpendicular to sketch plane">
+                Reset View
+              </button>
               <button className={styles.exitBtn} onClick={exitSketch}>
                 Exit Sketch
               </button>

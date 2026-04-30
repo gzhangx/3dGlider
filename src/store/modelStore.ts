@@ -227,6 +227,7 @@ interface ModelState {
   editingSketchId: string | null
   editingExtrudeId: string | null
   previewExtrude: ExtrudeFeature | null
+  sketchViewResetCounter: number
 
   setHoveredPlane: (plane: PlaneId | null) => void
   setActiveTool: (tool: SketchTool) => void
@@ -237,6 +238,7 @@ interface ModelState {
   selectElement2: (id: string | null) => void
   setIsDraggingPoint: (v: boolean) => void
   setHighlightElementIds: (ids: string[]) => void
+  resetSketchView: () => void
   setShowSketchNavigator: (v: boolean) => void
   addSketchElement: (el: SketchElement) => void
   updateSketchElement: (id: string, updates: Partial<SketchElement>) => void
@@ -289,6 +291,7 @@ export const useModelStore = create<ModelState>((set) => ({
   editingSketchId: null,
   editingExtrudeId: null,
   previewExtrude: null,
+  sketchViewResetCounter: 0,
 
   setHoveredPlane: (hoveredPlane) => set({ hoveredPlane }),
   setActiveTool: (activeTool) => set({ activeTool, selectedElementId: null, selectedElementId2: null }),
@@ -299,6 +302,7 @@ export const useModelStore = create<ModelState>((set) => ({
   selectElement2: (selectedElementId2) => set({ selectedElementId2 }),
   setIsDraggingPoint: (isDraggingPoint) => set({ isDraggingPoint }),
   setHighlightElementIds: (highlightElementIds) => set({ highlightElementIds }),
+  resetSketchView: () => set((s) => ({ sketchViewResetCounter: s.sketchViewResetCounter + 1 })),
   setShowSketchNavigator: (showSketchNavigator) => set({ showSketchNavigator }),
 
   addSketchElement: (el) => set((s) => ({ sketchElements: [...s.sketchElements, el] })),
