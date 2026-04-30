@@ -321,7 +321,30 @@ export function SketchPlane() {
         })
       }
     } else if (activeTool === 'rect') {
-      addSketchElement({ type: 'rect', id, start: startPt, end: pt, ...cFlag } satisfies SketchRect)
+      // Rect → 4 connected lines with coincident constraints at corners
+      const s = startPt, e = pt
+      const corners: SketchPoint[] = [
+        { x: s.x, y: s.y },
+        { x: e.x, y: s.y },
+        { x: e.x, y: e.y },
+        { x: s.x, y: e.y },
+      ]
+      const lineIds = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()]
+      for (let i = 0; i < 4; i++) {
+        addSketchElement({
+          type: 'line', id: lineIds[i],
+          start: corners[i], end: corners[(i + 1) % 4],
+          ...cFlag,
+        } satisfies SketchLine)
+      }
+      // Coincident constraints at each shared corner (end[i] = start[i+1])
+      for (let i = 0; i < 4; i++) {
+        addSketchConstraint({
+          id: crypto.randomUUID(), type: 'coincident',
+          p1: { elementId: lineIds[i], which: 'end' },
+          p2: { elementId: lineIds[(i + 1) % 4], which: 'start' },
+        })
+      }
     } else if (activeTool === 'circle') {
       const r = Math.hypot(pt.x - startPt.x, pt.y - startPt.y)
       if (r > 0) addSketchElement({ type: 'circle', id, center: startPt, radius: r, ...cFlag } satisfies SketchCircle)

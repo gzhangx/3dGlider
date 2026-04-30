@@ -1,71 +1,91 @@
 import { SketchLine, SketchRect, SketchCircle, SketchPoint } from '../store/modelStore'
 
-/** Move el.end along the (end - start) direction so the line is exactly `value` units long. */
+// ── Line helpers ──────────────────────────────────────────────────────────────
+
+/** Move el.end along (end-start) so the line is exactly `value` units long. */
 export function applyLength(el: SketchLine, value: number): SketchLine {
   const dx = el.end.x - el.start.x
   const dy = el.end.y - el.start.y
   const len = Math.hypot(dx, dy)
   if (len < 1e-9) return el
-  const scale = value / len
-  return {
-    ...el,
-    end: { x: el.start.x + dx * scale, y: el.start.y + dy * scale },
-  }
+  const s = value / len
+  return { ...el, end: { x: el.start.x + dx * s, y: el.start.y + dy * s } }
 }
 
-/**
- * Rotate el2 around its start point so the angle between el1 and el2 equals `angleDeg`.
- * The angle is measured from el1's direction to el2's direction, counter-clockwise.
- */
+/** Rotate el2 around its start so angle from el1 to el2 equals angleDeg (CCW). */
 export function applyAngle(el1: SketchLine, el2: SketchLine, angleDeg: number): SketchLine {
-  const angleRad = (angleDeg * Math.PI) / 180
-  const ax = el1.end.x - el1.start.x
-  const ay = el1.end.y - el1.start.y
-  const baseAngle = Math.atan2(ay, ax)
-  const targetAngle = baseAngle + angleRad
-  const el2len = Math.hypot(el2.end.x - el2.start.x, el2.end.y - el2.start.y)
-  return {
-    ...el2,
-    end: {
-      x: el2.start.x + Math.cos(targetAngle) * el2len,
-      y: el2.start.y + Math.sin(targetAngle) * el2len,
-    },
-  }
+  const rad = (angleDeg * Math.PI) / 180
+  const base = Math.atan2(el1.end.y - el1.start.y, el1.end.x - el1.start.x)
+  const target = base + rad
+  const len2 = Math.hypot(el2.end.x - el2.start.x, el2.end.y - el2.start.y)
+  return { ...el2, end: { x: el2.start.x + Math.cos(target) * len2, y: el2.start.y + Math.sin(target) * len2 } }
 }
 
-/** Set rect width (|end.x - start.x|), preserving direction and start. */
+/** Rotate el2 to be parallel to el1 (same direction), preserving el2's length and start. */
+export function applyParallel(el1: SketchLine, el2: SketchLine): SketchLine {
+  const angle = Math.atan2(el1.end.y - el1.start.y, el1.end.x - el1.start.x)
+  const len2 = Math.hypot(el2.end.x - el2.start.x, el2.end.y - el2.start.y)
+  return { ...el2, end: { x: el2.start.x + Math.cos(angle) * len2, y: el2.start.y + Math.sin(angle) * len2 } }
+}
+
+/** Rotate el2 to be perpendicular to el1 (+90°), preserving el2's length and start. */
+export function applyPerpendicular(el1: SketchLine, el2: SketchLine): SketchLine {
+  return applyAngle(el1, el2, 90)
+}
+
+/** Rotate el to be horizontal (0°), preserving length and start. */
+export function applyHorizontal(el: SketchLine): SketchLine {
+  const len = Math.hypot(el.end.x - el.start.x, el.end.y - el.start.y)
+  return { ...el, end: { x: el.start.x + len, y: el.start.y } }
+}
+
+/** Rotate el to be vertical (90°), preserving length and start. */
+export function applyVertical(el: SketchLine): SketchLine {
+  const len = Math.hypot(el.end.x - el.start.x, el.end.y - el.start.y)
+  return { ...el, end: { x: el.start.x, y: el.start.y + len } }
+}
+
+/** Set el2's length to equal el1's, keeping el2's direction and start. */
+export function applyEqual(el1: SketchLine, el2: SketchLine): SketchLine {
+  return applyLength(el2, lineLength(el1))
+}
+
+// ── Rect helpers ──────────────────────────────────────────────────────────────
+
+/** Set rect width, preserving direction and start corner. */
 export function applyRectWidth(el: SketchRect, value: number): SketchRect {
   const sign = el.end.x >= el.start.x ? 1 : -1
   return { ...el, end: { x: el.start.x + sign * Math.abs(value), y: el.end.y } }
 }
 
-/** Set rect height (|end.y - start.y|), preserving direction and start. */
+/** Set rect height, preserving direction and start corner. */
 export function applyRectHeight(el: SketchRect, value: number): SketchRect {
   const sign = el.end.y >= el.start.y ? 1 : -1
   return { ...el, end: { x: el.end.x, y: el.start.y + sign * Math.abs(value) } }
 }
+
+// ── Circle helpers ────────────────────────────────────────────────────────────
 
 /** Set circle radius. */
 export function applyRadius(el: SketchCircle, value: number): SketchCircle {
   return { ...el, radius: Math.abs(value) }
 }
 
-/** Get the current length of a line. */
+// ── Measurement helpers ───────────────────────────────────────────────────────
+
 export function lineLength(el: SketchLine): number {
   return Math.hypot(el.end.x - el.start.x, el.end.y - el.start.y)
 }
 
-/** Get rect width. */
 export function rectWidth(el: SketchRect): number {
   return Math.abs(el.end.x - el.start.x)
 }
 
-/** Get rect height. */
 export function rectHeight(el: SketchRect): number {
   return Math.abs(el.end.y - el.start.y)
 }
 
-/** Get the angle (degrees) from el1 to el2, counter-clockwise. */
+/** Angle in degrees from el1 to el2, CCW, normalized to [0, 360). */
 export function angleBetween(el1: SketchLine, el2: SketchLine): number {
   const a1 = Math.atan2(el1.end.y - el1.start.y, el1.end.x - el1.start.x)
   const a2 = Math.atan2(el2.end.y - el2.start.y, el2.end.x - el2.start.x)
@@ -75,9 +95,6 @@ export function angleBetween(el1: SketchLine, el2: SketchLine): number {
   return Math.round(deg * 1000) / 1000
 }
 
-/** Get a named endpoint from a sketch element. */
 export function getEndpoint(el: { start?: SketchPoint; end?: SketchPoint }, which: 'start' | 'end'): SketchPoint | null {
-  if (which === 'start' && el.start) return el.start
-  if (which === 'end' && el.end) return el.end
-  return null
+  return which === 'start' ? (el.start ?? null) : (el.end ?? null)
 }

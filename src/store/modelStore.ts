@@ -42,10 +42,18 @@ export type SketchElement = SketchLine | SketchRect | SketchCircle | SketchArc
 
 // ── Sketch constraints ────────────────────────────────────────────────────────
 export type PointRef = { elementId: string; which: 'start' | 'end' }
-export interface LengthConstraint    { id: string; type: 'length';    elementId: string; value: number; dimension?: 'width' | 'height' | 'radius' }
-export interface AngleConstraint     { id: string; type: 'angle';     elementId1: string; elementId2: string; value: number }
-export interface CoincidentConstraint{ id: string; type: 'coincident'; p1: PointRef; p2: PointRef }
-export type SketchConstraint = LengthConstraint | AngleConstraint | CoincidentConstraint
+export interface LengthConstraint       { id: string; type: 'length';       elementId: string; value: number; dimension?: 'width' | 'height' | 'radius' }
+export interface AngleConstraint        { id: string; type: 'angle';        elementId1: string; elementId2: string; value: number }
+export interface CoincidentConstraint   { id: string; type: 'coincident';   p1: PointRef; p2: PointRef }
+export interface ParallelConstraint     { id: string; type: 'parallel';     elementId1: string; elementId2: string }
+export interface PerpendicularConstraint{ id: string; type: 'perpendicular'; elementId1: string; elementId2: string }
+export interface HorizontalConstraint   { id: string; type: 'horizontal';   elementId: string }
+export interface VerticalConstraint     { id: string; type: 'vertical';     elementId: string }
+export interface EqualConstraint        { id: string; type: 'equal';        elementId1: string; elementId2: string }
+export type SketchConstraint =
+  | LengthConstraint | AngleConstraint | CoincidentConstraint
+  | ParallelConstraint | PerpendicularConstraint
+  | HorizontalConstraint | VerticalConstraint | EqualConstraint
 
 export interface Sketch {
   id: string
@@ -286,9 +294,13 @@ export const useModelStore = create<ModelState>((set) => ({
       selectedElementId2: null,
       sketchElements: s.sketchElements.filter((el) => el.id !== id),
       sketchConstraints: s.sketchConstraints.filter((c) => {
-        if (c.type === 'length') return c.elementId !== id
-        if (c.type === 'angle') return c.elementId1 !== id && c.elementId2 !== id
-        return c.p1.elementId !== id && c.p2.elementId !== id
+        if (c.type === 'length' || c.type === 'horizontal' || c.type === 'vertical')
+          return c.elementId !== id
+        if (c.type === 'angle' || c.type === 'parallel' || c.type === 'perpendicular' || c.type === 'equal')
+          return c.elementId1 !== id && c.elementId2 !== id
+        if (c.type === 'coincident')
+          return c.p1.elementId !== id && c.p2.elementId !== id
+        return true
       }),
       sketches: s.sketches
         .map((sk) => ({ ...sk, elements: sk.elements.filter((el) => el.id !== id) }))

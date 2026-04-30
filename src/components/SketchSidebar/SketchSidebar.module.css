@@ -201,3 +201,48 @@
   padding: 0 2px;
 }
 .constraintDeleteBtn:hover { color: #ff6644; }
+
+.iconBtnRow {
+  display: flex;
+  gap: 4px;
+  padding: 2px 2px;
+  flex-wrap: wrap;
+}
+
+.iconConstraintBtn {
+  flex: 1;
+  min-width: 24px;
+  padding: 4px 2px;
+  background: #1a2a40;
+  border: 1px solid #2a4060;
+  border-radius: 3px;
+  color: #7aacff;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: center;
+}
+.iconConstraintBtn:hover { background: #223050; }
+
+.coincidentLabel {
+  font-size: 10px;
+  color: #556;
+  padding: 2px 4px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.coincidentBtn {
+  flex: 1;
+  min-width: 36px;
+  padding: 3px 2px;
+  background: #1e1a38;
+  border: 1px solid #3a2a60;
+  border-radius: 3px;
+  color: #bb99ff;
+  font-size: 10px;
+  font-family: monospace;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+}
+.coincidentBtn:hover { background: #2a2450; }
