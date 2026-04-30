@@ -272,6 +272,7 @@ export const useModelStore = create<ModelState>((set) => ({
   activeTool: 'select',
   constructionMode: false,
   snapToGrid: true,
+  sketchElements: [],
   sketchConstraints: [],
   sketches: [],
   extrudes: [],

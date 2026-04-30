@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  useModelStore, SketchTool, SketchLine, SketchRect, SketchCircle, SketchPoint,
+  useModelStore, SketchTool, SketchLine, SketchRect, SketchCircle, SketchPoint, SketchConstraint,
 } from '../../store/modelStore'
 import {
   lineLength, angleBetween,
@@ -60,8 +60,8 @@ export function SketchSidebar() {
     : []
 
   // ── helpers ────────────────────────────────────────────────────────────────
-  const addC = (c: Omit<typeof sketchConstraints[number], 'id'>) =>
-    addSketchConstraint({ id: crypto.randomUUID(), ...c } as typeof sketchConstraints[number])
+  const addC = (c: { type: string } & Record<string, unknown>) =>
+    addSketchConstraint({ id: crypto.randomUUID(), ...c } as SketchConstraint)
 
   const upd = (id: string, updates: object) => updateSketchElement(id, updates as Parameters<typeof updateSketchElement>[1])
 
@@ -110,9 +110,7 @@ export function SketchSidebar() {
   const setCoincident = (p1which: 'start' | 'end', p2which: 'start' | 'end') => {
     if (!sel1 || !sel2) return
     const p1el = sel1 as SketchLine
-    const p2el = sel2 as SketchLine
     const src: SketchPoint = p1which === 'start' ? p1el.start : p1el.end
-    // Move sel2's endpoint to match sel1's
     upd(sel2.id, { [p2which]: { x: src.x, y: src.y } })
     addC({ type: 'coincident', p1: { elementId: sel1.id, which: p1which }, p2: { elementId: sel2.id, which: p2which } })
   }
@@ -143,7 +141,7 @@ export function SketchSidebar() {
   }
 
   // ── constraint label ──────────────────────────────────────────────────────
-  const constraintLabel = (c: typeof sketchConstraints[number]): string => {
+  const constraintLabel = (c: SketchConstraint): string => {
     if (c.type === 'length') {
       if (c.dimension === 'width')  return `W = ${c.value}`
       if (c.dimension === 'height') return `H = ${c.value}`
