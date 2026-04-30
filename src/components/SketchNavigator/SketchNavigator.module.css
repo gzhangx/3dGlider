@@ -1,0 +1,98 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  width: 200px;
+  background: #0e0e22;
+  border-right: 1px solid #2a2a4a;
+  flex-shrink: 0;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.heading {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #555;
+  padding: 10px 10px 4px;
+  border-bottom: 1px solid #1e1e3a;
+  flex-shrink: 0;
+}
+
+.section {
+  padding: 4px 0;
+}
+
+.sectionTitle {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #445;
+  padding: 4px 10px 2px;
+}
+
+.empty {
+  font-size: 11px;
+  color: #333;
+  padding: 2px 12px 4px;
+  font-style: italic;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 12px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background 0.1s;
+}
+
+.row:hover {
+  background: #161630;
+}
+
+.rowSelected {
+  background: #161630;
+  border-left-color: #ff44ff;
+}
+
+.rowLabel {
+  flex: 1;
+  color: #99aacc;
+  font-family: monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowSelected .rowLabel {
+  color: #dd88ff;
+}
+
+.deleteBtn {
+  background: transparent;
+  border: none;
+  color: #333;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.row:hover .deleteBtn {
+  opacity: 1;
+}
+
+.deleteBtn:hover {
+  color: #ff6644;
+}
+
+.divider {
+  height: 1px;
+  background: #1e1e3a;
+  margin: 2px 0;
+}
