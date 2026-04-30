@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { DoubleSide } from 'three'
 import { Line } from '@react-three/drei'
 import { ThreeEvent } from '@react-three/fiber'
 import {
@@ -496,7 +497,7 @@ export function SketchPlane() {
           onClick={onClick}
         >
           <planeGeometry args={[200, 200]} />
-          <meshBasicMaterial visible={false} />
+          <meshBasicMaterial visible={false} side={DoubleSide} />
         </mesh>
       )}
 
@@ -509,7 +510,7 @@ export function SketchPlane() {
           renderOrder={-1}
         >
           <planeGeometry args={[200, 200]} />
-          <meshBasicMaterial visible={false} />
+          <meshBasicMaterial visible={false} side={DoubleSide} />
         </mesh>
       )}
 
