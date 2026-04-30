@@ -1,4 +1,4 @@
-import { SketchLine, SketchRect, SketchCircle, SketchPoint } from '../store/modelStore'
+import { SketchLine, SketchRect, SketchCircle, SketchPoint, SketchElement, SketchConstraint, Parameter } from '../store/modelStore'
 
 // ── Line helpers ──────────────────────────────────────────────────────────────
 
@@ -97,4 +97,42 @@ export function angleBetween(el1: SketchLine, el2: SketchLine): number {
 
 export function getEndpoint(el: { start?: SketchPoint; end?: SketchPoint }, which: 'start' | 'end'): SketchPoint | null {
   return which === 'start' ? (el.start ?? null) : (el.end ?? null)
+}
+
+// ── Parametric constraint re-application ─────────────────────────────────────
+
+/** Re-apply all constraints that have a paramRef, updating element geometry. */
+export function reapplyParametricConstraints(
+  elements: SketchElement[],
+  constraints: SketchConstraint[],
+  parameters: Parameter[],
+): SketchElement[] {
+  let els = [...elements]
+  for (const c of constraints) {
+    if (c.type === 'length' && c.paramRef) {
+      const param = parameters.find((p) => p.name === c.paramRef)
+      if (!param) continue
+      const el = els.find((e) => e.id === c.elementId)
+      if (!el) continue
+      let updated: SketchElement | null = null
+      if (el.type === 'line' && !c.dimension)
+        updated = applyLength(el as SketchLine, param.value)
+      else if (el.type === 'circle' && c.dimension === 'radius')
+        updated = applyRadius(el as SketchCircle, param.value)
+      else if (el.type === 'rect' && c.dimension === 'width')
+        updated = applyRectWidth(el as SketchRect, param.value)
+      else if (el.type === 'rect' && c.dimension === 'height')
+        updated = applyRectHeight(el as SketchRect, param.value)
+      if (updated) els = els.map((e) => (e.id === el.id ? updated! : e))
+    } else if (c.type === 'angle' && c.paramRef) {
+      const param = parameters.find((p) => p.name === c.paramRef)
+      if (!param) continue
+      const el1 = els.find((e) => e.id === c.elementId1)
+      const el2 = els.find((e) => e.id === c.elementId2)
+      if (!el1 || !el2 || el1.type !== 'line' || el2.type !== 'line') continue
+      const updated = applyAngle(el1 as SketchLine, el2 as SketchLine, param.value)
+      els = els.map((e) => (e.id === el2.id ? updated : e))
+    }
+  }
+  return els
 }

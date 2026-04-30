@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { reapplyParametricConstraints } from '../lib/constraintSolve'
 
 export type PlaneId = 'XY' | 'XZ' | 'YZ'
 export type AppMode = 'view' | 'sketch'
@@ -42,8 +43,8 @@ export type SketchElement = SketchLine | SketchRect | SketchCircle | SketchArc
 
 // ── Sketch constraints ────────────────────────────────────────────────────────
 export type PointRef = { elementId: string; which: 'start' | 'end' }
-export interface LengthConstraint       { id: string; type: 'length';       elementId: string; value: number; dimension?: 'width' | 'height' | 'radius' }
-export interface AngleConstraint        { id: string; type: 'angle';        elementId1: string; elementId2: string; value: number }
+export interface LengthConstraint       { id: string; type: 'length';       elementId: string; value: number; dimension?: 'width' | 'height' | 'radius'; paramRef?: string }
+export interface AngleConstraint        { id: string; type: 'angle';        elementId1: string; elementId2: string; value: number; paramRef?: string }
 export interface CoincidentConstraint   { id: string; type: 'coincident';   p1: PointRef; p2: PointRef }
 export interface ParallelConstraint     { id: string; type: 'parallel';     elementId1: string; elementId2: string }
 export interface PerpendicularConstraint{ id: string; type: 'perpendicular'; elementId1: string; elementId2: string }
@@ -395,7 +396,15 @@ export const useModelStore = create<ModelState>((set) => ({
     set((s) => ({ parameters: [...s.parameters, { id: crypto.randomUUID(), name, value }] })),
 
   updateParameter: (id, name, value) =>
-    set((s) => ({ parameters: s.parameters.map((p) => p.id === id ? { ...p, name, value } : p) })),
+    set((s) => {
+      const parameters = s.parameters.map((p) => p.id === id ? { ...p, name, value } : p)
+      const sketchElements = reapplyParametricConstraints(s.sketchElements, s.sketchConstraints, parameters)
+      const sketches = s.sketches.map((sk) => ({
+        ...sk,
+        elements: reapplyParametricConstraints(sk.elements, sk.constraints ?? [], parameters),
+      }))
+      return { parameters, sketchElements, sketches }
+    }),
 
   deleteParameter: (id) =>
     set((s) => ({ parameters: s.parameters.filter((p) => p.id !== id) })),

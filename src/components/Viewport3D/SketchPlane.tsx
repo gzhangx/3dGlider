@@ -171,6 +171,8 @@ export function SketchPlane() {
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
       if (e.key === 'Escape') {
         if (startPt) setStartPt(null)
         else if (selectedElementId) selectElement(null)

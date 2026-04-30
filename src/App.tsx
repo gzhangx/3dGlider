@@ -17,6 +17,8 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (mode !== 'sketch') return
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
       const tool = KEY_TOOL[e.key.toLowerCase()]
       if (tool) setActiveTool(tool)
     }

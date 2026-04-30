@@ -33,7 +33,7 @@ export function SketchSidebar() {
   const {
     mode, activeTool, constructionMode, snapToGrid, snapToOtherPlanes, showSketchNavigator,
     setActiveTool, setConstructionMode, setSnapToGrid, setSnapToOtherPlanes, setShowSketchNavigator,
-    sketchElements, sketchConstraints,
+    sketchElements, sketchConstraints, parameters,
     selectedElementId, selectedElementId2, selectElement2,
     updateSketchElement, addSketchConstraint, deleteSketchConstraint,
     setHighlightElementIds,
@@ -66,12 +66,22 @@ export function SketchSidebar() {
 
   const upd = (id: string, updates: object) => updateSketchElement(id, updates as Parameters<typeof updateSketchElement>[1])
 
+  /** Resolve a text input to { value, paramRef? }. Returns null if invalid. */
+  const resolveInput = (raw: string): { value: number; paramRef?: string } | null => {
+    const trimmed = raw.trim()
+    const param = parameters.find((p) => p.name === trimmed)
+    if (param) return { value: param.value, paramRef: param.name }
+    const v = parseFloat(trimmed)
+    if (isNaN(v) || v <= 0) return null
+    return { value: v }
+  }
+
   // ── line (single) ─────────────────────────────────────────────────────────
   const setLineLength = () => {
     if (!line1) return
-    const v = parseFloat(input1); if (isNaN(v) || v <= 0) return
-    upd(line1.id, { end: applyLength(line1, v).end })
-    addC({ type: 'length', elementId: line1.id, value: v })
+    const r = resolveInput(input1); if (!r) return
+    upd(line1.id, { end: applyLength(line1, r.value).end })
+    addC({ type: 'length', elementId: line1.id, value: r.value, ...(r.paramRef ? { paramRef: r.paramRef } : {}) })
     setInput1('')
   }
   const setHorizontal = () => {
@@ -88,9 +98,9 @@ export function SketchSidebar() {
   // ── two lines ─────────────────────────────────────────────────────────────
   const setAngle = () => {
     if (!line1 || !line2) return
-    const v = parseFloat(angleInput); if (isNaN(v)) return
-    upd(line2.id, { end: applyAngle(line1, line2, v).end })
-    addC({ type: 'angle', elementId1: line1.id, elementId2: line2.id, value: v })
+    const r = resolveInput(angleInput); if (!r) return
+    upd(line2.id, { end: applyAngle(line1, line2, r.value).end })
+    addC({ type: 'angle', elementId1: line1.id, elementId2: line2.id, value: r.value, ...(r.paramRef ? { paramRef: r.paramRef } : {}) })
     setAngleInput('')
   }
   const setParallel = () => {
@@ -119,25 +129,25 @@ export function SketchSidebar() {
   // ── rect ──────────────────────────────────────────────────────────────────
   const setRectW = () => {
     if (!rect1) return
-    const v = parseFloat(input1); if (isNaN(v) || v <= 0) return
-    upd(rect1.id, { end: applyRectWidth(rect1, v).end })
-    addC({ type: 'length', elementId: rect1.id, value: v, dimension: 'width' })
+    const r = resolveInput(input1); if (!r) return
+    upd(rect1.id, { end: applyRectWidth(rect1, r.value).end })
+    addC({ type: 'length', elementId: rect1.id, value: r.value, dimension: 'width', ...(r.paramRef ? { paramRef: r.paramRef } : {}) })
     setInput1('')
   }
   const setRectH = () => {
     if (!rect1) return
-    const v = parseFloat(input2); if (isNaN(v) || v <= 0) return
-    upd(rect1.id, { end: applyRectHeight(rect1, v).end })
-    addC({ type: 'length', elementId: rect1.id, value: v, dimension: 'height' })
+    const r = resolveInput(input2); if (!r) return
+    upd(rect1.id, { end: applyRectHeight(rect1, r.value).end })
+    addC({ type: 'length', elementId: rect1.id, value: r.value, dimension: 'height', ...(r.paramRef ? { paramRef: r.paramRef } : {}) })
     setInput2('')
   }
 
   // ── circle ────────────────────────────────────────────────────────────────
   const setCircleRadius = () => {
     if (!circle1) return
-    const v = parseFloat(input1); if (isNaN(v) || v <= 0) return
-    upd(circle1.id, { radius: applyRadius(circle1, v).radius })
-    addC({ type: 'length', elementId: circle1.id, value: v, dimension: 'radius' })
+    const r = resolveInput(input1); if (!r) return
+    upd(circle1.id, { radius: applyRadius(circle1, r.value).radius })
+    addC({ type: 'length', elementId: circle1.id, value: r.value, dimension: 'radius', ...(r.paramRef ? { paramRef: r.paramRef } : {}) })
     setInput1('')
   }
 
@@ -152,12 +162,13 @@ export function SketchSidebar() {
   // ── constraint label ──────────────────────────────────────────────────────
   const constraintLabel = (c: SketchConstraint): string => {
     if (c.type === 'length') {
-      if (c.dimension === 'width')  return `W = ${c.value}`
-      if (c.dimension === 'height') return `H = ${c.value}`
-      if (c.dimension === 'radius') return `R = ${c.value}`
-      return `L = ${c.value}`
+      const v = c.paramRef ? c.paramRef : c.value
+      if (c.dimension === 'width')  return `W = ${v}`
+      if (c.dimension === 'height') return `H = ${v}`
+      if (c.dimension === 'radius') return `R = ${v}`
+      return `L = ${v}`
     }
-    if (c.type === 'angle')         return `∠ = ${c.value}°`
+    if (c.type === 'angle') return `∠ = ${c.paramRef ?? c.value}°`
     if (c.type === 'coincident')    return `⊙ coincident`
     if (c.type === 'parallel')      return `∥ parallel`
     if (c.type === 'perpendicular') return `⊥ perpendicular`
@@ -246,7 +257,7 @@ export function SketchSidebar() {
                 <span className={styles.constraintIcon}>↔</span>
                 <input
                   className={styles.constraintInput}
-                  type="number"
+                  type="text"
                   placeholder={lineLength(line1).toFixed(3)}
                   value={input1}
                   onChange={(e) => setInput1(e.target.value)}
@@ -268,7 +279,7 @@ export function SketchSidebar() {
               <div className={styles.constraintRow}>
                 <span className={styles.constraintIcon}>W</span>
                 <input
-                  className={styles.constraintInput} type="number"
+                  className={styles.constraintInput} type="text"
                   placeholder={rectWidth(rect1).toFixed(3)}
                   value={input1} onChange={(e) => setInput1(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && setRectW()}
@@ -278,7 +289,7 @@ export function SketchSidebar() {
               <div className={styles.constraintRow}>
                 <span className={styles.constraintIcon}>H</span>
                 <input
-                  className={styles.constraintInput} type="number"
+                  className={styles.constraintInput} type="text"
                   placeholder={rectHeight(rect1).toFixed(3)}
                   value={input2} onChange={(e) => setInput2(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && setRectH()}
@@ -293,7 +304,7 @@ export function SketchSidebar() {
             <div className={styles.constraintRow}>
               <span className={styles.constraintIcon}>R</span>
               <input
-                className={styles.constraintInput} type="number"
+                className={styles.constraintInput} type="text"
                 placeholder={circle1.radius.toFixed(3)}
                 value={input1} onChange={(e) => setInput1(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && setCircleRadius()}
@@ -308,7 +319,7 @@ export function SketchSidebar() {
               <div className={styles.constraintRow}>
                 <span className={styles.constraintIcon}>∠</span>
                 <input
-                  className={styles.constraintInput} type="number"
+                  className={styles.constraintInput} type="text"
                   placeholder={angleBetween(line1, line2).toFixed(1) + '°'}
                   value={angleInput}
                   onChange={(e) => setAngleInput(e.target.value)}
