@@ -141,7 +141,7 @@ const SNAP_ENDPOINT_THRESHOLD = 0.3
 
 export function SketchPlane() {
   const {
-    activePlane, activeTool, constructionMode, sketchElements,
+    activePlane, activeTool, constructionMode, sketchElements, sketchConstraints,
     selectedElementId, selectElement,
     addSketchElement, updateSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
     addSketchConstraint, setIsDraggingPoint,
@@ -159,6 +159,7 @@ export function SketchPlane() {
     | null
   >(null)
   const [dragTarget, setDragTarget] = useState<{ elementId: string; pointType: 'start' | 'end' | 'center' } | null>(null)
+  const [dragSnapTarget, setDragSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef } | null>(null)
 
   useEffect(() => {
     setStartPt(null); setCursorPt(null); setCutPreview(null); setCutTarget(null); setSnapTarget(null)
@@ -210,9 +211,33 @@ export function SketchPlane() {
 
     // ── drag mode ────────────────────────────────────────────────────────────
     if (dragTarget) {
-      const pt = snapPt(raw)
       const key = dragTarget.pointType
+      // Check for snap to another element's endpoint (excluding dragged element)
+      let snap: { pt: SketchPoint; ref: PointRef } | null = null
+      if (key === 'start' || key === 'end') {
+        let bestDist = SNAP_ENDPOINT_THRESHOLD
+        for (const el of sketchElements) {
+          if (el.id === dragTarget.elementId) continue
+          for (const { pt, ref } of elementEndpoints(el)) {
+            const d = Math.hypot(raw.x - pt.x, raw.y - pt.y)
+            if (d < bestDist) { bestDist = d; snap = { pt, ref } }
+          }
+        }
+      }
+      setDragSnapTarget(snap)
+      const pt = snap ? snap.pt : snapPt(raw)
       updateSketchElement(dragTarget.elementId, { [key]: pt } as Parameters<typeof updateSketchElement>[1])
+      // Propagate to already-coincident partners
+      if (key === 'start' || key === 'end') {
+        for (const c of sketchConstraints) {
+          if (c.type !== 'coincident') continue
+          if (c.p1.elementId === dragTarget.elementId && c.p1.which === key) {
+            updateSketchElement(c.p2.elementId, { [c.p2.which]: pt } as Parameters<typeof updateSketchElement>[1])
+          } else if (c.p2.elementId === dragTarget.elementId && c.p2.which === key) {
+            updateSketchElement(c.p1.elementId, { [c.p1.which]: pt } as Parameters<typeof updateSketchElement>[1])
+          }
+        }
+      }
       return
     }
 
@@ -388,7 +413,22 @@ export function SketchPlane() {
 
   const onPointerUp = () => {
     if (dragTarget) {
+      // If snapped to another endpoint, add a coincident constraint (unless already linked)
+      if (dragSnapTarget && (dragTarget.pointType === 'start' || dragTarget.pointType === 'end')) {
+        const p1: PointRef = { elementId: dragTarget.elementId, which: dragTarget.pointType }
+        const p2 = dragSnapTarget.ref
+        const alreadyLinked = sketchConstraints.some(
+          (c) => c.type === 'coincident' && (
+            (c.p1.elementId === p1.elementId && c.p1.which === p1.which && c.p2.elementId === p2.elementId && c.p2.which === p2.which) ||
+            (c.p2.elementId === p1.elementId && c.p2.which === p1.which && c.p1.elementId === p2.elementId && c.p1.which === p2.which)
+          )
+        )
+        if (!alreadyLinked) {
+          addSketchConstraint({ id: crypto.randomUUID(), type: 'coincident', p1, p2 })
+        }
+      }
       setDragTarget(null)
+      setDragSnapTarget(null)
       setIsDraggingPoint(false)
     }
   }
@@ -478,6 +518,11 @@ export function SketchPlane() {
       {/* Endpoint snap ring indicator — green ring when cursor near an existing endpoint */}
       {isDrawTool && activeTool !== 'cut' && snapTarget && (
         <Dot pos={worldPt(snapTarget.pt, plane)} color="#44ff88" size={0.14} ring />
+      )}
+
+      {/* Snap ring during point drag */}
+      {dragTarget && dragSnapTarget && (
+        <Dot pos={worldPt(dragSnapTarget.pt, plane)} color="#44ff88" size={0.14} ring />
       )}
 
       {/* Cursor dot */}
