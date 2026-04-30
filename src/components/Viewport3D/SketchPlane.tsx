@@ -145,7 +145,7 @@ export function SketchPlane() {
     activePlane, activeTool, constructionMode, snapToGrid, sketchElements, sketchConstraints,
     selectedElementId, selectElement,
     addSketchElement, updateSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
-    addSketchConstraint, setIsDraggingPoint,
+    addSketchConstraint, setIsDraggingPoint, setHighlightElementIds,
   } = useModelStore()
 
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
@@ -465,6 +465,19 @@ export function SketchPlane() {
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
           onClick={onClick}
+        >
+          <planeGeometry args={[200, 200]} />
+          <meshBasicMaterial visible={false} />
+        </mesh>
+      )}
+
+      {/* Background click plane — select mode only, clears highlight/selection on empty-space click */}
+      {!isDrawTool && !dragTarget && (
+        <mesh
+          position={[planeOrigin.x, planeOrigin.y, planeOrigin.z]}
+          rotation={plane.rotation}
+          onClick={(e) => { e.stopPropagation(); selectElement(null); setHighlightElementIds([]) }}
+          renderOrder={-1}
         >
           <planeGeometry args={[200, 200]} />
           <meshBasicMaterial visible={false} />

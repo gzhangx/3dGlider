@@ -36,6 +36,7 @@ export function SketchSidebar() {
     sketchElements, sketchConstraints,
     selectedElementId, selectedElementId2, selectElement2,
     updateSketchElement, addSketchConstraint, deleteSketchConstraint,
+    setHighlightElementIds,
   } = useModelStore()
 
   const [input1, setInput1] = useState('')   // length / width / radius
@@ -138,6 +139,14 @@ export function SketchSidebar() {
     upd(circle1.id, { radius: applyRadius(circle1, v).radius })
     addC({ type: 'length', elementId: circle1.id, value: v, dimension: 'radius' })
     setInput1('')
+  }
+
+  // ── constraint element ids ────────────────────────────────────────────────
+  const constraintElementIds = (c: SketchConstraint): string[] => {
+    if ('elementId' in c) return [(c as { elementId: string }).elementId]
+    if ('elementId1' in c) return [(c as { elementId1: string; elementId2: string }).elementId1, (c as { elementId1: string; elementId2: string }).elementId2]
+    if (c.type === 'coincident') return [c.p1.elementId, c.p2.elementId]
+    return []
   }
 
   // ── constraint label ──────────────────────────────────────────────────────
@@ -337,9 +346,14 @@ export function SketchSidebar() {
           {selectedConstraints.length > 0 && (
             <div className={styles.constraintList}>
               {selectedConstraints.map((c) => (
-                <div key={c.id} className={styles.constraintItem}>
+                <div
+                  key={c.id}
+                  className={styles.constraintItem}
+                  onClick={() => setHighlightElementIds(constraintElementIds(c))}
+                  style={{ cursor: 'pointer' }}
+                >
                   <span className={styles.constraintItemLabel}>{constraintLabel(c)}</span>
-                  <button className={styles.constraintDeleteBtn} onClick={() => deleteSketchConstraint(c.id)}>✕</button>
+                  <button className={styles.constraintDeleteBtn} onClick={(e) => { e.stopPropagation(); deleteSketchConstraint(c.id) }}>✕</button>
                 </div>
               ))}
             </div>

@@ -291,7 +291,7 @@ export const useModelStore = create<ModelState>((set) => ({
   setActiveTool: (activeTool) => set({ activeTool, selectedElementId: null, selectedElementId2: null }),
   setConstructionMode: (constructionMode) => set({ constructionMode }),
   setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
-  selectElement: (selectedElementId) => set({ selectedElementId }),
+  selectElement: (selectedElementId) => set({ selectedElementId, selectedElementId2: null, highlightElementIds: [] }),
   selectElement2: (selectedElementId2) => set({ selectedElementId2 }),
   setIsDraggingPoint: (isDraggingPoint) => set({ isDraggingPoint }),
   setHighlightElementIds: (highlightElementIds) => set({ highlightElementIds }),
