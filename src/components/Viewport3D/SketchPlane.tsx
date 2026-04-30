@@ -144,7 +144,7 @@ export function SketchPlane() {
     activePlane, activeTool, constructionMode, sketchElements,
     selectedElementId, selectElement,
     addSketchElement, updateSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
-    addSketchConstraint,
+    addSketchConstraint, setIsDraggingPoint,
   } = useModelStore()
 
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
@@ -387,7 +387,10 @@ export function SketchPlane() {
   }
 
   const onPointerUp = () => {
-    if (dragTarget) setDragTarget(null)
+    if (dragTarget) {
+      setDragTarget(null)
+      setIsDraggingPoint(false)
+    }
   }
 
   // In cut mode, prefer pointer-down over click (down+up) which can be flaky if
@@ -426,6 +429,7 @@ export function SketchPlane() {
         const startDrag = (pointType: 'start' | 'end' | 'center') => (e: ThreeEvent<PointerEvent>) => {
           e.stopPropagation()
           setDragTarget({ elementId: el.id, pointType })
+          setIsDraggingPoint(true)
         }
         if (el.type === 'line') return (
           <group key={el.id + '_handles'}>

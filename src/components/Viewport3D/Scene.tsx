@@ -16,7 +16,7 @@ const ACTION_ROTATE = 1
 const ACTION_TRUCK = 2
 
 export function Scene() {
-  const { activePlane, mode, activeTool } = useModelStore()
+  const { activePlane, mode, activeTool, isDraggingPoint } = useModelStore()
   const { camera } = useThree()
   const controlsRef = useRef<CameraControls>(null)
 
@@ -40,13 +40,13 @@ export function Scene() {
   useEffect(() => {
     if (!controlsRef.current) return
     const c = controlsRef.current
-    if (mode === 'sketch' && activeTool !== 'select') {
+    if (mode === 'sketch' && (activeTool !== 'select' || isDraggingPoint)) {
       c.mouseButtons.left = ACTION_NONE
     } else {
       c.mouseButtons.left = ACTION_ROTATE
     }
     c.mouseButtons.right = ACTION_TRUCK
-  }, [mode, activeTool])
+  }, [mode, activeTool, isDraggingPoint])
 
   return (
     <>

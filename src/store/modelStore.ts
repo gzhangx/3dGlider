@@ -219,6 +219,7 @@ interface ModelState {
   parameters: Parameter[]
   selectedElementId: string | null
   selectedElementId2: string | null       // second selection for angle constraint
+  isDraggingPoint: boolean
   editingSketchId: string | null
   editingExtrudeId: string | null
   previewExtrude: ExtrudeFeature | null
@@ -228,6 +229,7 @@ interface ModelState {
   setConstructionMode: (on: boolean) => void
   selectElement: (id: string | null) => void
   selectElement2: (id: string | null) => void
+  setIsDraggingPoint: (v: boolean) => void
   addSketchElement: (el: SketchElement) => void
   updateSketchElement: (id: string, updates: Partial<SketchElement>) => void
   deleteSketchElement: (id: string) => void
@@ -271,6 +273,7 @@ export const useModelStore = create<ModelState>((set) => ({
   parameters: [],
   selectedElementId: null,
   selectedElementId2: null,
+  isDraggingPoint: false,
   editingSketchId: null,
   editingExtrudeId: null,
   previewExtrude: null,
@@ -280,6 +283,7 @@ export const useModelStore = create<ModelState>((set) => ({
   setConstructionMode: (constructionMode) => set({ constructionMode }),
   selectElement: (selectedElementId) => set({ selectedElementId }),
   selectElement2: (selectedElementId2) => set({ selectedElementId2 }),
+  setIsDraggingPoint: (isDraggingPoint) => set({ isDraggingPoint }),
 
   addSketchElement: (el) => set((s) => ({ sketchElements: [...s.sketchElements, el] })),
 
