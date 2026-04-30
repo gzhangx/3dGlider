@@ -42,7 +42,7 @@ export type SketchElement = SketchLine | SketchRect | SketchCircle | SketchArc
 
 // ── Sketch constraints ────────────────────────────────────────────────────────
 export type PointRef = { elementId: string; which: 'start' | 'end' }
-export interface LengthConstraint    { id: string; type: 'length';    elementId: string; value: number }
+export interface LengthConstraint    { id: string; type: 'length';    elementId: string; value: number; dimension?: 'width' | 'height' | 'radius' }
 export interface AngleConstraint     { id: string; type: 'angle';     elementId1: string; elementId2: string; value: number }
 export interface CoincidentConstraint{ id: string; type: 'coincident'; p1: PointRef; p2: PointRef }
 export type SketchConstraint = LengthConstraint | AngleConstraint | CoincidentConstraint
