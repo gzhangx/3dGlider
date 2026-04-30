@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Viewport3D } from './components/Viewport3D/Viewport3D'
 import { Toolbar } from './components/Toolbar/Toolbar'
 import { SketchSidebar } from './components/SketchSidebar/SketchSidebar'
+import { SketchNavigator } from './components/SketchNavigator/SketchNavigator'
 import { FeatureTree } from './components/FeatureTree/FeatureTree'
 import { useModelStore, SketchTool } from './store/modelStore'
 import styles from './App.module.css'
@@ -11,7 +12,7 @@ const KEY_TOOL: Record<string, SketchTool> = {
 }
 
 export default function App() {
-  const { mode, setActiveTool } = useModelStore()
+  const { mode, showSketchNavigator, setActiveTool } = useModelStore()
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -28,6 +29,7 @@ export default function App() {
       <Toolbar />
       <div className={styles.main}>
         <SketchSidebar />
+        {showSketchNavigator && <SketchNavigator />}
         <div className={styles.canvas}>
           <Viewport3D />
         </div>
@@ -36,3 +38,4 @@ export default function App() {
     </div>
   )
 }
+

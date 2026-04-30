@@ -221,6 +221,8 @@ interface ModelState {
   selectedElementId: string | null
   selectedElementId2: string | null       // second selection for angle constraint
   isDraggingPoint: boolean
+  highlightElementIds: string[]
+  showSketchNavigator: boolean
   editingSketchId: string | null
   editingExtrudeId: string | null
   previewExtrude: ExtrudeFeature | null
@@ -232,6 +234,8 @@ interface ModelState {
   selectElement: (id: string | null) => void
   selectElement2: (id: string | null) => void
   setIsDraggingPoint: (v: boolean) => void
+  setHighlightElementIds: (ids: string[]) => void
+  setShowSketchNavigator: (v: boolean) => void
   addSketchElement: (el: SketchElement) => void
   updateSketchElement: (id: string, updates: Partial<SketchElement>) => void
   deleteSketchElement: (id: string) => void
@@ -276,6 +280,8 @@ export const useModelStore = create<ModelState>((set) => ({
   selectedElementId: null,
   selectedElementId2: null,
   isDraggingPoint: false,
+  highlightElementIds: [],
+  showSketchNavigator: false,
   editingSketchId: null,
   editingExtrudeId: null,
   previewExtrude: null,
@@ -287,6 +293,8 @@ export const useModelStore = create<ModelState>((set) => ({
   selectElement: (selectedElementId) => set({ selectedElementId }),
   selectElement2: (selectedElementId2) => set({ selectedElementId2 }),
   setIsDraggingPoint: (isDraggingPoint) => set({ isDraggingPoint }),
+  setHighlightElementIds: (highlightElementIds) => set({ highlightElementIds }),
+  setShowSketchNavigator: (showSketchNavigator) => set({ showSketchNavigator }),
 
   addSketchElement: (el) => set((s) => ({ sketchElements: [...s.sketchElements, el] })),
 

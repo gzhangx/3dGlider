@@ -113,6 +113,20 @@
   color: #55aa55 !important;
 }
 
+.navBtn {
+  color: #667;
+  border-color: transparent;
+}
+.navBtn:hover {
+  background: #14141e;
+  color: #99aacc;
+}
+.navActive {
+  background: #12122e !important;
+  border-color: #334488 !important;
+  color: #88aaff !important;
+}
+
 /* ── Constraints section ── */
 .sectionLabel {
   font-size: 10px;

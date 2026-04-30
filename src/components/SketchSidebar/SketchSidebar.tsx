@@ -31,7 +31,8 @@ const ENDPOINT_PAIRS: EndpointPair[] = [
 
 export function SketchSidebar() {
   const {
-    mode, activeTool, constructionMode, snapToGrid, setActiveTool, setConstructionMode, setSnapToGrid,
+    mode, activeTool, constructionMode, snapToGrid, showSketchNavigator,
+    setActiveTool, setConstructionMode, setSnapToGrid, setShowSketchNavigator,
     sketchElements, sketchConstraints,
     selectedElementId, selectedElementId2, selectElement2,
     updateSketchElement, addSketchConstraint, deleteSketchConstraint,
@@ -206,6 +207,15 @@ export function SketchSidebar() {
       >
         <span className={styles.icon}>⊞</span>
         <span className={styles.label}>Snap Grid</span>
+      </button>
+
+      <button
+        className={`${styles.btn} ${styles.navBtn} ${showSketchNavigator ? styles.navActive : ''}`}
+        onClick={() => setShowSketchNavigator(!showSketchNavigator)}
+        title="Toggle sketch navigator panel"
+      >
+        <span className={styles.icon}>≡</span>
+        <span className={styles.label}>Navigator</span>
       </button>
 
       {showConstraints && (

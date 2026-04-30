@@ -58,14 +58,15 @@ function rectCorners(rect: SketchRect): SketchPoint[] {
 const noopRaycast: () => void = () => {}
 
 function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean }) {
-  const { activeTool, selectedElementId, selectElement, selectElement2 } = useModelStore()
+  const { activeTool, selectedElementId, highlightElementIds, selectElement, selectElement2 } = useModelStore()
   const [hovered, setHovered] = useState(false)
 
   const isConstruction = !!el.construction
   const isSelected = selectedElementId === el.id
+  const isNavHighlighted = highlightElementIds.includes(el.id)
   const baseColor = isConstruction ? '#4488aa' : '#ffdd44'
-  const color = highlighted ? '#ff8844' : isSelected ? '#ff8844' : hovered ? '#ffe888' : baseColor
-  const width = highlighted || isSelected || hovered ? 3 : 2
+  const color = highlighted ? '#ff8844' : isNavHighlighted ? '#ff44ff' : isSelected ? '#ff8844' : hovered ? '#ffe888' : baseColor
+  const width = highlighted || isNavHighlighted || isSelected || hovered ? 3 : 2
 
   const selectProps = activeTool === 'select'
     ? {
