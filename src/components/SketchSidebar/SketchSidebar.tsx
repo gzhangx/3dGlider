@@ -155,7 +155,7 @@ export function SketchSidebar() {
     if (c.type === 'horizontal')    return `— horizontal`
     if (c.type === 'vertical')      return `| vertical`
     if (c.type === 'equal')         return `= equal`
-    return c.type
+    return (c as { type: string }).type
   }
 
   const hasTwoLines = !!(line1 && line2)
