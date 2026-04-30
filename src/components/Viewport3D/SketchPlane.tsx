@@ -141,7 +141,7 @@ const SNAP_ENDPOINT_THRESHOLD = 0.3
 
 export function SketchPlane() {
   const {
-    activePlane, activeTool, constructionMode, sketchElements, sketchConstraints,
+    activePlane, activeTool, constructionMode, snapToGrid, sketchElements, sketchConstraints,
     selectedElementId, selectElement,
     addSketchElement, updateSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
     addSketchConstraint, setIsDraggingPoint,
@@ -190,6 +190,7 @@ export function SketchPlane() {
   const isDrawTool = activeTool !== 'select'
 
   const getRaw = (e: ThreeEvent<PointerEvent | MouseEvent>) => toSketch(e.point, plane)
+  const doSnap = (p: SketchPoint) => snapToGrid ? snapPt(p) : p
 
   // Find nearest endpoint within snap threshold
   const findSnapTarget = (raw: SketchPoint): { pt: SketchPoint; ref: PointRef } | null => {
@@ -225,7 +226,7 @@ export function SketchPlane() {
         }
       }
       setDragSnapTarget(snap)
-      const pt = snap ? snap.pt : snapPt(raw)
+      const pt = snap ? snap.pt : doSnap(raw)
       updateSketchElement(dragTarget.elementId, { [key]: pt } as Parameters<typeof updateSketchElement>[1])
       // Propagate to already-coincident partners
       if (key === 'start' || key === 'end') {
@@ -242,7 +243,7 @@ export function SketchPlane() {
     }
 
     if (activeTool === 'cut') {
-      setCursorPt(snapPt(raw))
+      setCursorPt(doSnap(raw))
       const THRESHOLD = 0.5
       let nearest:
         | { kind: 'line'; line: SketchLine }
@@ -309,7 +310,7 @@ export function SketchPlane() {
       setCursorPt(snap.pt)
     } else {
       setSnapTarget(null)
-      setCursorPt(snapPt(raw))
+      setCursorPt(doSnap(raw))
     }
   }
 
@@ -356,7 +357,7 @@ export function SketchPlane() {
       return
     }
 
-    const pt = snapTarget ? snapTarget.pt : snapPt(getRaw(e))
+    const pt = snapTarget ? snapTarget.pt : doSnap(getRaw(e))
 
     if (startPt === null) {
       setStartPt(pt)

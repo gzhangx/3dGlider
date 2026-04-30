@@ -99,6 +99,20 @@
   color: #5599dd !important;
 }
 
+.snapBtn {
+  color: #557755;
+  border-color: transparent;
+}
+.snapBtn:hover {
+  background: #111a11;
+  color: #88aa88;
+}
+.snapActive {
+  background: #0e1e0e !important;
+  border-color: #226622 !important;
+  color: #55aa55 !important;
+}
+
 /* ── Constraints section ── */
 .sectionLabel {
   font-size: 10px;

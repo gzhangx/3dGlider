@@ -211,6 +211,7 @@ interface ModelState {
   newSketchArmed: boolean
   activeTool: SketchTool
   constructionMode: boolean
+  snapToGrid: boolean
   sketchElements: SketchElement[]
   sketchConstraints: SketchConstraint[]   // constraints for current working sketch
   sketches: Sketch[]
@@ -227,6 +228,7 @@ interface ModelState {
   setHoveredPlane: (plane: PlaneId | null) => void
   setActiveTool: (tool: SketchTool) => void
   setConstructionMode: (on: boolean) => void
+  setSnapToGrid: (on: boolean) => void
   selectElement: (id: string | null) => void
   selectElement2: (id: string | null) => void
   setIsDraggingPoint: (v: boolean) => void
@@ -265,7 +267,7 @@ export const useModelStore = create<ModelState>((set) => ({
   newSketchArmed: false,
   activeTool: 'select',
   constructionMode: false,
-  sketchElements: [],
+  snapToGrid: true,
   sketchConstraints: [],
   sketches: [],
   extrudes: [],
@@ -281,6 +283,7 @@ export const useModelStore = create<ModelState>((set) => ({
   setHoveredPlane: (hoveredPlane) => set({ hoveredPlane }),
   setActiveTool: (activeTool) => set({ activeTool, selectedElementId: null, selectedElementId2: null }),
   setConstructionMode: (constructionMode) => set({ constructionMode }),
+  setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
   selectElement: (selectedElementId) => set({ selectedElementId }),
   selectElement2: (selectedElementId2) => set({ selectedElementId2 }),
   setIsDraggingPoint: (isDraggingPoint) => set({ isDraggingPoint }),
