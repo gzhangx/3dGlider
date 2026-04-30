@@ -3,6 +3,7 @@ import { useModelStore, Sketch, PlaneId, ExtrudeFeature, RevolveFeature, Revolve
 import { planeIdFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { sketchElementsToShape } from '../../lib/sketchToShape'
 import { SCENE_TO_MM } from '../../lib/units'
+import { resolveParam } from '../../lib/resolveParam'
 import styles from './FeatureTree.module.css'
 
 function extrudeDefaultColor(op: 'add' | 'cut') { return op === 'cut' ? '#ff4422' : '#4477bb' }
@@ -13,7 +14,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     extrudes, revolves, addExtrude, updateExtrude, deleteExtrude, editSketch,
     addRevolve, updateRevolve, deleteRevolve, setRevolveAppearance,
     setSketchAppearance, setExtrudeAppearance, setEditingExtrudeId, setPreviewExtrude,
-    selectedElementId, selectElement,
+    selectedElementId, selectElement, parameters,
   } = useModelStore()
 
   // ── create-new-extrude form state ────────────────────────────────────────
@@ -86,7 +87,8 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   // Live-preview: push edit state into store whenever it changes
   useEffect(() => {
     if (!editingId) return
-    const d = parseFloat(eDepth) / SCENE_TO_MM  // convert mm input → scene units
+    const raw = resolveParam(eDepth, parameters)
+    const d = raw !== null ? raw / SCENE_TO_MM : NaN
     if (isNaN(d) || d === 0) return
     let direction: [number, number, number] | undefined
     if (eUseDir) {
@@ -102,7 +104,8 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   // Create-form preview
   useEffect(() => {
     if (!showExtrude) { setPreviewExtrude(null); return }
-    const d = parseFloat(depth) / SCENE_TO_MM  // convert mm input → scene units
+    const raw = resolveParam(depth, parameters)
+    const d = raw !== null ? raw / SCENE_TO_MM : NaN
     if (isNaN(d) || d === 0) { setPreviewExtrude(null); return }
     let direction: [number, number, number] | undefined
     if (useCustomDir) {
@@ -169,7 +172,8 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   }
 
   const handleExtrude = () => {
-    const d = parseFloat(depth) / SCENE_TO_MM  // convert mm → scene units
+    const raw = resolveParam(depth, parameters)
+    const d = raw !== null ? raw / SCENE_TO_MM : NaN
     if (!isNaN(d) && d !== 0) {
       let direction: [number, number, number] | undefined
       if (useCustomDir) {
@@ -184,7 +188,8 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   }
 
   const handleRevolve = () => {
-    const angle = Math.max(1, Math.min(360, parseFloat(revolveAngle)))
+    const raw = resolveParam(revolveAngle, parameters)
+    const angle = raw !== null ? Math.max(1, Math.min(360, raw)) : NaN
     if (isNaN(angle)) return
     if (revolveAxis === 'element' && !revolveLineId) return
     addRevolve(sketch.id, revolveAxis, angle, revolveAxis === 'element' ? revolveLineId! : undefined)
@@ -202,7 +207,8 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
 
   const applyEditRevolve = () => {
     if (!editingRevolveId) return
-    const angle = Math.max(1, Math.min(360, parseFloat(eRevolveAngle)))
+    const raw = resolveParam(eRevolveAngle, parameters)
+    const angle = raw !== null ? Math.max(1, Math.min(360, raw)) : NaN
     if (isNaN(angle)) return
     updateRevolve(editingRevolveId, eRevolveAxis, angle, eRevolveAxis === 'element' ? eRevolveLineId ?? undefined : undefined)
     setEditingRevolveId(null)

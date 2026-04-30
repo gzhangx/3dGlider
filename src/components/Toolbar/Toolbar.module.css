@@ -94,3 +94,16 @@
   margin-left: 8px;
 }
 .exportBtn:hover { background: #224422; }
+
+.paramsBtn {
+  padding: 5px 12px;
+  background: #1e1a38;
+  color: #bb99ff;
+  border: 1px solid #4433aa;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: monospace;
+  transition: background 0.15s;
+}
+.paramsBtn:hover { background: #2a2450; }

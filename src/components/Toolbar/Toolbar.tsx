@@ -1,19 +1,23 @@
-import { ChangeEvent, useRef } from 'react'
+import { ChangeEvent, useRef, useState } from 'react'
 import { useModelStore } from '../../store/modelStore'
 import { exportSTL } from '../../lib/exportSTL'
 import { planeIdFromPose } from '../../lib/planePose'
+import { ParametersDialog } from '../ParametersDialog/ParametersDialog'
 import styles from './Toolbar.module.css'
 
 export function Toolbar() {
-  const { mode, activePlane, extrudes, revolves, sketches, exitSketch, loadModel } = useModelStore()
+  const { mode, activePlane, extrudes, revolves, sketches, parameters, exitSketch, loadModel } = useModelStore()
   const activePlaneLabel = activePlane ? planeIdFromPose(activePlane) : null
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showParams, setShowParams] = useState(false)
 
   const handleSaveJson = () => {
     const payload = {
       version: 1,
       sketches,
       extrudes,
+      revolves,
+      parameters,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -47,56 +51,68 @@ export function Toolbar() {
   }
 
   return (
-    <header className={styles.toolbar}>
-      <span className={styles.logo}>3D Glider</span>
+    <>
+      <header className={styles.toolbar}>
+        <span className={styles.logo}>3D Glider</span>
 
-      <div className={styles.status}>
-        {mode === 'view' && (
-          <span className={styles.hint}>Use New Sketch, then pick XY / XZ / YZ or click a flat extruded face</span>
-        )}
-        {mode === 'sketch' && (
-          <>
-            <span className={styles.activeLabel}>Sketching on {activePlaneLabel}</span>
-            <button className={styles.exitBtn} onClick={exitSketch}>
-              Exit Sketch
-            </button>
-          </>
-        )}
-      </div>
+        <div className={styles.status}>
+          {mode === 'view' && (
+            <span className={styles.hint}>Use New Sketch, then pick XY / XZ / YZ or click a flat extruded face</span>
+          )}
+          {mode === 'sketch' && (
+            <>
+              <span className={styles.activeLabel}>Sketching on {activePlaneLabel}</span>
+              <button className={styles.exitBtn} onClick={exitSketch}>
+                Exit Sketch
+              </button>
+            </>
+          )}
+        </div>
 
-      <button
-        className={styles.saveBtn}
-        onClick={handleSaveJson}
-        title="Save current model as JSON"
-      >
-        Save JSON
-      </button>
-
-      <button
-        className={styles.loadBtn}
-        onClick={handleLoadJson}
-        title="Load model from JSON"
-      >
-        Load JSON
-      </button>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="application/json,.json"
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
-
-      {extrudes.length > 0 && (
         <button
-          className={styles.exportBtn}
-          onClick={() => exportSTL(extrudes, revolves, sketches)}
-          title="Export all extruded solids as binary STL"
+          className={styles.paramsBtn}
+          onClick={() => setShowParams(true)}
+          title="Open parameters spreadsheet"
         >
-          ⬇ Export STL
+          {'{ }'} Params
         </button>
-      )}
-    </header>
+
+        <button
+          className={styles.saveBtn}
+          onClick={handleSaveJson}
+          title="Save current model as JSON"
+        >
+          Save JSON
+        </button>
+
+        <button
+          className={styles.loadBtn}
+          onClick={handleLoadJson}
+          title="Load model from JSON"
+        >
+          Load JSON
+        </button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+
+        {(extrudes.length > 0 || revolves.length > 0) && (
+          <button
+            className={styles.exportBtn}
+            onClick={() => exportSTL(extrudes, revolves, sketches)}
+            title="Export all solids as binary STL"
+          >
+            ⬇ Export STL
+          </button>
+        )}
+      </header>
+
+      {showParams && <ParametersDialog onClose={() => setShowParams(false)} />}
+    </>
   )
 }

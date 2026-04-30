@@ -10,6 +10,7 @@ import {
   SketchRect,
   SketchCircle,
   SketchArc,
+  PointRef,
 } from '../../store/modelStore'
 import {
   worldPt,
@@ -25,7 +26,15 @@ import { distToSeg, distToCircle, distToArc, computeCut, computeCircleCut, compu
 
 // ─── dot marker ──────────────────────────────────────────────────────────────
 
-function Dot({ pos, color, size = 0.06 }: { pos: [number, number, number]; color: string; size?: number }) {
+function Dot({ pos, color, size = 0.06, ring = false }: { pos: [number, number, number]; color: string; size?: number; ring?: boolean }) {
+  if (ring) {
+    const pts: [number, number, number][] = []
+    for (let i = 0; i <= 32; i++) {
+      const a = (i / 32) * Math.PI * 2
+      pts.push([pos[0] + Math.cos(a) * size, pos[1] + Math.sin(a) * size, pos[2]])
+    }
+    return <Line points={pts} color={color} lineWidth={2} />
+  }
   return (
     <mesh position={pos}>
       <sphereGeometry args={[size, 8, 8]} />
@@ -49,7 +58,7 @@ function rectCorners(rect: SketchRect): SketchPoint[] {
 const noopRaycast: () => void = () => {}
 
 function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean }) {
-  const { activeTool, selectedElementId, selectElement } = useModelStore()
+  const { activeTool, selectedElementId, selectElement, selectElement2 } = useModelStore()
   const [hovered, setHovered] = useState(false)
 
   const isConstruction = !!el.construction
@@ -60,7 +69,14 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: Sketch
 
   const selectProps = activeTool === 'select'
     ? {
-        onClick: (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); selectElement(el.id) },
+        onClick: (e: ThreeEvent<MouseEvent>) => {
+          e.stopPropagation()
+          if (e.shiftKey) {
+            selectElement2(el.id)
+          } else {
+            selectElement(el.id)
+          }
+        },
         onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setHovered(true) },
         onPointerOut: () => setHovered(false),
       }
@@ -82,6 +98,22 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: Sketch
   return null
 }
 
+// ─── collect element endpoints for snap ──────────────────────────────────────
+
+function elementEndpoints(el: SketchElement): { pt: SketchPoint; ref: PointRef }[] {
+  if (el.type === 'line') return [
+    { pt: el.start, ref: { elementId: el.id, which: 'start' } },
+    { pt: el.end,   ref: { elementId: el.id, which: 'end' } },
+  ]
+  if (el.type === 'rect') return [
+    { pt: el.start, ref: { elementId: el.id, which: 'start' } },
+    { pt: el.end,   ref: { elementId: el.id, which: 'end' } },
+  ]
+  return []
+}
+
+const SNAP_ENDPOINT_THRESHOLD = 0.3
+
 // ─── main component ───────────────────────────────────────────────────────────
 
 export function SketchPlane() {
@@ -89,10 +121,12 @@ export function SketchPlane() {
     activePlane, activeTool, constructionMode, sketchElements,
     selectedElementId, selectElement,
     addSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
+    addSketchConstraint,
   } = useModelStore()
 
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
   const [cursorPt, setCursorPt] = useState<SketchPoint | null>(null)
+  const [snapTarget, setSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef } | null>(null)
   const [cutPreview, setCutPreview] = useState<CutResult | CircleCutResult | ArcCutResult | null>(null)
   const [cutTarget, setCutTarget] = useState<
     | { kind: 'line'; line: SketchLine }
@@ -102,7 +136,9 @@ export function SketchPlane() {
     | null
   >(null)
 
-  useEffect(() => { setStartPt(null); setCursorPt(null); setCutPreview(null); setCutTarget(null) }, [activeTool])
+  useEffect(() => {
+    setStartPt(null); setCursorPt(null); setCutPreview(null); setCutTarget(null); setSnapTarget(null)
+  }, [activeTool])
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
@@ -128,15 +164,28 @@ export function SketchPlane() {
   const planeOrigin = planeOriginFromPose(plane)
   const isDrawTool = activeTool !== 'select'
 
-  const getSnapped = (e: ThreeEvent<PointerEvent | MouseEvent>) => snapPt(toSketch(e.point, plane))
-  const getRaw    = (e: ThreeEvent<PointerEvent | MouseEvent>) => toSketch(e.point, plane)
+  const getRaw = (e: ThreeEvent<PointerEvent | MouseEvent>) => toSketch(e.point, plane)
+
+  // Find nearest endpoint within snap threshold
+  const findSnapTarget = (raw: SketchPoint): { pt: SketchPoint; ref: PointRef } | null => {
+    let best: { pt: SketchPoint; ref: PointRef; dist: number } | null = null
+    for (const el of sketchElements) {
+      for (const { pt, ref } of elementEndpoints(el)) {
+        const d = Math.hypot(raw.x - pt.x, raw.y - pt.y)
+        if (d < SNAP_ENDPOINT_THRESHOLD && (!best || d < best.dist)) {
+          best = { pt, ref, dist: d }
+        }
+      }
+    }
+    return best ? { pt: best.pt, ref: best.ref } : null
+  }
 
   const onMove = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
-    setCursorPt(getSnapped(e))
+    const raw = getRaw(e)
 
     if (activeTool === 'cut') {
-      const raw = getRaw(e)
+      setCursorPt(snapPt(raw))
       const THRESHOLD = 0.5
       let nearest:
         | { kind: 'line'; line: SketchLine }
@@ -193,6 +242,17 @@ export function SketchPlane() {
         }
         setCutTarget(nearest)
       }
+      return
+    }
+
+    // Draw tools: check endpoint snap first
+    const snap = findSnapTarget(raw)
+    if (snap) {
+      setSnapTarget(snap)
+      setCursorPt(snap.pt)
+    } else {
+      setSnapTarget(null)
+      setCursorPt(snapPt(raw))
     }
   }
 
@@ -232,17 +292,14 @@ export function SketchPlane() {
           targetId = cutTarget.arc.id
         }
 
-        cutSketchElement(
-          targetId,
-          replacements,
-        )
+        cutSketchElement(targetId, replacements)
         setCutPreview(null)
         setCutTarget(null)
       }
       return
     }
 
-    const pt = getSnapped(e)
+    const pt = snapTarget ? snapTarget.pt : snapPt(getRaw(e))
 
     if (startPt === null) {
       setStartPt(pt)
@@ -251,15 +308,27 @@ export function SketchPlane() {
 
     const id = crypto.randomUUID()
     const cFlag = constructionMode ? { construction: true as const } : {}
+
     if (activeTool === 'line') {
       addSketchElement({ type: 'line', id, start: startPt, end: pt, ...cFlag } satisfies SketchLine)
+      // Auto-coincident if end point snapped to existing endpoint
+      if (snapTarget) {
+        addSketchConstraint({
+          id: crypto.randomUUID(),
+          type: 'coincident',
+          p1: snapTarget.ref,
+          p2: { elementId: id, which: 'end' },
+        })
+      }
     } else if (activeTool === 'rect') {
       addSketchElement({ type: 'rect', id, start: startPt, end: pt, ...cFlag } satisfies SketchRect)
     } else if (activeTool === 'circle') {
       const r = Math.hypot(pt.x - startPt.x, pt.y - startPt.y)
       if (r > 0) addSketchElement({ type: 'circle', id, center: startPt, radius: r, ...cFlag } satisfies SketchCircle)
     }
+
     setStartPt(null)
+    setSnapTarget(null)
   }
 
   // In cut mode, prefer pointer-down over click (down+up) which can be flaky if
@@ -318,8 +387,16 @@ export function SketchPlane() {
         )
       )}
 
-      {/* Cursor & anchor dots (draw tools only, not cut) */}
-      {isDrawTool && activeTool !== 'cut' && cursorPt && <Dot pos={worldPt(cursorPt, plane)} color="#ffffff" size={0.05} />}
+      {/* Endpoint snap ring indicator — green ring when cursor near an existing endpoint */}
+      {isDrawTool && activeTool !== 'cut' && snapTarget && (
+        <Dot pos={worldPt(snapTarget.pt, plane)} color="#44ff88" size={0.14} ring />
+      )}
+
+      {/* Cursor dot */}
+      {isDrawTool && activeTool !== 'cut' && cursorPt && (
+        <Dot pos={worldPt(cursorPt, plane)} color={snapTarget ? '#44ff88' : '#ffffff'} size={0.05} />
+      )}
+      {/* Anchor dot */}
       {isDrawTool && startPt && <Dot pos={worldPt(startPt, plane)} color="#ffdd44" size={0.08} />}
 
       {/* Live preview */}

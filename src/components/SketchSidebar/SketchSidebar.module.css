@@ -98,3 +98,106 @@
   border-color: #2266aa !important;
   color: #5599dd !important;
 }
+
+/* ── Constraints section ── */
+.sectionLabel {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #555;
+  padding: 2px 4px 0;
+}
+
+.constraintRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 2px;
+}
+
+.constraintIcon {
+  font-size: 13px;
+  color: #668;
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.constraintInput {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 5px;
+  background: #0e0e24;
+  border: 1px solid #2a2a4a;
+  border-radius: 3px;
+  color: #ccd;
+  font-size: 11px;
+}
+.constraintInput:focus { outline: none; border-color: #4488ff; }
+.constraintInput:disabled { opacity: 0.4; cursor: not-allowed; }
+.constraintInput::placeholder { color: #446; }
+
+.constraintBtn {
+  padding: 2px 6px;
+  background: #1a2a40;
+  border: 1px solid #2a4060;
+  border-radius: 3px;
+  color: #7aacff;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.constraintBtn:hover:not(:disabled) { background: #223050; }
+.constraintBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.constraintHint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #448844;
+  padding: 1px 4px;
+}
+
+.clearSel2 {
+  background: transparent;
+  border: none;
+  color: #446;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0 2px;
+}
+.clearSel2:hover { color: #ff6644; }
+
+.constraintList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 2px;
+}
+
+.constraintItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #0e0e20;
+  border: 1px solid #1e2040;
+  border-radius: 3px;
+  padding: 2px 4px 2px 6px;
+}
+
+.constraintItemLabel {
+  font-size: 11px;
+  color: #88aacc;
+  font-family: monospace;
+}
+
+.constraintDeleteBtn {
+  background: transparent;
+  border: none;
+  color: #446;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0 2px;
+}
+.constraintDeleteBtn:hover { color: #ff6644; }
