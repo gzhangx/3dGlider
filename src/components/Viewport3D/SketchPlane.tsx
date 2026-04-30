@@ -98,6 +98,29 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: Sketch
   return null
 }
 
+// ─── draggable point handle ───────────────────────────────────────────────────
+
+function PointHandle({
+  pos,
+  onDragStart,
+}: {
+  pos: [number, number, number]
+  onDragStart: (e: ThreeEvent<PointerEvent>) => void
+}) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <mesh
+      position={pos}
+      onPointerDown={onDragStart}
+      onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
+      onPointerOut={() => setHovered(false)}
+    >
+      <sphereGeometry args={[0.12, 8, 8]} />
+      <meshBasicMaterial color={hovered ? '#ffffff' : '#ffdd44'} depthTest={false} />
+    </mesh>
+  )
+}
+
 // ─── collect element endpoints for snap ──────────────────────────────────────
 
 function elementEndpoints(el: SketchElement): { pt: SketchPoint; ref: PointRef }[] {
@@ -120,7 +143,7 @@ export function SketchPlane() {
   const {
     activePlane, activeTool, constructionMode, sketchElements,
     selectedElementId, selectElement,
-    addSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
+    addSketchElement, updateSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
     addSketchConstraint,
   } = useModelStore()
 
@@ -135,6 +158,7 @@ export function SketchPlane() {
     | { kind: 'arc'; arc: SketchArc }
     | null
   >(null)
+  const [dragTarget, setDragTarget] = useState<{ elementId: string; pointType: 'start' | 'end' | 'center' } | null>(null)
 
   useEffect(() => {
     setStartPt(null); setCursorPt(null); setCutPreview(null); setCutTarget(null); setSnapTarget(null)
@@ -183,6 +207,14 @@ export function SketchPlane() {
   const onMove = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     const raw = getRaw(e)
+
+    // ── drag mode ────────────────────────────────────────────────────────────
+    if (dragTarget) {
+      const pt = snapPt(raw)
+      const key = dragTarget.pointType
+      updateSketchElement(dragTarget.elementId, { [key]: pt } as Parameters<typeof updateSketchElement>[1])
+      return
+    }
 
     if (activeTool === 'cut') {
       setCursorPt(snapPt(raw))
@@ -354,6 +386,10 @@ export function SketchPlane() {
     setSnapTarget(null)
   }
 
+  const onPointerUp = () => {
+    if (dragTarget) setDragTarget(null)
+  }
+
   // In cut mode, prefer pointer-down over click (down+up) which can be flaky if
   // the hovered hit target changes during the gesture.
   const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
@@ -365,13 +401,14 @@ export function SketchPlane() {
 
   return (
     <>
-      {/* Hit-test plane — only present during draw tools; absent in select mode so camera gets events */}
-      {isDrawTool && (
+      {/* Hit-test plane — present during draw tools and point dragging */}
+      {(isDrawTool || dragTarget) && (
         <mesh
           position={[planeOrigin.x, planeOrigin.y, planeOrigin.z]}
           rotation={plane.rotation}
           onPointerMove={onMove}
           onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
           onClick={onClick}
         >
           <planeGeometry args={[200, 200]} />
@@ -383,6 +420,30 @@ export function SketchPlane() {
       {sketchElements.map((el) => (
         <SketchEl key={el.id} el={el} plane={plane} highlighted={cutPreview?.lineId === el.id} />
       ))}
+
+      {/* Point handles — shown in select mode for dragging endpoints/centers */}
+      {activeTool === 'select' && sketchElements.map((el) => {
+        const startDrag = (pointType: 'start' | 'end' | 'center') => (e: ThreeEvent<PointerEvent>) => {
+          e.stopPropagation()
+          setDragTarget({ elementId: el.id, pointType })
+        }
+        if (el.type === 'line') return (
+          <group key={el.id + '_handles'}>
+            <PointHandle pos={worldPt(el.start, plane)} onDragStart={startDrag('start')} />
+            <PointHandle pos={worldPt(el.end,   plane)} onDragStart={startDrag('end')} />
+          </group>
+        )
+        if (el.type === 'circle') return (
+          <PointHandle key={el.id + '_handle'} pos={worldPt(el.center, plane)} onDragStart={startDrag('center')} />
+        )
+        if (el.type === 'rect') return (
+          <group key={el.id + '_handles'}>
+            <PointHandle pos={worldPt(el.start, plane)} onDragStart={startDrag('start')} />
+            <PointHandle pos={worldPt(el.end,   plane)} onDragStart={startDrag('end')} />
+          </group>
+        )
+        return null
+      })}
 
       {/* Cut preview — red overlay of the exact removed geometry */}
       {activeTool === 'cut' && cutPreview && (
