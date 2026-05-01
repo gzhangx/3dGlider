@@ -51,10 +51,11 @@ export interface PerpendicularConstraint{ id: string; type: 'perpendicular'; ele
 export interface HorizontalConstraint   { id: string; type: 'horizontal';   elementId: string }
 export interface VerticalConstraint     { id: string; type: 'vertical';     elementId: string }
 export interface EqualConstraint        { id: string; type: 'equal';        elementId1: string; elementId2: string }
+export interface TangentConstraint      { id: string; type: 'tangent';      elementId1: string; elementId2: string }
 export type SketchConstraint =
   | LengthConstraint | AngleConstraint | CoincidentConstraint
   | ParallelConstraint | PerpendicularConstraint
-  | HorizontalConstraint | VerticalConstraint | EqualConstraint
+  | HorizontalConstraint | VerticalConstraint | EqualConstraint | TangentConstraint
 
 export interface Sketch {
   id: string

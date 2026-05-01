@@ -36,6 +36,7 @@ function constraintLabel(c: SketchConstraint, elements: SketchElement[]): string
     case 'horizontal':  return `— horiz [${name(c.elementId)}]`
     case 'vertical':    return `| vert [${name(c.elementId)}]`
     case 'equal':       return `= equal [${name(c.elementId1)}·${name(c.elementId2)}]`
+    case 'tangent':     return `⌶ tangent [${name(c.elementId1)}·${name(c.elementId2)}]`
     default:            return (c as SketchConstraint).type
   }
 }
@@ -46,7 +47,7 @@ function constraintElementIds(c: SketchConstraint): string[] {
   switch (c.type) {
     case 'length': case 'horizontal': case 'vertical':
       return [c.elementId]
-    case 'angle': case 'parallel': case 'perpendicular': case 'equal':
+    case 'angle': case 'parallel': case 'perpendicular': case 'equal': case 'tangent':
       return [c.elementId1, c.elementId2]
     case 'coincident':
       return [c.p1.elementId, c.p2.elementId]

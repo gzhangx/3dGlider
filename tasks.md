@@ -22,11 +22,22 @@ Show how many DOF the sketch has. Color unconstrained elements blue, fully-const
 
 ## Sketch capability
 
+### ✅ Tangent constraint (COMPLETED)
+~~Ability to constrain a line to be tangent to a circle.~~
+
+**IMPLEMENTED May 1, 2026:**
+- `TangentConstraint` type added to store
+- Newton-Raphson solver with numerical differentiation for tangent equations
+- Circle radius becomes a solver variable when tangent constraints exist
+- UI button (⌶) to apply tangent between selected line and circle
+- Navigator displays tangent constraints with proper labeling
+- Supports both (line, circle) and (circle, line) orderings
+
 - **Trim / Extend** — split a line at an intersection, extend to meet another element
 - **Fillet / Chamfer** — round or bevel corners between two lines
 - **Offset** — create a parallel copy of a profile at a fixed distance
 - **Mirror** — mirror elements across a line
-- **Tangent constraint** — line tangent to circle, arc tangent to arc
+- **Arc tangent constraint** — arc tangent to arc (extension of line tangent to circle)
 - **Dimension display in viewport** — draw actual dimension lines in 3D space (not just sidebar numbers)
 - **Coordinate input** — press Tab while drawing to type exact X/Y values
 

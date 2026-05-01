@@ -118,6 +118,13 @@ export function SketchSidebar() {
     upd(line2.id, { end: applyEqual(line1, line2).end })
     addC({ type: 'equal', elementId1: line1.id, elementId2: line2.id })
   }
+  const setTangent = () => {
+    // Tangent can be between line and circle, or circle and line
+    const line = sel1?.type === 'line' ? (sel1 as SketchLine) : sel2?.type === 'line' ? (sel2 as SketchLine) : null
+    const circle = sel1?.type === 'circle' ? sel1 : sel2?.type === 'circle' ? sel2 : null
+    if (!line || !circle) return
+    addC({ type: 'tangent', elementId1: line.id, elementId2: circle.id })
+  }
   const setCoincident = (p1which: 'start' | 'end', p2which: 'start' | 'end') => {
     if (!sel1 || !sel2) return
     const p1el = sel1 as SketchLine
@@ -175,6 +182,7 @@ export function SketchSidebar() {
     if (c.type === 'horizontal')    return `— horizontal`
     if (c.type === 'vertical')      return `| vertical`
     if (c.type === 'equal')         return `= equal`
+    if (c.type === 'tangent')       return `⌶ tangent`
     return (c as { type: string }).type
   }
 
@@ -366,6 +374,13 @@ export function SketchSidebar() {
                 ))}
               </div>
             </>
+          )}
+
+          {/* ── Line + Circle: tangent ── */}
+          {hasTwoEls && ((sel1?.type === 'line' && sel2?.type === 'circle') || (sel1?.type === 'circle' && sel2?.type === 'line')) && (
+            <div className={styles.iconBtnRow}>
+              <button className={styles.iconConstraintBtn} onClick={setTangent} title="Tangent constraint">⌶</button>
+            </div>
           )}
 
           {/* 2nd element indicator */}

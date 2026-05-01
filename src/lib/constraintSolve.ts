@@ -142,7 +142,7 @@ export function reapplyParametricConstraints(
 /** Represents a variable in the solver (x/y coordinate of a point). */
 interface SolverVariable {
   elementId: string
-  pointType: 'start' | 'end' | 'center'
+  pointType: 'start' | 'end' | 'center' | 'radius'
   coord: 'x' | 'y'
   index: number
 }
@@ -158,20 +158,21 @@ interface ConstraintEquation {
 /**
  * Extract a point from an element by id and type.
  */
-function getPoint(elements: SketchElement[], elementId: string, pointType: 'start' | 'end' | 'center'): SketchPoint | null {
+function getPoint(elements: SketchElement[], elementId: string, pointType: 'start' | 'end' | 'center' | 'radius'): SketchPoint | null {
   const el = elements.find((e) => e.id === elementId)
   if (!el) return null
   if (pointType === 'start' && ('start' in el)) return el.start
   if (pointType === 'end' && ('end' in el)) return el.end
   if (pointType === 'center' && el.type === 'circle') return el.center
   if (pointType === 'center' && el.type === 'arc') return el.center
+  if (pointType === 'radius' && el.type === 'circle') return { x: el.radius, y: 0 }
   return null
 }
 
 /**
  * Set a coordinate of a point in an element.
  */
-function setPoint(el: SketchElement, pointType: 'start' | 'end' | 'center', coord: 'x' | 'y', value: number): SketchElement {
+function setPoint(el: SketchElement, pointType: 'start' | 'end' | 'center' | 'radius', coord: 'x' | 'y', value: number): SketchElement {
   if (pointType === 'start' && 'start' in el) {
     return { ...el, start: { ...el.start, [coord]: value } }
   }
@@ -180,6 +181,9 @@ function setPoint(el: SketchElement, pointType: 'start' | 'end' | 'center', coor
   }
   if (pointType === 'center' && (el.type === 'circle' || el.type === 'arc')) {
     return { ...el, center: { ...el.center, [coord]: value } }
+  }
+  if (pointType === 'radius' && el.type === 'circle' && coord === 'x') {
+    return { ...el, radius: Math.max(0.01, value) }
   }
   if (pointType === 'center' && el.type === 'rect') {
     // For rect, center is derived; treat it as dragging start or end
@@ -536,6 +540,112 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
           })
         },
       })
+    } else if (c.type === 'tangent') {
+      const lineId = c.elementId1
+      const circleId = c.elementId2
+      // Support both (line, circle) and (circle, line)
+      const actualLineId = lineId
+      const actualCircleId = circleId
+
+      equations.push({
+        type: 'tangent',
+        residual: (els) => {
+          const line = els.find((e) => e.id === actualLineId)
+          const circle = els.find((e) => e.id === actualCircleId)
+          if (!line || !circle) return 0
+
+          // If line and circle are swapped, adjust
+          let l = line, c = circle
+          if (line.type === 'circle' && circle.type === 'line') {
+            [l, c] = [circle, line]
+          }
+
+          if (l.type !== 'line' || c.type !== 'circle') return 0
+
+          // Distance from circle center to line
+          const cx = c.center.x
+          const cy = c.center.y
+          const x1 = l.start.x
+          const y1 = l.start.y
+          const x2 = l.end.x
+          const y2 = l.end.y
+
+          const dx = x2 - x1
+          const dy = y2 - y1
+          const lineLenSq = dx * dx + dy * dy
+
+          if (lineLenSq < 1e-12) return c.radius // Degenerate line, distance is undefined
+
+          // Distance = |ax + by + c| / sqrt(a^2 + b^2) where line is ax + by + c = 0
+          // Line through (x1, y1) and (x2, y2): (y2-y1)x - (x2-x1)y + x2*y1 - y2*x1 = 0
+          const num = Math.abs((y2 - y1) * cx - (x2 - x1) * cy + x2 * y1 - y2 * x1)
+          const dist = num / Math.sqrt(lineLenSq)
+
+          // Residual: distance - radius (tangent when zero)
+          return dist - c.radius
+        },
+        jacobian: (els, vars) => {
+          const line = els.find((e) => e.id === actualLineId)
+          const circle = els.find((e) => e.id === actualCircleId)
+          if (!line || !circle) return vars.map(() => 0)
+
+          let l = line, circleEl = circle
+          if (line.type === 'circle' && circle.type === 'line') {
+            [l, circleEl] = [circle, line]
+          }
+
+          if (l.type !== 'line' || circleEl.type !== 'circle') return vars.map(() => 0)
+
+          // Numerical differentiation
+          const eps = 1e-6
+          const residual0 = (() => {
+            const cx = circleEl.center.x
+            const cy = circleEl.center.y
+            const x1 = l.start.x
+            const y1 = l.start.y
+            const x2 = l.end.x
+            const y2 = l.end.y
+            const dx = x2 - x1
+            const dy = y2 - y1
+            const lineLenSq = dx * dx + dy * dy
+            if (lineLenSq < 1e-12) return circleEl.radius
+            const num = Math.abs((y2 - y1) * cx - (x2 - x1) * cy + x2 * y1 - y2 * x1)
+            return num / Math.sqrt(lineLenSq) - circleEl.radius
+          })()
+
+          return vars.map((v) => {
+            // Perturb the variable and compute new residual
+            const saveVal = getPoint(els, v.elementId, v.pointType)?.[v.coord] ?? 0
+            const perturbed = els.map((e) => {
+              if (e.id === v.elementId) {
+                return setPoint(e, v.pointType, v.coord, saveVal + eps)
+              }
+              return e
+            })
+
+            const l_pert = perturbed.find(e => e.id === l.id) as SketchLine
+            const circ_pert = perturbed.find(e => e.id === circleEl.id) as SketchCircle
+            
+            if (!l_pert || !circ_pert) return 0
+
+            const cx = circ_pert.center.x
+            const cy = circ_pert.center.y
+            const x1 = l_pert.start.x
+            const y1 = l_pert.start.y
+            const x2 = l_pert.end.x
+            const y2 = l_pert.end.y
+            const dx = x2 - x1
+            const dy = y2 - y1
+            const lineLenSq = dx * dx + dy * dy
+            if (lineLenSq < 1e-12) return 0
+
+            const num = Math.abs((y2 - y1) * cx - (x2 - x1) * cy + x2 * y1 - y2 * x1)
+            const residual1 = num / Math.sqrt(lineLenSq) - circ_pert.radius
+
+            return (residual1 - residual0) / eps
+          })
+        },
+      })
     }
   }
 
@@ -567,6 +677,9 @@ export function solveConstraints(
   const variables: SolverVariable[] = []
   let varIndex = 0
 
+  // Check if any tangent constraints exist
+  const hasTangentConstraints = constraints.some(c => c.type === 'tangent')
+
   for (const el of elements) {
     const fixKey = (pt: string) => `${el.id}:${pt}`
 
@@ -592,6 +705,10 @@ export function solveConstraints(
       if (!fixedPoints?.has(fixKey('center'))) {
         variables.push({ elementId: el.id, pointType: 'center', coord: 'x', index: varIndex++ })
         variables.push({ elementId: el.id, pointType: 'center', coord: 'y', index: varIndex++ })
+      }
+      // Add radius as a variable for circles if there are tangent constraints
+      if (el.type === 'circle' && hasTangentConstraints) {
+        variables.push({ elementId: el.id, pointType: 'radius', coord: 'x', index: varIndex++ })
       }
     }
   }
