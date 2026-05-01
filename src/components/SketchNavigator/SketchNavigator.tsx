@@ -78,13 +78,8 @@ export function SketchNavigator() {
   }
 
   const selectElement = (el: SketchElement) => {
-    // Highlight the element itself + all elements connected via constraints
-    const linked = new Set<string>([el.id])
-    for (const c of sketchConstraints) {
-      const ids = constraintElementIds(c)
-      if (ids.includes(el.id)) ids.forEach((id) => linked.add(id))
-    }
-    select(el.id, Array.from(linked))
+    // Highlight only the selected element
+    select(el.id, [el.id])
   }
 
   const selectConstraint = (c: SketchConstraint) => {
