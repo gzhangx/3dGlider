@@ -16,7 +16,7 @@ const ACTION_ROTATE = 1
 const ACTION_TRUCK = 2
 
 export function Scene() {
-  const { activePlane, mode, activeTool, isDraggingPoint, sketchViewResetCounter } = useModelStore()
+  const { activePlane, mode, activeTool, isDraggingPoint, sketchViewResetCounter, hideOtherSketches } = useModelStore()
   const { camera } = useThree()
   const controlsRef = useRef<CameraControls>(null)
 
@@ -89,9 +89,13 @@ export function Scene() {
         </>
       )}
 
-      <ExtrudedSolids />
-      <RevolvedSolids />
-      <CommittedSketches />
+      {!(mode === 'sketch' && hideOtherSketches) && (
+        <>
+          <ExtrudedSolids />
+          <RevolvedSolids />
+          <CommittedSketches />
+        </>
+      )}
 
       {mode === 'sketch' && <SketchPlane />}
 

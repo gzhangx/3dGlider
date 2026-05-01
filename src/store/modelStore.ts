@@ -225,6 +225,7 @@ interface ModelState {
   isDraggingPoint: boolean
   highlightElementIds: string[]
   showSketchNavigator: boolean
+  hideOtherSketches: boolean
   editingSketchId: string | null
   editingExtrudeId: string | null
   previewExtrude: ExtrudeFeature | null
@@ -241,6 +242,7 @@ interface ModelState {
   setHighlightElementIds: (ids: string[]) => void
   resetSketchView: () => void
   setShowSketchNavigator: (v: boolean) => void
+  setHideOtherSketches: (v: boolean) => void
   addSketchElement: (el: SketchElement) => void
   updateSketchElement: (id: string, updates: Partial<SketchElement>) => void
   deleteSketchElement: (id: string) => void
@@ -289,6 +291,7 @@ export const useModelStore = create<ModelState>((set) => ({
   isDraggingPoint: false,
   highlightElementIds: [],
   showSketchNavigator: false,
+  hideOtherSketches: true,
   editingSketchId: null,
   editingExtrudeId: null,
   previewExtrude: null,
@@ -305,6 +308,7 @@ export const useModelStore = create<ModelState>((set) => ({
   setHighlightElementIds: (highlightElementIds) => set({ highlightElementIds }),
   resetSketchView: () => set((s) => ({ sketchViewResetCounter: s.sketchViewResetCounter + 1 })),
   setShowSketchNavigator: (showSketchNavigator) => set({ showSketchNavigator }),
+  setHideOtherSketches: (hideOtherSketches) => set({ hideOtherSketches }),
 
   addSketchElement: (el) => set((s) => ({ sketchElements: [...s.sketchElements, el] })),
 
