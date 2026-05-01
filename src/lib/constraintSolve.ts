@@ -136,3 +136,553 @@ export function reapplyParametricConstraints(
   }
   return els
 }
+
+// ── Iterative constraint solver (Newton-Raphson) ──────────────────────────────
+
+/** Represents a variable in the solver (x/y coordinate of a point). */
+interface SolverVariable {
+  elementId: string
+  pointType: 'start' | 'end' | 'center'
+  coord: 'x' | 'y'
+  index: number
+}
+
+/** Constraint residual and Jacobian row. */
+interface ConstraintEquation {
+  type: SketchConstraint['type']
+  residual(elements: SketchElement[]): number
+  jacobian(elements: SketchElement[], variables: SolverVariable[]): number[]
+  priority?: number // Lower = solved first (default 0)
+}
+
+/**
+ * Extract a point from an element by id and type.
+ */
+function getPoint(elements: SketchElement[], elementId: string, pointType: 'start' | 'end' | 'center'): SketchPoint | null {
+  const el = elements.find((e) => e.id === elementId)
+  if (!el) return null
+  if (pointType === 'start' && ('start' in el)) return el.start
+  if (pointType === 'end' && ('end' in el)) return el.end
+  if (pointType === 'center' && el.type === 'circle') return el.center
+  if (pointType === 'center' && el.type === 'arc') return el.center
+  return null
+}
+
+/**
+ * Set a coordinate of a point in an element.
+ */
+function setPoint(el: SketchElement, pointType: 'start' | 'end' | 'center', coord: 'x' | 'y', value: number): SketchElement {
+  if (pointType === 'start' && 'start' in el) {
+    return { ...el, start: { ...el.start, [coord]: value } }
+  }
+  if (pointType === 'end' && 'end' in el) {
+    return { ...el, end: { ...el.end, [coord]: value } }
+  }
+  if (pointType === 'center' && (el.type === 'circle' || el.type === 'arc')) {
+    return { ...el, center: { ...el.center, [coord]: value } }
+  }
+  if (pointType === 'center' && el.type === 'rect') {
+    // For rect, center is derived; treat it as dragging start or end
+    return el
+  }
+  if (pointType === 'center' && el.type === 'line') {
+    // For line, center is the midpoint; move both endpoints symmetrically
+    return el
+  }
+  return el
+}
+
+/**
+ * Build constraint equations from sketch constraints.
+ */
+function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEquation[] {
+  const equations: ConstraintEquation[] = []
+
+  for (const c of constraints) {
+    if (c.type === 'coincident') {
+      const p1 = c.p1
+      const p2 = c.p2
+
+      // X-coordinate coincident
+      equations.push({
+        type: 'coincident',
+        residual: (els) => {
+          const pt1 = getPoint(els, p1.elementId, p1.which)
+          const pt2 = getPoint(els, p2.elementId, p2.which)
+          return (pt1?.x ?? 0) - (pt2?.x ?? 0)
+        },
+        jacobian: (_els, vars) => {
+          return vars.map((v) => {
+            if (v.elementId === p1.elementId && v.pointType === p1.which && v.coord === 'x') return 1
+            if (v.elementId === p2.elementId && v.pointType === p2.which && v.coord === 'x') return -1
+            return 0
+          })
+        },
+        priority: 10, // High priority
+      })
+
+      // Y-coordinate coincident
+      equations.push({
+        type: 'coincident',
+        residual: (els) => {
+          const pt1 = getPoint(els, p1.elementId, p1.which)
+          const pt2 = getPoint(els, p2.elementId, p2.which)
+          return (pt1?.y ?? 0) - (pt2?.y ?? 0)
+        },
+        jacobian: (_els, vars) => {
+          return vars.map((v) => {
+            if (v.elementId === p1.elementId && v.pointType === p1.which && v.coord === 'y') return 1
+            if (v.elementId === p2.elementId && v.pointType === p2.which && v.coord === 'y') return -1
+            return 0
+          })
+        },
+        priority: 10,
+      })
+    } else if (c.type === 'length') {
+      const elementId = c.elementId
+      const targetLength = c.value
+
+      equations.push({
+        type: 'length',
+        residual: (els) => {
+          const el = els.find((e) => e.id === elementId)
+          if (!el) return 0
+
+          if (el.type === 'line') {
+            return lineLength(el) - targetLength
+          } else if (el.type === 'circle') {
+            return el.radius - targetLength
+          } else if (el.type === 'rect' && c.dimension === 'width') {
+            return rectWidth(el) - targetLength
+          } else if (el.type === 'rect' && c.dimension === 'height') {
+            return rectHeight(el) - targetLength
+          }
+          return 0
+        },
+        jacobian: (els, vars) => {
+          const el = els.find((e) => e.id === elementId)
+          if (!el) return vars.map(() => 0)
+
+          if (el.type === 'line') {
+            const dx = el.end.x - el.start.x
+            const dy = el.end.y - el.start.y
+            const len = Math.hypot(dx, dy)
+            if (len < 1e-9) return vars.map(() => 0)
+
+            return vars.map((v) => {
+              if (v.elementId === elementId && v.pointType === 'end' && v.coord === 'x') return dx / len
+              if (v.elementId === elementId && v.pointType === 'end' && v.coord === 'y') return dy / len
+              if (v.elementId === elementId && v.pointType === 'start' && v.coord === 'x') return -dx / len
+              if (v.elementId === elementId && v.pointType === 'start' && v.coord === 'y') return -dy / len
+              return 0
+            })
+          } else if (el.type === 'circle') {
+            return vars.map((v) => {
+              if (v.elementId === elementId && v.pointType === 'center' && (v.coord === 'x' || v.coord === 'y')) return 0
+              return 0
+            })
+          } else if (el.type === 'rect' && c.dimension === 'width') {
+            return vars.map((v) => {
+              if (v.elementId === elementId && v.pointType === 'end' && v.coord === 'x') return 1
+              if (v.elementId === elementId && v.pointType === 'start' && v.coord === 'x') return -1
+              return 0
+            })
+          } else if (el.type === 'rect' && c.dimension === 'height') {
+            return vars.map((v) => {
+              if (v.elementId === elementId && v.pointType === 'end' && v.coord === 'y') return 1
+              if (v.elementId === elementId && v.pointType === 'start' && v.coord === 'y') return -1
+              return 0
+            })
+          }
+          return vars.map(() => 0)
+        },
+      })
+    } else if (c.type === 'angle') {
+      const el1Id = c.elementId1
+      const el2Id = c.elementId2
+      const targetAngle = (c.value * Math.PI) / 180
+
+      equations.push({
+        type: 'angle',
+        residual: (els) => {
+          const el1 = els.find((e) => e.id === el1Id)
+          const el2 = els.find((e) => e.id === el2Id)
+          if (!el1 || !el2 || el1.type !== 'line' || el2.type !== 'line') return 0
+
+          const angle1 = Math.atan2(el1.end.y - el1.start.y, el1.end.x - el1.start.x)
+          const angle2 = Math.atan2(el2.end.y - el2.start.y, el2.end.x - el2.start.x)
+          let diff = angle2 - angle1
+
+          // Normalize to [-π, π]
+          while (diff > Math.PI) diff -= 2 * Math.PI
+          while (diff < -Math.PI) diff += 2 * Math.PI
+
+          return diff - targetAngle
+        },
+        jacobian: (els, vars) => {
+          const el1 = els.find((e) => e.id === el1Id)
+          const el2 = els.find((e) => e.id === el2Id)
+          if (!el1 || !el2 || el1.type !== 'line' || el2.type !== 'line') return vars.map(() => 0)
+
+          const dx1 = el1.end.x - el1.start.x
+          const dy1 = el1.end.y - el1.start.y
+          const r1sq = dx1 * dx1 + dy1 * dy1
+          if (r1sq < 1e-12) return vars.map(() => 0)
+
+          const dx2 = el2.end.x - el2.start.x
+          const dy2 = el2.end.y - el2.start.y
+          const r2sq = dx2 * dx2 + dy2 * dy2
+          if (r2sq < 1e-12) return vars.map(() => 0)
+
+          return vars.map((v) => {
+            let jac = 0
+            // Derivative of atan2 w.r.t. end point
+            if (v.elementId === el1Id && v.pointType === 'end') {
+              if (v.coord === 'x') jac -= dy1 / r1sq
+              if (v.coord === 'y') jac += dx1 / r1sq
+            } else if (v.elementId === el1Id && v.pointType === 'start') {
+              if (v.coord === 'x') jac += dy1 / r1sq
+              if (v.coord === 'y') jac -= dx1 / r1sq
+            } else if (v.elementId === el2Id && v.pointType === 'end') {
+              if (v.coord === 'x') jac += dy2 / r2sq
+              if (v.coord === 'y') jac -= dx2 / r2sq
+            } else if (v.elementId === el2Id && v.pointType === 'start') {
+              if (v.coord === 'x') jac -= dy2 / r2sq
+              if (v.coord === 'y') jac += dx2 / r2sq
+            }
+            return jac
+          })
+        },
+      })
+    } else if (c.type === 'horizontal') {
+      const elementId = c.elementId
+
+      equations.push({
+        type: 'horizontal',
+        residual: (els) => {
+          const el = els.find((e) => e.id === elementId)
+          if (!el || el.type !== 'line') return 0
+          return el.end.y - el.start.y
+        },
+        jacobian: (_els, vars) => {
+          return vars.map((v) => {
+            if (v.elementId === elementId && v.pointType === 'end' && v.coord === 'y') return 1
+            if (v.elementId === elementId && v.pointType === 'start' && v.coord === 'y') return -1
+            return 0
+          })
+        },
+      })
+    } else if (c.type === 'vertical') {
+      const elementId = c.elementId
+
+      equations.push({
+        type: 'vertical',
+        residual: (els) => {
+          const el = els.find((e) => e.id === elementId)
+          if (!el || el.type !== 'line') return 0
+          return el.end.x - el.start.x
+        },
+        jacobian: (_els, vars) => {
+          return vars.map((v) => {
+            if (v.elementId === elementId && v.pointType === 'end' && v.coord === 'x') return 1
+            if (v.elementId === elementId && v.pointType === 'start' && v.coord === 'x') return -1
+            return 0
+          })
+        },
+      })
+    } else if (c.type === 'parallel') {
+      const el1Id = c.elementId1
+      const el2Id = c.elementId2
+
+      equations.push({
+        type: 'parallel',
+        residual: (els) => {
+          const el1 = els.find((e) => e.id === el1Id)
+          const el2 = els.find((e) => e.id === el2Id)
+          if (!el1 || !el2 || el1.type !== 'line' || el2.type !== 'line') return 0
+
+          const dx1 = el1.end.x - el1.start.x
+          const dy1 = el1.end.y - el1.start.y
+          const dx2 = el2.end.x - el2.start.x
+          const dy2 = el2.end.y - el2.start.y
+
+          // Cross product should be zero for parallel lines
+          return dx1 * dy2 - dy1 * dx2
+        },
+        jacobian: (els, vars) => {
+          const el1 = els.find((e) => e.id === el1Id)
+          const el2 = els.find((e) => e.id === el2Id)
+          if (!el1 || !el2 || el1.type !== 'line' || el2.type !== 'line') return vars.map(() => 0)
+
+          return vars.map((v) => {
+            const dx2 = el2.end.x - el2.start.x
+            const dy2 = el2.end.y - el2.start.y
+
+            let jac = 0
+            if (v.elementId === el1Id) {
+              if (v.pointType === 'end' && v.coord === 'x') jac = dy2
+              if (v.pointType === 'end' && v.coord === 'y') jac = -dx2
+              if (v.pointType === 'start' && v.coord === 'x') jac = -dy2
+              if (v.pointType === 'start' && v.coord === 'y') jac = dx2
+            } else if (v.elementId === el2Id) {
+              const dx1 = el1.end.x - el1.start.x
+              const dy1 = el1.end.y - el1.start.y
+              if (v.pointType === 'end' && v.coord === 'x') jac = -dy1
+              if (v.pointType === 'end' && v.coord === 'y') jac = dx1
+              if (v.pointType === 'start' && v.coord === 'x') jac = dy1
+              if (v.pointType === 'start' && v.coord === 'y') jac = -dx1
+            }
+            return jac
+          })
+        },
+      })
+    } else if (c.type === 'perpendicular') {
+      const el1Id = c.elementId1
+      const el2Id = c.elementId2
+
+      equations.push({
+        type: 'perpendicular',
+        residual: (els) => {
+          const el1 = els.find((e) => e.id === el1Id)
+          const el2 = els.find((e) => e.id === el2Id)
+          if (!el1 || !el2 || el1.type !== 'line' || el2.type !== 'line') return 0
+
+          const dx1 = el1.end.x - el1.start.x
+          const dy1 = el1.end.y - el1.start.y
+          const dx2 = el2.end.x - el2.start.x
+          const dy2 = el2.end.y - el2.start.y
+
+          // Dot product should be zero for perpendicular lines
+          return dx1 * dx2 + dy1 * dy2
+        },
+        jacobian: (els, vars) => {
+          const el1 = els.find((e) => e.id === el1Id)
+          const el2 = els.find((e) => e.id === el2Id)
+          if (!el1 || !el2 || el1.type !== 'line' || el2.type !== 'line') return vars.map(() => 0)
+
+          return vars.map((v) => {
+            const dx2 = el2.end.x - el2.start.x
+            const dy2 = el2.end.y - el2.start.y
+
+            let jac = 0
+            if (v.elementId === el1Id) {
+              if (v.pointType === 'end' && v.coord === 'x') jac = dx2
+              if (v.pointType === 'end' && v.coord === 'y') jac = dy2
+              if (v.pointType === 'start' && v.coord === 'x') jac = -dx2
+              if (v.pointType === 'start' && v.coord === 'y') jac = -dy2
+            } else if (v.elementId === el2Id) {
+              const dx1 = el1.end.x - el1.start.x
+              const dy1 = el1.end.y - el1.start.y
+              if (v.pointType === 'end' && v.coord === 'x') jac = dx1
+              if (v.pointType === 'end' && v.coord === 'y') jac = dy1
+              if (v.pointType === 'start' && v.coord === 'x') jac = -dx1
+              if (v.pointType === 'start' && v.coord === 'y') jac = -dy1
+            }
+            return jac
+          })
+        },
+      })
+    } else if (c.type === 'equal') {
+      const el1Id = c.elementId1
+      const el2Id = c.elementId2
+
+      equations.push({
+        type: 'equal',
+        residual: (els) => {
+          const el1 = els.find((e) => e.id === el1Id)
+          const el2 = els.find((e) => e.id === el2Id)
+          if (!el1 || !el2) return 0
+
+          let len1 = 0, len2 = 0
+
+          if (el1.type === 'line') len1 = lineLength(el1)
+          else if (el1.type === 'circle') len1 = el1.radius
+          else if (el1.type === 'rect' && el2.type === 'rect') len1 = rectWidth(el1) // Compare widths for rects
+
+          if (el2.type === 'line') len2 = lineLength(el2)
+          else if (el2.type === 'circle') len2 = el2.radius
+          else if (el2.type === 'rect' && el1.type === 'rect') len2 = rectWidth(el2)
+
+          return len1 - len2
+        },
+        jacobian: (els, vars) => {
+          const el1 = els.find((e) => e.id === el1Id)
+          const el2 = els.find((e) => e.id === el2Id)
+          if (!el1 || !el2) return vars.map(() => 0)
+
+          const dx1 = el1.type === 'line' ? el1.end.x - el1.start.x : 0
+          const dy1 = el1.type === 'line' ? el1.end.y - el1.start.y : 0
+          const len1 = el1.type === 'line' ? Math.hypot(dx1, dy1) : 1
+
+          const dx2 = el2.type === 'line' ? el2.end.x - el2.start.x : 0
+          const dy2 = el2.type === 'line' ? el2.end.y - el2.start.y : 0
+          const len2 = el2.type === 'line' ? Math.hypot(dx2, dy2) : 1
+
+          return vars.map((v) => {
+            let jac = 0
+            if (el1.type === 'line' && len1 > 1e-9) {
+              if (v.elementId === el1Id && v.pointType === 'end' && v.coord === 'x') jac += dx1 / len1
+              if (v.elementId === el1Id && v.pointType === 'end' && v.coord === 'y') jac += dy1 / len1
+              if (v.elementId === el1Id && v.pointType === 'start' && v.coord === 'x') jac -= dx1 / len1
+              if (v.elementId === el1Id && v.pointType === 'start' && v.coord === 'y') jac -= dy1 / len1
+            }
+            if (el2.type === 'line' && len2 > 1e-9) {
+              if (v.elementId === el2Id && v.pointType === 'end' && v.coord === 'x') jac -= dx2 / len2
+              if (v.elementId === el2Id && v.pointType === 'end' && v.coord === 'y') jac -= dy2 / len2
+              if (v.elementId === el2Id && v.pointType === 'start' && v.coord === 'x') jac += dx2 / len2
+              if (v.elementId === el2Id && v.pointType === 'start' && v.coord === 'y') jac += dy2 / len2
+            }
+            return jac
+          })
+        },
+      })
+    }
+  }
+
+  return equations
+}
+
+/**
+ * Solve constraints using Newton-Raphson iteration.
+ * Returns updated elements with constraints satisfied.
+ *
+ * @param elements Sketch elements to solve
+ * @param constraints Constraints to satisfy
+ * @param fixedPoints Set of (elementId, pointType) to keep fixed during solving
+ * @param maxIterations Maximum Newton-Raphson iterations
+ * @param tolerance Convergence tolerance (max residual)
+ * @returns Updated elements
+ */
+export function solveConstraints(
+  elements: SketchElement[],
+  constraints: SketchConstraint[],
+  fixedPoints?: Set<string>,
+  maxIterations: number = 50,
+  tolerance: number = 1e-6,
+): SketchElement[] {
+  if (constraints.length === 0) return elements
+  if (elements.length === 0) return elements
+
+  // Find all variables (movable element points)
+  const variables: SolverVariable[] = []
+  let varIndex = 0
+
+  for (const el of elements) {
+    const fixKey = (pt: string) => `${el.id}:${pt}`
+
+    if (el.type === 'line') {
+      if (!fixedPoints?.has(fixKey('start'))) {
+        variables.push({ elementId: el.id, pointType: 'start', coord: 'x', index: varIndex++ })
+        variables.push({ elementId: el.id, pointType: 'start', coord: 'y', index: varIndex++ })
+      }
+      if (!fixedPoints?.has(fixKey('end'))) {
+        variables.push({ elementId: el.id, pointType: 'end', coord: 'x', index: varIndex++ })
+        variables.push({ elementId: el.id, pointType: 'end', coord: 'y', index: varIndex++ })
+      }
+    } else if (el.type === 'rect') {
+      if (!fixedPoints?.has(fixKey('start'))) {
+        variables.push({ elementId: el.id, pointType: 'start', coord: 'x', index: varIndex++ })
+        variables.push({ elementId: el.id, pointType: 'start', coord: 'y', index: varIndex++ })
+      }
+      if (!fixedPoints?.has(fixKey('end'))) {
+        variables.push({ elementId: el.id, pointType: 'end', coord: 'x', index: varIndex++ })
+        variables.push({ elementId: el.id, pointType: 'end', coord: 'y', index: varIndex++ })
+      }
+    } else if (el.type === 'circle' || el.type === 'arc') {
+      if (!fixedPoints?.has(fixKey('center'))) {
+        variables.push({ elementId: el.id, pointType: 'center', coord: 'x', index: varIndex++ })
+        variables.push({ elementId: el.id, pointType: 'center', coord: 'y', index: varIndex++ })
+      }
+    }
+  }
+
+  if (variables.length === 0) return elements
+
+  // Build constraint equations
+  const equations = buildConstraintEquations(constraints)
+  if (equations.length === 0) return elements
+
+  // Sort by priority (lower first)
+  equations.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+
+  let currentElements = [...elements]
+  let iteration = 0
+
+  for (iteration; iteration < maxIterations; iteration++) {
+    // Compute residuals
+    const residuals = equations.map((eq) => eq.residual(currentElements))
+    const maxResidual = Math.max(...residuals.map(Math.abs))
+
+    if (maxResidual < tolerance) break
+
+    // Build Jacobian matrix (equations × variables)
+    const jacobian: number[][] = equations.map((eq) => eq.jacobian(currentElements, variables))
+
+    // Gaussian elimination to solve Jx = -r
+    const augmented = jacobian.map((row, i) => [...row, -residuals[i]])
+    gaussianElimination(augmented)
+
+    // Extract solution
+    const delta = new Array(variables.length).fill(0)
+    for (let i = Math.min(augmented.length, variables.length) - 1; i >= 0; i--) {
+      let sum = 0
+      for (let j = i + 1; j < variables.length; j++) {
+        sum += augmented[i][j] * delta[j]
+      }
+      if (Math.abs(augmented[i][i]) > 1e-12) {
+        delta[i] = (augmented[i][variables.length] - sum) / augmented[i][i]
+      }
+    }
+
+    // Update variables with damping (0.5 for stability)
+    const dampingFactor = 0.5
+    for (const v of variables) {
+      const el = currentElements.find((e) => e.id === v.elementId)
+      if (!el) continue
+
+      const oldPt = getPoint(currentElements, v.elementId, v.pointType)
+      if (!oldPt) continue
+
+      const newValue = (oldPt[v.coord] ?? 0) + dampingFactor * delta[v.index]
+      const updated = setPoint(el, v.pointType, v.coord, newValue)
+      currentElements = currentElements.map((e) => (e.id === el.id ? updated : e))
+    }
+  }
+
+  return currentElements
+}
+
+/**
+ * Gaussian elimination with partial pivoting for solving Ax=b.
+ * Modifies the augmented matrix in-place.
+ */
+function gaussianElimination(matrix: number[][]): void {
+  const m = matrix.length
+  if (m === 0) return
+  const n = matrix[0].length - 1
+
+  for (let col = 0; col < Math.min(m, n); col++) {
+    // Find pivot
+    let pivotRow = col
+    for (let row = col + 1; row < m; row++) {
+      if (Math.abs(matrix[row][col]) > Math.abs(matrix[pivotRow][col])) {
+        pivotRow = row
+      }
+    }
+
+    // Swap rows
+    if (pivotRow !== col) {
+      [matrix[col], matrix[pivotRow]] = [matrix[pivotRow], matrix[col]]
+    }
+
+    if (Math.abs(matrix[col][col]) < 1e-12) continue
+
+    // Eliminate below
+    for (let row = col + 1; row < m; row++) {
+      const factor = matrix[row][col] / matrix[col][col]
+      for (let j = col; j <= n; j++) {
+        matrix[row][j] -= factor * matrix[col][j]
+      }
+    }
+  }
+}

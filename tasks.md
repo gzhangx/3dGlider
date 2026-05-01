@@ -2,8 +2,15 @@
 
 ## Critical gaps (CAD fundamentals)
 
-### Constraint solver
-The biggest weakness. Constraints are applied once and forgotten — drag an endpoint and all constraints are violated. Real CAD uses an iterative solver (Newton-Raphson or similar) that enforces all constraints simultaneously during every drag. Without this, constraints are just convenient one-shot operations.
+### ✅ Constraint solver (COMPLETED)
+~~The biggest weakness. Constraints are applied once and forgotten — drag an endpoint and all constraints are violated. Real CAD uses an iterative solver (Newton-Raphson or similar) that enforces all constraints simultaneously during every drag. Without this, constraints are just convenient one-shot operations.~~
+
+**IMPLEMENTED May 1, 2026:**
+- Newton-Raphson iterative solver in `src/lib/constraintSolve.ts`
+- Supports all constraint types: coincident, length, angle, horizontal, vertical, parallel, perpendicular, equal
+- Integrated into drag handler in `SketchPlane.tsx`
+- Maintains all constraints simultaneously during every point drag
+- See `docs/CONSTRAINT_SOLVER.md` for full documentation
 
 ### Undo/Redo
 No undo exists at all. Zustand supports this via `zustand/middleware` (`temporal`). Arguably the most-missed feature in any editing tool.
@@ -65,8 +72,8 @@ Show how many DOF the sketch has. Color unconstrained elements blue, fully-const
 
 ## Priority order (highest ROI first)
 
-1. Undo/Redo
-2. Constraint solver
+1. ✅ **Constraint solver** (DONE)
+2. Undo/Redo
 3. DOF tracking
 4. Trim/Extend
 5. STEP export

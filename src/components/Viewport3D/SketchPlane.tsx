@@ -24,6 +24,7 @@ import {
 } from '../../lib/sketchGeometry'
 import { planeOriginFromPose } from '../../lib/planePose'
 import { distToSeg, distToCircle, distToArc, computeCut, computeCircleCut, computeArcCut, CutResult, CircleCutResult, ArcCutResult } from '../../lib/cutTool'
+import { solveConstraints } from '../../lib/constraintSolve'
 
 // ─── dot marker ──────────────────────────────────────────────────────────────
 
@@ -261,17 +262,21 @@ export function SketchPlane() {
       }
       setDragSnapTarget(snap)
       const pt = snap ? snap.pt : doSnap(raw)
-      updateSketchElement(dragTarget.elementId, { [key]: pt } as Parameters<typeof updateSketchElement>[1])
-      // Propagate to already-coincident partners
-      if (key === 'start' || key === 'end') {
-        for (const c of sketchConstraints) {
-          if (c.type !== 'coincident') continue
-          if (c.p1.elementId === dragTarget.elementId && c.p1.which === key) {
-            updateSketchElement(c.p2.elementId, { [c.p2.which]: pt } as Parameters<typeof updateSketchElement>[1])
-          } else if (c.p2.elementId === dragTarget.elementId && c.p2.which === key) {
-            updateSketchElement(c.p1.elementId, { [c.p1.which]: pt } as Parameters<typeof updateSketchElement>[1])
-          }
-        }
+
+      // Update the dragged point position
+      let updated = sketchElements.map((el) =>
+        el.id === dragTarget.elementId
+          ? { ...el, [key]: pt } as SketchElement
+          : el
+      )
+
+      // Solve constraints to maintain all constraints simultaneously
+      const fixedPoints = new Set<string>([`${dragTarget.elementId}:${dragTarget.pointType}`])
+      updated = solveConstraints(updated, sketchConstraints, fixedPoints)
+
+      // Apply updates to store - update all elements that were in the solved result
+      for (const newEl of updated) {
+        updateSketchElement(newEl.id, newEl as Parameters<typeof updateSketchElement>[1])
       }
       return
     }
