@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useModelStore, Sketch, PlaneId, ExtrudeFeature, RevolveFeature, RevolveAxis, LoftFeature, SweepFeature, ShellFeature } from '../../store/modelStore'
+import { useModelStore, Sketch, PlaneId, ExtrudeFeature, RevolveFeature, RevolveAxis } from '../../store/modelStore'
 import { planeIdFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { sketchElementsToShape } from '../../lib/sketchToShape'
 import { SCENE_TO_MM } from '../../lib/units'
