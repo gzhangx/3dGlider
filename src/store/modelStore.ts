@@ -92,11 +92,40 @@ export interface RevolveFeature {
   opacity?: number
 }
 
+export interface LoftFeature {
+  id: string
+  sketchId1: string
+  sketchId2: string
+  operation: 'add' | 'cut'
+  color?: string
+  opacity?: number
+}
+
+export interface SweepFeature {
+  id: string
+  profileSketchId: string
+  pathSketchId: string
+  operation: 'add' | 'cut'
+  color?: string
+  opacity?: number
+}
+
+export interface ShellFeature {
+  id: string
+  sketchId: string
+  thickness: number
+  color?: string
+  opacity?: number
+}
+
 export interface ModelData {
   version: number
   sketches: Sketch[]
   extrudes: ExtrudeFeature[]
   revolves: RevolveFeature[]
+  lofts?: LoftFeature[]
+  sweeps?: SweepFeature[]
+  shells?: ShellFeature[]
   parameters?: Parameter[]
 }
 
@@ -116,7 +145,7 @@ function isSketchElement(value: unknown): value is SketchElement {
   return el.type === 'line' || el.type === 'rect' || el.type === 'circle' || el.type === 'arc'
 }
 
-function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: ExtrudeFeature[]; revolves: RevolveFeature[]; parameters: Parameter[] } | null {
+function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: ExtrudeFeature[]; revolves: RevolveFeature[]; lofts: LoftFeature[]; sweeps: SweepFeature[]; shells: ShellFeature[]; parameters: Parameter[] } | null {
   if (!value || typeof value !== 'object') return null
   const raw = value as Partial<ModelData>
   if (!Array.isArray(raw.sketches) || !Array.isArray(raw.extrudes)) return null
@@ -194,6 +223,72 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
         })
     : []
 
+  const lofts: LoftFeature[] = Array.isArray(raw.lofts)
+    ? raw.lofts
+        .filter((l): l is LoftFeature => !!l
+          && typeof l.id === 'string'
+          && typeof l.sketchId1 === 'string'
+          && typeof l.sketchId2 === 'string'
+          && (l.operation === 'add' || l.operation === 'cut')
+          && validSketchIds.has(l.sketchId1)
+          && validSketchIds.has(l.sketchId2)
+          && l.sketchId1 !== l.sketchId2)
+        .map((l) => {
+          const rawL = l as LoftFeature & { color?: unknown; opacity?: unknown }
+          return {
+            id: l.id,
+            sketchId1: l.sketchId1,
+            sketchId2: l.sketchId2,
+            operation: l.operation,
+            ...(typeof rawL.color === 'string' ? { color: rawL.color } : {}),
+            ...(typeof rawL.opacity === 'number' && Number.isFinite(rawL.opacity) ? { opacity: rawL.opacity } : {}),
+          }
+        })
+    : []
+
+  const sweeps: SweepFeature[] = Array.isArray(raw.sweeps)
+    ? raw.sweeps
+        .filter((sw): sw is SweepFeature => !!sw
+          && typeof sw.id === 'string'
+          && typeof sw.profileSketchId === 'string'
+          && typeof sw.pathSketchId === 'string'
+          && (sw.operation === 'add' || sw.operation === 'cut')
+          && validSketchIds.has(sw.profileSketchId)
+          && validSketchIds.has(sw.pathSketchId)
+          && sw.profileSketchId !== sw.pathSketchId)
+        .map((sw) => {
+          const rawSw = sw as SweepFeature & { color?: unknown; opacity?: unknown }
+          return {
+            id: sw.id,
+            profileSketchId: sw.profileSketchId,
+            pathSketchId: sw.pathSketchId,
+            operation: sw.operation,
+            ...(typeof rawSw.color === 'string' ? { color: rawSw.color } : {}),
+            ...(typeof rawSw.opacity === 'number' && Number.isFinite(rawSw.opacity) ? { opacity: rawSw.opacity } : {}),
+          }
+        })
+    : []
+
+  const shells: ShellFeature[] = Array.isArray(raw.shells)
+    ? raw.shells
+        .filter((sh): sh is ShellFeature => !!sh
+          && typeof sh.id === 'string'
+          && typeof sh.sketchId === 'string'
+          && typeof sh.thickness === 'number'
+          && Number.isFinite(sh.thickness)
+          && validSketchIds.has(sh.sketchId))
+        .map((sh) => {
+          const rawSh = sh as ShellFeature & { color?: unknown; opacity?: unknown }
+          return {
+            id: sh.id,
+            sketchId: sh.sketchId,
+            thickness: sh.thickness,
+            ...(typeof rawSh.color === 'string' ? { color: rawSh.color } : {}),
+            ...(typeof rawSh.opacity === 'number' && Number.isFinite(rawSh.opacity) ? { opacity: rawSh.opacity } : {}),
+          }
+        })
+    : []
+
   const parameters: Parameter[] = Array.isArray(raw.parameters)
     ? (raw.parameters as unknown[]).filter((p): p is Parameter =>
         !!p && typeof p === 'object'
@@ -203,7 +298,7 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
         && Number.isFinite((p as Parameter).value))
     : []
 
-  return { sketches, extrudes, revolves, parameters }
+  return { sketches, extrudes, revolves, lofts, sweeps, shells, parameters }
 }
 
 interface ModelState {
@@ -220,6 +315,9 @@ interface ModelState {
   sketches: Sketch[]
   extrudes: ExtrudeFeature[]
   revolves: RevolveFeature[]
+  lofts: LoftFeature[]
+  sweeps: SweepFeature[]
+  shells: ShellFeature[]
   parameters: Parameter[]
   selectedElementId: string | null
   selectedElementId2: string | null       // second selection for angle constraint
@@ -261,6 +359,12 @@ interface ModelState {
   updateRevolve: (id: string, axisType: RevolveAxis, angle: number, axisElementId?: string) => void
   deleteRevolve: (id: string) => void
   setRevolveAppearance: (id: string, color: string, opacity: number) => void
+  addLoft: (sketchId1: string, sketchId2: string, operation?: 'add' | 'cut') => void
+  deleteLoft: (id: string) => void
+  addSweep: (profileSketchId: string, pathSketchId: string, operation?: 'add' | 'cut') => void
+  deleteSweep: (id: string) => void
+  addShell: (sketchId: string, thickness: number) => void
+  deleteShell: (id: string) => void
   addParameter: (name: string, value: number) => void
   updateParameter: (id: string, name: string, value: number) => void
   deleteParameter: (id: string) => void
@@ -286,6 +390,9 @@ export const useModelStore = create<ModelState>((set) => ({
   sketches: [],
   extrudes: [],
   revolves: [],
+  lofts: [],
+  sweeps: [],
+  shells: [],
   parameters: [],
   selectedElementId: null,
   selectedElementId2: null,
@@ -397,6 +504,30 @@ export const useModelStore = create<ModelState>((set) => ({
   setRevolveAppearance: (id, color, opacity) =>
     set((s) => ({ revolves: s.revolves.map((r) => r.id === id ? { ...r, color, opacity } : r) })),
 
+  addLoft: (sketchId1, sketchId2, operation = 'add') =>
+    set((s) => ({
+      lofts: [...s.lofts, { id: crypto.randomUUID(), sketchId1, sketchId2, operation }],
+    })),
+
+  deleteLoft: (id) =>
+    set((s) => ({ lofts: s.lofts.filter((l) => l.id !== id) })),
+
+  addSweep: (profileSketchId, pathSketchId, operation = 'add') =>
+    set((s) => ({
+      sweeps: [...s.sweeps, { id: crypto.randomUUID(), profileSketchId, pathSketchId, operation }],
+    })),
+
+  deleteSweep: (id) =>
+    set((s) => ({ sweeps: s.sweeps.filter((sw) => sw.id !== id) })),
+
+  addShell: (sketchId, thickness) =>
+    set((s) => ({
+      shells: [...s.shells, { id: crypto.randomUUID(), sketchId, thickness }],
+    })),
+
+  deleteShell: (id) =>
+    set((s) => ({ shells: s.shells.filter((sh) => sh.id !== id) })),
+
   addParameter: (name, value) =>
     set((s) => ({ parameters: [...s.parameters, { id: crypto.randomUUID(), name, value }] })),
 
@@ -502,6 +633,9 @@ export const useModelStore = create<ModelState>((set) => ({
       sketches: parsed.sketches,
       extrudes: parsed.extrudes,
       revolves: parsed.revolves,
+      lofts: parsed.lofts,
+      sweeps: parsed.sweeps,
+      shells: parsed.shells,
       parameters: parsed.parameters,
     })
     return true

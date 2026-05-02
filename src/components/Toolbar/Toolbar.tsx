@@ -6,7 +6,7 @@ import { ParametersDialog } from '../ParametersDialog/ParametersDialog'
 import styles from './Toolbar.module.css'
 
 export function Toolbar() {
-  const { mode, activePlane, extrudes, revolves, sketches, parameters, exitSketch, loadModel, resetSketchView, hideOtherSketches, setHideOtherSketches } = useModelStore()
+  const { mode, activePlane, extrudes, revolves, lofts, sweeps, shells, sketches, parameters, exitSketch, loadModel, resetSketchView, hideOtherSketches, setHideOtherSketches } = useModelStore()
   const activePlaneLabel = activePlane ? planeIdFromPose(activePlane) : null
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showParams, setShowParams] = useState(false)
@@ -17,6 +17,9 @@ export function Toolbar() {
       sketches,
       extrudes,
       revolves,
+      lofts,
+      sweeps,
+      shells,
       parameters,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })

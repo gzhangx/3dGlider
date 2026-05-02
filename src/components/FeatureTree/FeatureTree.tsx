@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useModelStore, Sketch, PlaneId, ExtrudeFeature, RevolveFeature, RevolveAxis } from '../../store/modelStore'
+import { useModelStore, Sketch, PlaneId, ExtrudeFeature, RevolveFeature, RevolveAxis, LoftFeature, SweepFeature, ShellFeature } from '../../store/modelStore'
 import { planeIdFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { sketchElementsToShape } from '../../lib/sketchToShape'
 import { SCENE_TO_MM } from '../../lib/units'
@@ -11,8 +11,11 @@ function extrudeDefaultOpacity(op: 'add' | 'cut') { return op === 'cut' ? 0.22 :
 
 function SketchRow({ sketch }: { sketch: Sketch }) {
   const {
-    extrudes, revolves, addExtrude, updateExtrude, deleteExtrude, editSketch,
+    sketches: allSketches,
+    extrudes, revolves, lofts, sweeps, shells,
+    addExtrude, updateExtrude, deleteExtrude, editSketch,
     addRevolve, updateRevolve, deleteRevolve, setRevolveAppearance,
+    addLoft, deleteLoft, addSweep, deleteSweep, addShell, deleteShell,
     setSketchAppearance, setExtrudeAppearance, setEditingExtrudeId, setPreviewExtrude,
     selectedElementId, selectElement, parameters,
   } = useModelStore()
@@ -45,6 +48,16 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   const [revolveLineId, setRevolveLineId] = useState<string | null>(null)
   const [pickingAxis, setPickingAxis] = useState(false)
 
+  // ── create-new-loft/sweep/shell state ───────────────────────────────────
+  const [showLoft, setShowLoft] = useState(false)
+  const [showSweep, setShowSweep] = useState(false)
+  const [showShell, setShowShell] = useState(false)
+  const [loftTargetSketchId, setLoftTargetSketchId] = useState<string>('')
+  const [loftOperation, setLoftOperation] = useState<'add' | 'cut'>('add')
+  const [sweepPathSketchId, setSweepPathSketchId] = useState<string>('')
+  const [sweepOperation, setSweepOperation] = useState<'add' | 'cut'>('add')
+  const [shellThickness, setShellThickness] = useState('2')
+
   // ── edit-existing-revolve state ──────────────────────────────────────────
   const [editingRevolveId, setEditingRevolveId] = useState<string | null>(null)
   const [eRevolveAxis, setERevolveAxis] = useState<RevolveAxis>('y')
@@ -59,6 +72,10 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
 
   const existingExtrudes = extrudes.filter((e) => e.sketchId === sketch.id)
   const existingRevolves = revolves.filter((r) => r.sketchId === sketch.id)
+  const existingLofts = lofts.filter((l) => l.sketchId1 === sketch.id)
+  const existingSweeps = sweeps.filter((sw) => sw.profileSketchId === sketch.id)
+  const existingShells = shells.filter((sh) => sh.sketchId === sketch.id)
+  const otherSketches = allSketches.filter((s) => s.id !== sketch.id)
   const canExtrude = sketchElementsToShape(sketch.elements).length > 0
   const planeLabel = planeIdFromPose(sketch.plane)
 
@@ -197,6 +214,25 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     setPickingAxis(false)
   }
 
+  const handleLoft = () => {
+    if (!loftTargetSketchId || loftTargetSketchId === sketch.id) return
+    addLoft(sketch.id, loftTargetSketchId, loftOperation)
+    setShowLoft(false)
+  }
+
+  const handleSweep = () => {
+    if (!sweepPathSketchId || sweepPathSketchId === sketch.id) return
+    addSweep(sketch.id, sweepPathSketchId, sweepOperation)
+    setShowSweep(false)
+  }
+
+  const handleShell = () => {
+    const t = parseFloat(shellThickness)
+    if (!Number.isFinite(t) || t <= 0) return
+    addShell(sketch.id, t / SCENE_TO_MM)
+    setShowShell(false)
+  }
+
   const startEditRevolve = (rev: RevolveFeature) => {
     setEditingRevolveId(rev.id)
     setERevolveAxis(rev.axisType)
@@ -220,6 +256,12 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   const axisLabel = (axisType: RevolveAxis, axisElementId?: string) =>
     axisType === 'element' ? `line ${axisElementId?.slice(0, 6)}…` : axisType.toUpperCase()
 
+  const sketchLabelById = (id: string) => {
+    const idx = allSketches.findIndex((s) => s.id === id)
+    if (idx < 0) return 'Sketch ?'
+    return `Sketch ${idx + 1}`
+  }
+
   const sketchColor = sketch.color ?? '#ffdd44'
   const sketchOpacity = sketch.opacity ?? 1
 
@@ -239,6 +281,27 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
           onClick={() => { setShowRevolve((v) => !v); setShowExtrude(false) }}
         >
           ↻
+        </button>
+        <button
+          className={`${styles.revolveSketchBtn} ${showLoft ? styles.revolveSketchActive : ''}`}
+          title="Add loft"
+          onClick={() => { setShowLoft((v) => !v); setShowSweep(false); setShowShell(false) }}
+        >
+          ⇅
+        </button>
+        <button
+          className={`${styles.revolveSketchBtn} ${showSweep ? styles.revolveSketchActive : ''}`}
+          title="Add sweep"
+          onClick={() => { setShowSweep((v) => !v); setShowLoft(false); setShowShell(false) }}
+        >
+          ↝
+        </button>
+        <button
+          className={`${styles.revolveSketchBtn} ${showShell ? styles.revolveSketchActive : ''}`}
+          title="Add shell"
+          onClick={() => { setShowShell((v) => !v); setShowLoft(false); setShowSweep(false) }}
+        >
+          ◍
         </button>
         <button
           className={`${styles.colorSwatch} ${showSketchAppearance ? styles.colorSwatchActive : ''}`}
@@ -503,6 +566,69 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
         )
       })}
 
+      {/* ── Loft rows ── */}
+      {existingLofts.map((loft) => (
+        <div key={loft.id} className={styles.sketchGroup}>
+          <div className={styles.revolveRow}>
+            <button className={styles.revolveIconBtn} title="Loft feature">⇅</button>
+            <span className={styles.revolveLabel}>
+              Loft {sketchLabelById(loft.sketchId1)} → {sketchLabelById(loft.sketchId2)}
+              <span className={styles.dirLabel}> [{loft.operation}]</span>
+              <span className={styles.dirLabel}> (pending mesh)</span>
+            </span>
+            <button
+              className={styles.deleteBtn}
+              title="Delete loft"
+              onClick={() => deleteLoft(loft.id)}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {/* ── Sweep rows ── */}
+      {existingSweeps.map((sw) => (
+        <div key={sw.id} className={styles.sketchGroup}>
+          <div className={styles.revolveRow}>
+            <button className={styles.revolveIconBtn} title="Sweep feature">↝</button>
+            <span className={styles.revolveLabel}>
+              Sweep profile {sketchLabelById(sw.profileSketchId)} along {sketchLabelById(sw.pathSketchId)}
+              <span className={styles.dirLabel}> [{sw.operation}]</span>
+              <span className={styles.dirLabel}> (pending mesh)</span>
+            </span>
+            <button
+              className={styles.deleteBtn}
+              title="Delete sweep"
+              onClick={() => deleteSweep(sw.id)}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {/* ── Shell rows ── */}
+      {existingShells.map((sh) => (
+        <div key={sh.id} className={styles.sketchGroup}>
+          <div className={styles.revolveRow}>
+            <button className={styles.revolveIconBtn} title="Shell feature">◍</button>
+            <span className={styles.revolveLabel}>
+              Shell {sketchLabelById(sh.sketchId)}
+              <span className={styles.dirLabel}> {+(sh.thickness * SCENE_TO_MM).toFixed(2)} mm</span>
+              <span className={styles.dirLabel}> (pending mesh)</span>
+            </span>
+            <button
+              className={styles.deleteBtn}
+              title="Delete shell"
+              onClick={() => deleteShell(sh.id)}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      ))}
+
       {/* ── Extrude create form ── */}
       {showExtrude && canExtrude && (
         <div className={styles.extrudeForm}>
@@ -614,6 +740,86 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
       {showRevolve && !canExtrude && (
         <div className={styles.noProfile}>
           No closed profile — draw a rect, circle, or closed lines
+        </div>
+      )}
+
+      {/* ── Loft create form ── */}
+      {showLoft && (
+        <div className={styles.revolveForm}>
+          <div className={styles.extrudeFormRow}>
+            <select
+              className={styles.opSelect}
+              value={loftOperation}
+              onChange={(e) => setLoftOperation(e.target.value as 'add' | 'cut')}
+            >
+              <option value="add">Add</option>
+              <option value="cut">Cut</option>
+            </select>
+            <select
+              className={styles.opSelect}
+              value={loftTargetSketchId}
+              onChange={(e) => setLoftTargetSketchId(e.target.value)}
+            >
+              <option value="">Target sketch…</option>
+              {otherSketches.map((s, idx) => (
+                <option key={s.id} value={s.id}>Sketch {idx + 1}</option>
+              ))}
+            </select>
+          </div>
+          <button className={styles.revolveBtn} onClick={handleLoft} disabled={!loftTargetSketchId || otherSketches.length === 0}>
+            Loft ▶
+          </button>
+        </div>
+      )}
+
+      {/* ── Sweep create form ── */}
+      {showSweep && (
+        <div className={styles.revolveForm}>
+          <div className={styles.extrudeFormRow}>
+            <select
+              className={styles.opSelect}
+              value={sweepOperation}
+              onChange={(e) => setSweepOperation(e.target.value as 'add' | 'cut')}
+            >
+              <option value="add">Add</option>
+              <option value="cut">Cut</option>
+            </select>
+            <select
+              className={styles.opSelect}
+              value={sweepPathSketchId}
+              onChange={(e) => setSweepPathSketchId(e.target.value)}
+            >
+              <option value="">Path sketch…</option>
+              {otherSketches.map((s, idx) => (
+                <option key={s.id} value={s.id}>Sketch {idx + 1}</option>
+              ))}
+            </select>
+          </div>
+          <button className={styles.revolveBtn} onClick={handleSweep} disabled={!sweepPathSketchId || otherSketches.length === 0}>
+            Sweep ▶
+          </button>
+        </div>
+      )}
+
+      {/* ── Shell create form ── */}
+      {showShell && (
+        <div className={styles.revolveForm}>
+          <div className={styles.extrudeFormRow}>
+            <span className={styles.axisLabel}>Thickness:</span>
+            <input
+              type="number"
+              className={styles.depthInput}
+              value={shellThickness}
+              min={0.1}
+              step={0.1}
+              onChange={(e) => setShellThickness(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleShell()}
+            />
+            <span className={styles.unit}>mm</span>
+          </div>
+          <button className={styles.revolveBtn} onClick={handleShell}>
+            Shell ▶
+          </button>
         </div>
       )}
     </div>
