@@ -34,7 +34,7 @@ export function SketchSidebar() {
     mode, activeTool, constructionMode, snapToGrid, snapToOtherPlanes, showSketchNavigator,
     setActiveTool, setConstructionMode, setSnapToGrid, setSnapToOtherPlanes, setShowSketchNavigator,
     sketchElements, sketchConstraints, parameters,
-    selectedElementId, selectedElementId2, selectElement2,
+    selectedElementIds, selectElement2,
     updateSketchElement, addSketchConstraint, deleteSketchConstraint,
     setHighlightElementIds,
   } = useModelStore()
@@ -45,18 +45,19 @@ export function SketchSidebar() {
 
   if (mode !== 'sketch') return null
 
-  const sel1 = selectedElementId  ? sketchElements.find((e) => e.id === selectedElementId)  : null
-  const sel2 = selectedElementId2 ? sketchElements.find((e) => e.id === selectedElementId2) : null
+  const sel1 = selectedElementIds[0] ? sketchElements.find((e) => e.id === selectedElementIds[0]) : null
+  const sel2 = selectedElementIds[1] ? sketchElements.find((e) => e.id === selectedElementIds[1]) : null
   const line1   = sel1?.type === 'line'   ? (sel1 as SketchLine)   : null
   const rect1   = sel1?.type === 'rect'   ? (sel1 as SketchRect)   : null
   const circle1 = sel1?.type === 'circle' ? (sel1 as SketchCircle) : null
   const line2   = sel2?.type === 'line'   ? (sel2 as SketchLine)   : null
 
-  const selectedConstraints = selectedElementId
+  const selectedConstraints = selectedElementIds[0]
     ? sketchConstraints.filter((c) => {
-        if ('elementId' in c)  return c.elementId  === selectedElementId
-        if ('elementId1' in c) return c.elementId1 === selectedElementId || c.elementId2 === selectedElementId
-        return c.p1.elementId === selectedElementId || c.p2.elementId === selectedElementId
+        const id = selectedElementIds[0]
+        if ('elementId' in c)  return c.elementId  === id
+        if ('elementId1' in c) return c.elementId1 === id || c.elementId2 === id
+        return c.p1.elementId === id || c.p2.elementId === id
       })
     : []
 
@@ -194,9 +195,9 @@ export function SketchSidebar() {
   if (activeTool !== 'select') {
     hintText = constructionMode ? 'Drawing construction geometry' : 'Click 1st point · Click 2nd point · Esc cancel'
   } else if (!sel1) {
-    hintText = 'Click element · Shift+click 2nd'
+    hintText = 'Click element · Shift+click or drag-box for multi'
   } else if (!sel2) {
-    hintText = 'Shift+click 2nd element for more constraints'
+    hintText = `${selectedElementIds.length} selected · Shift+click 2nd for constraints`
   }
 
   return (

@@ -321,6 +321,7 @@ interface ModelState {
   parameters: Parameter[]
   selectedElementId: string | null
   selectedElementId2: string | null       // second selection for angle constraint
+  selectedElementIds: string[]            // full multi-select set (slot1==[0], slot2==[1])
   isDraggingPoint: boolean
   highlightElementIds: string[]
   showSketchNavigator: boolean
@@ -337,6 +338,8 @@ interface ModelState {
   setSnapToOtherPlanes: (on: boolean) => void
   selectElement: (id: string | null) => void
   selectElement2: (id: string | null) => void
+  toggleElementSelection: (id: string) => void
+  selectElements: (ids: string[]) => void
   setIsDraggingPoint: (v: boolean) => void
   setHighlightElementIds: (ids: string[]) => void
   resetSketchView: () => void
@@ -396,6 +399,7 @@ export const useModelStore = create<ModelState>((set) => ({
   parameters: [],
   selectedElementId: null,
   selectedElementId2: null,
+  selectedElementIds: [],
   isDraggingPoint: false,
   highlightElementIds: [],
   showSketchNavigator: false,
@@ -406,12 +410,32 @@ export const useModelStore = create<ModelState>((set) => ({
   sketchViewResetCounter: 0,
 
   setHoveredPlane: (hoveredPlane) => set({ hoveredPlane }),
-  setActiveTool: (activeTool) => set({ activeTool, selectedElementId: null, selectedElementId2: null }),
+  setActiveTool: (activeTool) => set({ activeTool, selectedElementId: null, selectedElementId2: null, selectedElementIds: [] }),
   setConstructionMode: (constructionMode) => set({ constructionMode }),
   setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
   setSnapToOtherPlanes: (snapToOtherPlanes) => set({ snapToOtherPlanes }),
-  selectElement: (selectedElementId) => set({ selectedElementId, selectedElementId2: null, highlightElementIds: [] }),
-  selectElement2: (selectedElementId2) => set({ selectedElementId2 }),
+  selectElement: (id) => set({ selectedElementId: id, selectedElementId2: null, selectedElementIds: id ? [id] : [], highlightElementIds: [] }),
+  selectElement2: (id) => set((s) => ({
+    selectedElementId2: id,
+    selectedElementIds: id
+      ? s.selectedElementIds.includes(id) ? s.selectedElementIds : [...s.selectedElementIds.slice(0, 1), id]
+      : s.selectedElementIds.slice(0, 1),
+  })),
+  toggleElementSelection: (id) => set((s) => {
+    const already = s.selectedElementIds.includes(id)
+    const next = already ? s.selectedElementIds.filter((x) => x !== id) : [...s.selectedElementIds, id]
+    return {
+      selectedElementIds: next,
+      selectedElementId:  next[0] ?? null,
+      selectedElementId2: next[1] ?? null,
+    }
+  }),
+  selectElements: (ids) => set({
+    selectedElementIds: ids,
+    selectedElementId:  ids[0] ?? null,
+    selectedElementId2: ids[1] ?? null,
+    highlightElementIds: [],
+  }),
   setIsDraggingPoint: (isDraggingPoint) => set({ isDraggingPoint }),
   setHighlightElementIds: (highlightElementIds) => set({ highlightElementIds }),
   resetSketchView: () => set((s) => ({ sketchViewResetCounter: s.sketchViewResetCounter + 1 })),
@@ -429,6 +453,7 @@ export const useModelStore = create<ModelState>((set) => ({
     set((s) => ({
       selectedElementId: null,
       selectedElementId2: null,
+      selectedElementIds: [],
       sketchElements: s.sketchElements.filter((el) => el.id !== id),
       sketchConstraints: s.sketchConstraints.filter((c) => {
         if (c.type === 'length' || c.type === 'horizontal' || c.type === 'vertical')

@@ -60,11 +60,11 @@ function rectCorners(rect: SketchRect): SketchPoint[] {
 const noopRaycast: () => void = () => {}
 
 function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean }) {
-  const { activeTool, selectedElementId, highlightElementIds, selectElement, selectElement2 } = useModelStore()
+  const { activeTool, selectedElementIds, highlightElementIds, selectElement, toggleElementSelection } = useModelStore()
   const [hovered, setHovered] = useState(false)
 
   const isConstruction = !!el.construction
-  const isSelected = selectedElementId === el.id
+  const isSelected = selectedElementIds.includes(el.id)
   const isNavHighlighted = highlightElementIds.includes(el.id)
   const baseColor = isConstruction ? '#4488aa' : '#ffdd44'
   const color = highlighted ? '#ff8844' : isNavHighlighted ? '#ff44ff' : isSelected ? '#ff8844' : hovered ? '#ffe888' : baseColor
@@ -75,7 +75,7 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: Sketch
         onClick: (e: ThreeEvent<MouseEvent>) => {
           e.stopPropagation()
           if (e.shiftKey) {
-            selectElement2(el.id)
+            toggleElementSelection(el.id)
           } else {
             selectElement(el.id)
           }
@@ -146,7 +146,7 @@ export function SketchPlane() {
   const {
     activePlane, activeTool, constructionMode, snapToGrid, snapToOtherPlanes,
     sketchElements, sketchConstraints, sketches, editingSketchId,
-    selectedElementId, selectElement,
+    selectedElementIds, selectElement, selectElements,
     addSketchElement, updateSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
     addSketchConstraint, setIsDraggingPoint, setHighlightElementIds,
   } = useModelStore()
@@ -165,6 +165,9 @@ export function SketchPlane() {
   const [dragTarget, setDragTarget] = useState<{ elementId: string; pointType: 'start' | 'end' | 'center' } | null>(null)
   const [dragSnapTarget, setDragSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef | null } | null>(null)
   const [startSnapRef, setStartSnapRef] = useState<PointRef | null>(null)
+  // Drag-box selection state (sketch-local coordinates)
+  const [selectBoxStart, setSelectBoxStart] = useState<SketchPoint | null>(null)
+  const [selectBoxEnd, setSelectBoxEnd] = useState<SketchPoint | null>(null)
 
   useEffect(() => {
     setStartPt(null); setCursorPt(null); setCutPreview(null); setCutTarget(null); setSnapTarget(null); setStartSnapRef(null)
@@ -176,15 +179,16 @@ export function SketchPlane() {
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       if (e.key === 'Escape') {
         if (startPt) setStartPt(null)
-        else if (selectedElementId) selectElement(null)
+        else if (selectedElementIds.length > 0) selectElement(null)
         else exitSketch()
         return
       }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedElementId) {
-        deleteSketchElement(selectedElementId)
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedElementIds.length > 0) {
+        // Delete all selected elements one by one
+        for (const id of selectedElementIds) deleteSketchElement(id)
       }
     },
-    [startPt, selectedElementId, exitSketch, selectElement, deleteSketchElement],
+    [startPt, selectedElementIds, exitSketch, selectElement, deleteSketchElement],
   )
   useEffect(() => {
     window.addEventListener('keydown', handleKey)
@@ -231,6 +235,12 @@ export function SketchPlane() {
   const onMove = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     const raw = getRaw(e)
+
+    // ── select drag-box mode ──────────────────────────────────────────────────
+    if (selectBoxStart) {
+      setSelectBoxEnd(raw)
+      return
+    }
 
     // ── drag mode ────────────────────────────────────────────────────────────
     if (dragTarget) {
@@ -508,12 +518,57 @@ export function SketchPlane() {
         </mesh>
       )}
 
-      {/* Background click plane — select mode only, clears highlight/selection on empty-space click */}
+      {/* Background click plane — select mode only, clears highlight/selection on empty-space click or starts drag-box */}
       {!isDrawTool && !dragTarget && (
         <mesh
           position={[planeOrigin.x, planeOrigin.y, planeOrigin.z]}
           rotation={plane.rotation}
-          onClick={(e) => { e.stopPropagation(); selectElement(null); setHighlightElementIds([]) }}
+          onPointerDown={(e) => {
+            // Only left-button, not on an element
+            if (e.button !== 0) return
+            e.stopPropagation()
+            const raw = toSketch(e.point, plane)
+            setSelectBoxStart(raw)
+            setSelectBoxEnd(raw)
+          }}
+          onPointerMove={onMove}
+          onPointerUp={(e) => {
+            e.stopPropagation()
+            if (selectBoxStart && selectBoxEnd) {
+              const minX = Math.min(selectBoxStart.x, selectBoxEnd.x)
+              const maxX = Math.max(selectBoxStart.x, selectBoxEnd.x)
+              const minY = Math.min(selectBoxStart.y, selectBoxEnd.y)
+              const maxY = Math.max(selectBoxStart.y, selectBoxEnd.y)
+              const boxSize = Math.hypot(maxX - minX, maxY - minY)
+              if (boxSize > 0.15) {
+                // Select elements whose bounding box overlaps the drag rect
+                const hit = sketchElements.filter((el) => {
+                  if (el.type === 'line') {
+                    return Math.max(el.start.x, el.end.x) >= minX && Math.min(el.start.x, el.end.x) <= maxX &&
+                           Math.max(el.start.y, el.end.y) >= minY && Math.min(el.start.y, el.end.y) <= maxY
+                  }
+                  if (el.type === 'rect') {
+                    const ex = [el.start.x, el.end.x], ey = [el.start.y, el.end.y]
+                    return Math.max(...ex) >= minX && Math.min(...ex) <= maxX &&
+                           Math.max(...ey) >= minY && Math.min(...ey) <= maxY
+                  }
+                  if (el.type === 'circle' || el.type === 'arc') {
+                    return el.center.x + el.radius >= minX && el.center.x - el.radius <= maxX &&
+                           el.center.y + el.radius >= minY && el.center.y - el.radius <= maxY
+                  }
+                  return false
+                })
+                selectElements(hit.map((el) => el.id))
+              } else {
+                // Tiny box = plain click on empty space → deselect
+                selectElement(null)
+                setHighlightElementIds([])
+              }
+            }
+            setSelectBoxStart(null)
+            setSelectBoxEnd(null)
+          }}
+          onClick={(e) => { e.stopPropagation() }}
           renderOrder={-1}
         >
           <planeGeometry args={[200, 200]} />
@@ -593,6 +648,23 @@ export function SketchPlane() {
       )}
       {/* Anchor dot */}
       {isDrawTool && startPt && <Dot pos={worldPt(startPt, plane)} color="#ffdd44" size={0.08} />}
+
+      {/* Drag-box selection rectangle */}
+      {selectBoxStart && selectBoxEnd && (() => {
+        const s = selectBoxStart, e = selectBoxEnd
+        const corners: SketchPoint[] = [
+          { x: s.x, y: s.y }, { x: e.x, y: s.y },
+          { x: e.x, y: e.y }, { x: s.x, y: e.y }, { x: s.x, y: s.y },
+        ]
+        return (
+          <Line
+            points={corners.map((p) => worldPt(p, plane))}
+            color="#44aaff"
+            lineWidth={1.5}
+            raycast={noopRaycast}
+          />
+        )
+      })()}
 
       {/* Live preview */}
       {preview && activeTool === 'line' && (

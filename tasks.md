@@ -56,7 +56,7 @@ Show how many DOF the sketch has. Color unconstrained elements blue, fully-const
 
 ## File formats
 
-- **STEP export** — the universal CAD interchange format; STL loses topology
+- ✅ **STEP export** — implemented May 2, 2026; exports `3dglider_model.step` (ISO-10303-21 STEP ASCII format); toolbar button changed from "Export STL" to "Export STEP"
 - **DXF import/export** — for 2D sketch exchange with other tools
 - **Versioned save format** — migration logic when the JSON schema evolves
 
@@ -84,8 +84,8 @@ Show how many DOF the sketch has. Color unconstrained elements blue, fully-const
 ## Priority order (highest ROI first)
 
 1. ✅ **Constraint solver** (DONE)
-2. Undo/Redo
-3. DOF tracking
-4. Trim/Extend
-5. STEP export
+2. ✅ **STEP export** (DONE)
+3. Undo/Redo
+4. DOF tracking
+5. Trim/Extend
 6. Dimension display in viewport
