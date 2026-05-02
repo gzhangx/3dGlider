@@ -36,8 +36,6 @@ jobs:
 
       - name: Build
         run: npm run build
-        env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
