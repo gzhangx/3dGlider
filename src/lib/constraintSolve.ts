@@ -735,19 +735,44 @@ export function solveConstraints(
     // Build Jacobian matrix (equations × variables)
     const jacobian: number[][] = equations.map((eq) => eq.jacobian(currentElements, variables))
 
-    // Gaussian elimination to solve Jx = -r
-    const augmented = jacobian.map((row, i) => [...row, -residuals[i]])
+    // Solve using damped least-squares: (J^T J + λI) δ = -J^T r
+    // This is robust for underdetermined and overdetermined systems.
+    const n = variables.length
+    const m = jacobian.length
+    const lambda = 1e-6
+
+    const normal: number[][] = Array.from({ length: n }, () => new Array(n).fill(0))
+    const rhs: number[] = new Array(n).fill(0)
+
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        let sum = 0
+        for (let k = 0; k < m; k++) {
+          sum += jacobian[k][i] * jacobian[k][j]
+        }
+        normal[i][j] = sum
+      }
+      normal[i][i] += lambda
+
+      let sum = 0
+      for (let k = 0; k < m; k++) {
+        sum += jacobian[k][i] * residuals[k]
+      }
+      rhs[i] = -sum
+    }
+
+    const augmented = normal.map((row, i) => [...row, rhs[i]])
     gaussianElimination(augmented)
 
-    // Extract solution
-    const delta = new Array(variables.length).fill(0)
-    for (let i = Math.min(augmented.length, variables.length) - 1; i >= 0; i--) {
+    // Extract solution via back substitution
+    const delta = new Array(n).fill(0)
+    for (let i = n - 1; i >= 0; i--) {
       let sum = 0
-      for (let j = i + 1; j < variables.length; j++) {
+      for (let j = i + 1; j < n; j++) {
         sum += augmented[i][j] * delta[j]
       }
       if (Math.abs(augmented[i][i]) > 1e-12) {
-        delta[i] = (augmented[i][variables.length] - sum) / augmented[i][i]
+        delta[i] = (augmented[i][n] - sum) / augmented[i][i]
       }
     }
 
