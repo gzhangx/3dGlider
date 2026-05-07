@@ -82,6 +82,13 @@
   background: #274a35;
 }
 
+.exportActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+}
+
 .exportBtn {
   padding: 5px 14px;
   background: #1a3a1a;
@@ -91,7 +98,6 @@
   cursor: pointer;
   font-size: 13px;
   transition: background 0.15s;
-  margin-left: 8px;
 }
 .exportBtn:hover { background: #224422; }
 

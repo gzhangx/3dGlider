@@ -1,6 +1,7 @@
 import { ChangeEvent, useRef, useState } from 'react'
 import { useModelStore } from '../../store/modelStore'
 import { exportSTEP } from '../../lib/exportSTEP'
+import { exportSTL } from '../../lib/exportSTL'
 import { planeIdFromPose } from '../../lib/planePose'
 import { ParametersDialog } from '../ParametersDialog/ParametersDialog'
 import styles from './Toolbar.module.css'
@@ -111,13 +112,22 @@ export function Toolbar() {
         />
 
         {(extrudes.length > 0 || revolves.length > 0) && (
-          <button
-            className={styles.exportBtn}
-            onClick={() => exportSTEP(extrudes, revolves, sketches)}
-            title="Export all solids as STEP"
-          >
-            ⬇ Export STEP
-          </button>
+          <div className={styles.exportActions}>
+            <button
+              className={styles.exportBtn}
+              onClick={() => exportSTL(extrudes, revolves, sketches)}
+              title="Export all solids as STL"
+            >
+              ⬇ Export STL
+            </button>
+            <button
+              className={styles.exportBtn}
+              onClick={() => exportSTEP(extrudes, revolves, sketches)}
+              title="Export all solids as STEP"
+            >
+              ⬇ Export STEP
+            </button>
+          </div>
         )}
       </header>
 
