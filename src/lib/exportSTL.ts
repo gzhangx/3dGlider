@@ -1,12 +1,13 @@
 import { Group, Mesh } from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import { ExtrudeFeature, RevolveFeature, Sketch } from '../store/modelStore'
+import { ExtrudeFeature, LoftFeature, RevolveFeature, Sketch } from '../store/modelStore'
 import { buildSolidMeshes, disposeSolidMeshes } from './solidModel'
 import { buildRevolveGeometry } from './revolveModel'
+import { buildLoftGeometry } from './loftModel'
 import { SCENE_TO_MM } from './units'
 
-export function exportSTL(extrudes: ExtrudeFeature[], revolves: RevolveFeature[], sketches: Sketch[]) {
-  if (extrudes.length === 0 && revolves.length === 0) return
+export function exportSTL(extrudes: ExtrudeFeature[], revolves: RevolveFeature[], lofts: LoftFeature[], sketches: Sketch[]) {
+  if (extrudes.length === 0 && revolves.length === 0 && lofts.length === 0) return
 
   const group = new Group()
   const solids = buildSolidMeshes(extrudes, sketches)
@@ -17,6 +18,11 @@ export function exportSTL(extrudes: ExtrudeFeature[], revolves: RevolveFeature[]
 
   const revolveGeos = revolves.map((r) => buildRevolveGeometry(r, sketches)).filter(Boolean)
   for (const geo of revolveGeos) {
+    group.add(new Mesh(geo!))
+  }
+
+  const loftGeos = lofts.map((l) => buildLoftGeometry(l, sketches)).filter(Boolean)
+  for (const geo of loftGeos) {
     group.add(new Mesh(geo!))
   }
 
@@ -54,4 +60,5 @@ export function exportSTL(extrudes: ExtrudeFeature[], revolves: RevolveFeature[]
   // Dispose temporary geometry
   disposeSolidMeshes(solids)
   revolveGeos.forEach((g) => g?.dispose())
+  loftGeos.forEach((g) => g?.dispose())
 }

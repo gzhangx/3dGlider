@@ -574,7 +574,6 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
             <span className={styles.revolveLabel}>
               Loft {sketchLabelById(loft.sketchId1)} → {sketchLabelById(loft.sketchId2)}
               <span className={styles.dirLabel}> [{loft.operation}]</span>
-              <span className={styles.dirLabel}> (pending mesh)</span>
             </span>
             <button
               className={styles.deleteBtn}

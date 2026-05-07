@@ -111,18 +111,18 @@ export function Toolbar() {
           onChange={handleFileChange}
         />
 
-        {(extrudes.length > 0 || revolves.length > 0) && (
+        {(extrudes.length > 0 || revolves.length > 0 || lofts.length > 0) && (
           <div className={styles.exportActions}>
             <button
               className={styles.exportBtn}
-              onClick={() => exportSTL(extrudes, revolves, sketches)}
+              onClick={() => exportSTL(extrudes, revolves, lofts, sketches)}
               title="Export all solids as STL"
             >
               ⬇ Export STL
             </button>
             <button
               className={styles.exportBtn}
-              onClick={() => exportSTEP(extrudes, revolves, sketches)}
+              onClick={() => exportSTEP(extrudes, revolves, lofts, sketches)}
               title="Export all solids as STEP"
             >
               ⬇ Export STEP
