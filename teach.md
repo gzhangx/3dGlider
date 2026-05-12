@@ -1,3 +1,344 @@
+# 3D Glider Teaching Guide (Current Code)
+
+Last updated: 2026-05-10
+
+This guide explains how the current app works, from user interaction to geometry generation and export. It is aligned with the implementation in src/.
+
+## 1. Big Picture
+
+Pipeline:
+
+1. User interacts with React UI and 3D viewport.
+2. Zustand store holds all model and editing state.
+3. Sketch and feature components render based on store state.
+4. Geometry builders convert sketch data into Three.js BufferGeometry.
+5. Three.js scene renders solids and sketch overlays.
+6. Export pipeline serializes current solids to STL or STEP.
+
+Main stack:
+
+- React + TypeScript + Vite
+- Zustand for app/model state
+- Three.js + @react-three/fiber + @react-three/drei for 3D
+- three-csg-ts for boolean cut operations
+
+## 2. Core Data Model (Store)
+
+The canonical model lives in useModelStore.
+
+Primary types:
+
+- Plane and mode
+  - PlaneId: XY, XZ, YZ
+  - SketchPlanePose: { rotation: [rx, ry, rz], offset }
+  - AppMode: view | sketch
+- Sketch geometry
+  - SketchElement: line | rect | circle | arc
+  - Sketch: { id, plane, elements, constraints?, color?, opacity? }
+- Features
+  - ExtrudeFeature: add/cut, depth, optional custom direction, optional symmetric
+  - RevolveFeature: axis x/y/z/element, angle, optional axisElementId
+  - LoftFeature: sketchId1 -> sketchId2, operation add/cut
+  - SweepFeature: profile + path, operation add/cut (stored, mesh pending)
+  - ShellFeature: sketch + thickness (stored, mesh pending)
+- Parameters
+  - Named scalar parameters used by constraints and feature inputs
+
+Important store behavior:
+
+- startNewSketch enters sketch mode on a preset or custom plane pose.
+- editSketch loads an existing sketch into working sketch state.
+- exitSketch commits working sketch back into sketches.
+- loadModel sanitizes all incoming JSON before accepting it.
+- Parameter updates re-apply parametric constraints across active and committed sketches.
+
+## 3. UI Structure
+
+App layout:
+
+- Top: Toolbar
+- Left: SketchSidebar (only in sketch mode)
+- Optional left-middle: SketchNavigator
+- Center: Viewport3D
+- Right: FeatureTree
+
+### Toolbar
+
+Capabilities:
+
+- Mode status and sketch-plane label
+- Reset sketch view
+- Show/Hide other sketches and solids while sketching
+- Open Parameters dialog
+- Save JSON / Load JSON
+- Export STL / Export STEP
+
+Notes:
+
+- Export buttons appear when there is at least one extrude, revolve, or loft.
+- Sweep and shell are not currently part of export geometry generation.
+
+### SketchSidebar
+
+Tools:
+
+- Select, Line, Rectangle, Circle, Cut
+- Construction toggle
+- Snap Grid toggle
+- Snap Planes toggle
+- Navigator toggle
+
+Constraint authoring from selection:
+
+- Length (line, rect width/height, circle radius)
+- Angle
+- Coincident
+- Parallel
+- Perpendicular
+- Horizontal
+- Vertical
+- Equal
+- Tangent (line-circle)
+
+Input accepts either numeric values or a parameter name.
+
+### SketchNavigator
+
+Lists and manages:
+
+- Sketch elements
+- Sketch constraints
+- Click to highlight related geometry
+- Delete elements/constraints
+
+### FeatureTree
+
+Per-sketch feature actions:
+
+- Create/Edit Extrude (add/cut, depth, symmetric, custom direction)
+- Create/Edit Revolve (x/y/z or pick line axis, partial/full angle)
+- Create Loft
+- Create Sweep (marked pending mesh)
+- Create Shell (marked pending mesh)
+- Appearance controls for sketches/extrudes/revolves
+
+Also includes New Sketch flow:
+
+- Arm new sketch
+- Start on XY/XZ/YZ
+- Or click a plane/face in viewport
+
+## 4. Viewport and Scene
+
+Scene composition:
+
+- Lights + infinite grid
+- Axis helper
+- Plane gizmos in view mode
+- Committed sketches + solids (unless hidden in sketch mode)
+- Active SketchPlane in sketch mode
+- CameraControls with mode-aware mouse behavior
+
+Camera behavior:
+
+- On entering sketch mode, camera snaps perpendicular to the sketch plane.
+- Reset View repeats that alignment.
+- While drawing/dragging in sketch mode, left-button orbit is disabled to prioritize sketch interaction.
+
+## 5. Sketching Interaction Model
+
+SketchPlane handles:
+
+- Drawing line/rect/circle with live preview
+- Endpoint snapping on active plane
+- Optional snapping to endpoints on other planes
+- Select mode with click, shift-click, and drag-box multi-select
+- Point-handle dragging for endpoints/centers
+- Cut tool for line/rect-edge/circle/arc splitting
+- Auto-coincident creation when drawing from/to snapped endpoints
+
+Shortcuts:
+
+- S/L/R/C/X: select/line/rect/circle/cut (sketch mode)
+- Esc: cancel current draw, then clear selection, then exit sketch
+- Delete/Backspace: delete selected elements
+
+## 6. Constraint Solver (Current)
+
+File: src/lib/constraintSolve.ts
+
+Approach:
+
+- Iterative Newton-style solving
+- Builds residual equations and Jacobian rows for each constraint
+- Solves damped least-squares normal equations:
+  - (J^T J + lambda I) delta = -J^T r
+- Uses Gaussian elimination with partial pivoting on the augmented normal system
+- Applies damping factor 0.5 to updates for stability
+
+Constraint support:
+
+- coincident, length, angle, horizontal, vertical, parallel, perpendicular, equal, tangent
+
+Runtime integration:
+
+- During point drag in SketchPlane, dragged point is treated as fixed.
+- Solver updates remaining variables so constraints remain satisfied continuously.
+
+## 7. Geometry Pipeline
+
+### 7.1 Sketch -> Shape
+
+File: src/lib/sketchToShape.ts
+
+Converts sketch elements into one or more THREE.Shape profiles:
+
+- Rectangles and circles
+- Closed loops from lines
+- Mixed loops from lines + arcs
+- Full 2pi arcs treated as circles
+- Construction geometry excluded
+- Inner loops nested as holes in outer shapes
+
+### 7.2 Extrude / Cut
+
+File: src/lib/solidModel.ts
+
+- Builds ExtrudeGeometry from shapes
+- Applies plane pose rotation + offset translation
+- Supports:
+  - symmetric extrusion around sketch plane
+  - negative depth direction handling
+  - optional custom direction vector by rotating around plane origin
+- For cut features:
+  - subtracts cut volume from all existing solids using CSG.subtract
+
+Rendering:
+
+- ExtrudedSolids renders resulting add solids
+- Cut bodies are visualized only while editing the corresponding cut feature
+- Create-form preview geometry is rendered live
+
+### 7.3 Revolve
+
+File: src/lib/revolveModel.ts
+
+- Axis options: world x/y/z or selected sketch line
+- Uses profile points sampled from first shape
+- Converts to radius-height space around axis
+- Builds LatheGeometry with configurable angle (1..360 degrees)
+- Rotates and translates result into world space
+
+Rendering:
+
+- RevolvedSolids builds one geometry per revolve and renders with per-feature appearance
+
+### 7.4 Loft
+
+File: src/lib/loftModel.ts
+
+- Picks primary (largest-area) shape from each source sketch
+- Resamples both loops to same division count
+- Aligns winding to reduce twists
+- Bridges loops and generates end caps
+- Outputs BufferGeometry
+
+Rendering:
+
+- LoftedSolids renders each loft with add/cut tinting
+
+### 7.5 Sweep and Shell
+
+Current state:
+
+- Stored in model and visible in FeatureTree
+- Explicitly labeled pending mesh
+- Not yet rendered as solids and not exported
+
+## 8. Plane and Coordinate System
+
+Plane utility file: src/lib/planePose.ts
+
+Key functions:
+
+- planeNormalFromPose: normal from Euler rotation
+- planeOriginFromPose: normal * offset
+- planePoseFromHit: derive a plane pose from clicked face normal + point
+- planeIdFromPose: classify pose as XY/XZ/YZ or Custom
+
+This enables sketching on:
+
+- Preset orthogonal planes
+- Faces of extruded solids selected in view mode
+
+## 9. Units
+
+File: src/lib/units.ts
+
+- Scene unit convention: 1 scene unit = 1 cm
+- SCENE_TO_MM = 10
+- UI feature values and export scale use this conversion
+
+## 10. Save/Load and Export
+
+### JSON Save/Load
+
+Toolbar serializes/deserializes:
+
+- sketches, extrudes, revolves, lofts, sweeps, shells, parameters
+
+Load path uses strict sanitization (type checks + cross-reference checks).
+
+### STL Export
+
+File: src/lib/exportSTL.ts
+
+- Aggregates extrude + revolve + loft geometry
+- Scales scene to mm before export
+- Uses STLExporter binary path
+- Disposes temporary geometry
+
+### STEP Export
+
+File: src/lib/exportSTEP.ts
+
+- Aggregates extrude + revolve + loft geometry
+- Scales scene to mm
+- Emits a custom ASCII STEP-like structure from mesh triangles
+- Disposes temporary geometry
+
+Practical note:
+
+- STEP generation is mesh-derived and simplified, not full B-rep CAD topology.
+
+## 11. What Is Done vs Pending
+
+Implemented and wired:
+
+- Sketching tools (select/line/rect/circle/cut)
+- Real-time constraint solving during drag
+- Multi-feature stack: extrude, revolve, loft
+- Feature appearance controls
+- Parameters dialog and parameter-aware inputs
+- Save/Load JSON
+- STL/STEP export for extrude/revolve/loft
+- Sketch-on-face plane creation in viewport
+
+Pending / partial:
+
+- Sweep solid generation and rendering
+- Shell solid generation and rendering
+- Export inclusion for sweep/shell
+
+## 12. Recommended Reading Order (for onboarding)
+
+1. src/store/modelStore.ts (state model and actions)
+2. src/components/Viewport3D/SketchPlane.tsx (interaction + solver integration)
+3. src/lib/constraintSolve.ts (constraint math)
+4. src/lib/sketchToShape.ts (profile extraction)
+5. src/lib/solidModel.ts, src/lib/revolveModel.ts, src/lib/loftModel.ts (3D generation)
+6. src/components/FeatureTree/FeatureTree.tsx (feature UI orchestration)
+7. src/lib/exportSTL.ts and src/lib/exportSTEP.ts (output pipeline)
 # 3D Glider: Complete Architecture & Library Flow Guide
 
 ## Part 1: Project Architecture Overview

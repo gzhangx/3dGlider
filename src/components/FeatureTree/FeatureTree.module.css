@@ -32,6 +32,26 @@
   padding: 0 4px 8px;
 }
 
+.newSketchColumns {
+  display: flex;
+  flex-direction: column;
+}
+
+.planeModeSelect {
+  width: 100%;
+  padding: 3px 4px;
+  background: #0e0e24;
+  border: 1px solid #334;
+  border-radius: 3px;
+  color: #ccd;
+  font-size: 12px;
+}
+
+.planeModeSelect:focus {
+  outline: none;
+  border-color: #4488ff;
+}
+
 .planeSelect {
   width: 56px;
   padding: 3px 4px;
@@ -45,6 +65,28 @@
 .planeSelect:focus {
   outline: none;
   border-color: #4488ff;
+}
+
+.planeInput {
+  width: 58px;
+  padding: 3px 4px;
+  background: #0e0e24;
+  border: 1px solid #334;
+  border-radius: 3px;
+  color: #ccd;
+  font-size: 12px;
+}
+
+.planeInput:focus {
+  outline: none;
+  border-color: #4488ff;
+}
+
+.axisLabel {
+  width: 16px;
+  color: #7788a8;
+  font-size: 11px;
+  line-height: 22px;
 }
 
 .newSketchBtn {
@@ -63,7 +105,9 @@
 }
 
 .newSketchBtn:disabled,
-.planeSelect:disabled {
+.planeSelect:disabled,
+.planeModeSelect:disabled,
+.planeInput:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }

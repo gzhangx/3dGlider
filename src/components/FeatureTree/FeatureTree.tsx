@@ -827,7 +827,45 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
 
 function NewSketchRow() {
   const { mode, newSketchArmed, armNewSketch, cancelNewSketch, startNewSketch } = useModelStore()
+  const [planeMode, setPlaneMode] = useState<'preset' | 'custom'>('preset')
   const [plane, setPlane] = useState<PlaneId>('XY')
+  const [offsetMm, setOffsetMm] = useState('0')
+  const [rotXDeg, setRotXDeg] = useState('0')
+  const [rotYDeg, setRotYDeg] = useState('0')
+  const [rotZDeg, setRotZDeg] = useState('0')
+
+  const parseFinite = (v: string) => {
+    const n = parseFloat(v)
+    return Number.isFinite(n) ? n : null
+  }
+
+  const startSketch = () => {
+    const offsetVal = parseFinite(offsetMm)
+    if (offsetVal === null) return
+    const offset = offsetVal / SCENE_TO_MM
+
+    if (planeMode === 'preset') {
+      startNewSketch(plane, offset)
+      return
+    }
+
+    const rx = parseFinite(rotXDeg)
+    const ry = parseFinite(rotYDeg)
+    const rz = parseFinite(rotZDeg)
+    if (rx === null || ry === null || rz === null) return
+
+    startNewSketch({
+      rotation: [rx * Math.PI / 180, ry * Math.PI / 180, rz * Math.PI / 180],
+      offset,
+    })
+  }
+
+  const hasInvalidPreset = parseFinite(offsetMm) === null
+  const hasInvalidCustom = hasInvalidPreset
+    || parseFinite(rotXDeg) === null
+    || parseFinite(rotYDeg) === null
+    || parseFinite(rotZDeg) === null
+  const cannotStart = mode === 'sketch' || (planeMode === 'preset' ? hasInvalidPreset : hasInvalidCustom)
 
   if (!newSketchArmed) {
     return (
@@ -848,21 +886,95 @@ function NewSketchRow() {
     <>
       <div className={styles.newSketchRow}>
         <select
+          className={styles.planeModeSelect}
+          value={planeMode}
+          disabled={mode === 'sketch'}
+          onChange={(e) => setPlaneMode(e.target.value as 'preset' | 'custom')}
+          title="Plane input mode"
+        >
+          <option value="preset">Preset</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+
+      <div className={styles.newSketchRow}>
+        <select
           className={styles.planeSelect}
           value={plane}
-          disabled={mode === 'sketch'}
+          disabled={mode === 'sketch' || planeMode === 'custom'}
           onChange={(e) => setPlane(e.target.value as PlaneId)}
-          title="Sketch plane"
+          title="Preset sketch plane"
         >
           <option value="XY">XY</option>
           <option value="XZ">XZ</option>
           <option value="YZ">YZ</option>
         </select>
+        <input
+          type="number"
+          className={styles.planeInput}
+          value={offsetMm}
+          step="1"
+          disabled={mode === 'sketch'}
+          onChange={(e) => setOffsetMm(e.target.value)}
+          title="Plane offset in mm"
+          aria-label="Plane offset in mm"
+        />
+        <span className={styles.unit}>mm</span>
+      </div>
+
+      {planeMode === 'custom' && (
+        <div className={styles.newSketchColumns}>
+          <div className={styles.newSketchRow}>
+            <span className={styles.axisLabel}>Rx</span>
+            <input
+              type="number"
+              className={styles.planeInput}
+              value={rotXDeg}
+              step="5"
+              disabled={mode === 'sketch'}
+              onChange={(e) => setRotXDeg(e.target.value)}
+              title="Rotation around X in degrees"
+              aria-label="Rotation around X in degrees"
+            />
+            <span className={styles.unit}>deg</span>
+          </div>
+          <div className={styles.newSketchRow}>
+            <span className={styles.axisLabel}>Ry</span>
+            <input
+              type="number"
+              className={styles.planeInput}
+              value={rotYDeg}
+              step="5"
+              disabled={mode === 'sketch'}
+              onChange={(e) => setRotYDeg(e.target.value)}
+              title="Rotation around Y in degrees"
+              aria-label="Rotation around Y in degrees"
+            />
+            <span className={styles.unit}>deg</span>
+          </div>
+          <div className={styles.newSketchRow}>
+            <span className={styles.axisLabel}>Rz</span>
+            <input
+              type="number"
+              className={styles.planeInput}
+              value={rotZDeg}
+              step="5"
+              disabled={mode === 'sketch'}
+              onChange={(e) => setRotZDeg(e.target.value)}
+              title="Rotation around Z in degrees"
+              aria-label="Rotation around Z in degrees"
+            />
+            <span className={styles.unit}>deg</span>
+          </div>
+        </div>
+      )}
+
+      <div className={styles.newSketchRow}>
         <button
           className={styles.newSketchBtn}
-          onClick={() => startNewSketch(plane)}
-          disabled={mode === 'sketch'}
-          title="Start sketch on selected plane"
+          onClick={startSketch}
+          disabled={cannotStart}
+          title="Start sketch on selected plane settings"
         >
           Start
         </button>
