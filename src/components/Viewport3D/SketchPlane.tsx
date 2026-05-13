@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { DoubleSide } from 'three'
-import { Line } from '@react-three/drei'
+import { Line, Text } from '@react-three/drei'
 import { ThreeEvent } from '@react-three/fiber'
 import {
   useModelStore,
@@ -140,6 +140,7 @@ function elementEndpoints(el: SketchElement): { pt: SketchPoint; ref: PointRef }
 
 const SNAP_ENDPOINT_THRESHOLD = 0.3
 const SNAP_OBJECT_THRESHOLD = 0.5
+const SNAP_TANGENT_THRESHOLD = 1.0  // Higher threshold for tangent/circle perimeter snap
 
 // Helper: closest point on line segment to a point
 function closestPointOnSegment(p: SketchPoint, a: SketchPoint, b: SketchPoint): SketchPoint {
@@ -180,7 +181,7 @@ export function SketchPlane() {
 
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
   const [cursorPt, setCursorPt] = useState<SketchPoint | null>(null)
-  const [snapTarget, setSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef | null } | null>(null)
+  const [snapTarget, setSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef | null; constraintHint?: string; tangentCircleId?: string } | null>(null)
   const [cutPreview, setCutPreview] = useState<CutResult | CircleCutResult | ArcCutResult | null>(null)
   const [cutTarget, setCutTarget] = useState<
     | { kind: 'line'; line: SketchLine }
@@ -190,7 +191,7 @@ export function SketchPlane() {
     | null
   >(null)
   const [dragTarget, setDragTarget] = useState<{ elementId: string; pointType: 'start' | 'end' | 'center' } | null>(null)
-  const [dragSnapTarget, setDragSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef | null } | null>(null)
+  const [dragSnapTarget, setDragSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef | null; constraintHint?: string; tangentCircleId?: string } | null>(null)
   const [startSnapRef, setStartSnapRef] = useState<PointRef | null>(null)
   // Drag-box selection state (sketch-local coordinates)
   const [selectBoxStart, setSelectBoxStart] = useState<SketchPoint | null>(null)
@@ -231,8 +232,8 @@ export function SketchPlane() {
   const doSnap = (p: SketchPoint) => snapToGrid ? snapPt(p) : p
 
   // Find nearest snap target: endpoints, line segments, circle centers, circle perimeters
-  const findSnapTarget = (raw: SketchPoint): { pt: SketchPoint; ref: PointRef | null } | null => {
-    let best: { pt: SketchPoint; ref: PointRef | null; dist: number } | null = null
+  const findSnapTarget = (raw: SketchPoint): { pt: SketchPoint; ref: PointRef | null; constraintHint?: string; tangentCircleId?: string } | null => {
+    let best: { pt: SketchPoint; ref: PointRef | null; constraintHint?: string; tangentCircleId?: string; dist: number } | null = null
 
     // ── Snap to endpoints ──────────────────────────────────────────────────
     for (const el of sketchElements) {
@@ -252,7 +253,7 @@ export function SketchPlane() {
           const closest = closestPointOnSegment(raw, el.start, el.end)
           const d = Math.hypot(raw.x - closest.x, raw.y - closest.y)
           if (d < SNAP_OBJECT_THRESHOLD && (!best || d < best.dist)) {
-            best = { pt: closest, ref: null, dist: d }
+            best = { pt: closest, ref: null, constraintHint: '⊙ Coincident on line', dist: d }
           }
         }
 
@@ -260,16 +261,16 @@ export function SketchPlane() {
         if (el.type === 'circle') {
           const d = Math.hypot(raw.x - el.center.x, raw.y - el.center.y)
           if (d < SNAP_OBJECT_THRESHOLD && (!best || d < best.dist)) {
-            best = { pt: el.center, ref: null, dist: d }
+            best = { pt: el.center, ref: null, constraintHint: '⊙ Coincident at center', dist: d }
           }
         }
 
-        // Snap to circle perimeter (tangent)
+        // Snap to circle perimeter (tangent) with a wider threshold
         if (el.type === 'circle') {
           const closest = closestPointOnCircle(raw, el.center, el.radius)
           const d = distToCirclePerimeter(raw, el.center, el.radius)
-          if (d < SNAP_OBJECT_THRESHOLD && (!best || d < best.dist)) {
-            best = { pt: closest, ref: null, dist: d }
+          if (d < SNAP_TANGENT_THRESHOLD && (!best || d < best.dist)) {
+            best = { pt: closest, ref: null, constraintHint: '⌶ Tangent to circle', tangentCircleId: el.id, dist: d }
           }
         }
 
@@ -289,7 +290,7 @@ export function SketchPlane() {
             const closest = closestPointOnSegment(raw, a, b)
             const d = Math.hypot(raw.x - closest.x, raw.y - closest.y)
             if (d < SNAP_OBJECT_THRESHOLD && (!best || d < best.dist)) {
-              best = { pt: closest, ref: null, dist: d }
+              best = { pt: closest, ref: null, constraintHint: '⊙ Coincident on edge', dist: d }
             }
           }
         }
@@ -559,7 +560,13 @@ export function SketchPlane() {
         })
       }
       // Auto-coincident for end point if it snapped (same-plane only)
-      if (snapTarget?.ref) {
+      if (snapTarget?.tangentCircleId && activeTool === 'line') {
+        addSketchConstraint({
+          id: crypto.randomUUID(), type: 'tangent',
+          elementId1: id,
+          elementId2: snapTarget.tangentCircleId,
+        })
+      } else if (snapTarget?.ref) {
         addSketchConstraint({
           id: crypto.randomUUID(), type: 'coincident',
           p1: snapTarget.ref,
@@ -764,14 +771,46 @@ export function SketchPlane() {
       )}
 
       {/* Endpoint snap ring indicator — green ring when cursor near an existing endpoint */}
-      {isDrawTool && activeTool !== 'cut' && snapTarget && (
-        <Dot pos={worldPt(snapTarget.pt, plane)} color="#44ff88" size={0.14} ring />
-      )}
+      {isDrawTool && activeTool !== 'cut' && snapTarget && (() => {
+        const world = worldPt(snapTarget.pt, plane)
+        return (
+          <>
+            <Dot pos={world} color="#44ff88" size={0.14} ring />
+            {snapTarget.constraintHint && (
+              <Text
+                position={[world[0] + 0.2, world[1] + 0.2, world[2]]}
+                fontSize={0.12}
+                color="#88ff88"
+                anchorX="left"
+                anchorY="bottom"
+              >
+                {snapTarget.constraintHint}
+              </Text>
+            )}
+          </>
+        )
+      })()}
 
       {/* Snap ring during point drag */}
-      {dragTarget && dragSnapTarget && (
-        <Dot pos={worldPt(dragSnapTarget.pt, plane)} color="#44ff88" size={0.14} ring />
-      )}
+      {dragTarget && dragSnapTarget && (() => {
+        const world = worldPt(dragSnapTarget.pt, plane)
+        return (
+          <>
+            <Dot pos={world} color="#44ff88" size={0.14} ring />
+            {dragSnapTarget.constraintHint && (
+              <Text
+                position={[world[0] + 0.2, world[1] + 0.2, world[2]]}
+                fontSize={0.12}
+                color="#88ff88"
+                anchorX="left"
+                anchorY="bottom"
+              >
+                {dragSnapTarget.constraintHint}
+              </Text>
+            )}
+          </>
+        )
+      })()}
 
       {/* Cursor dot */}
       {isDrawTool && activeTool !== 'cut' && cursorPt && (
