@@ -1,7 +1,8 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useMemo } from 'react'
 import { Grid, CameraControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { useModelStore } from '../../store/modelStore'
+import { PlaneGeometry, EdgesGeometry, DoubleSide } from 'three'
+import { useModelStore, SketchPlanePose } from '../../store/modelStore'
 import { planeNormalFromPose, planeOriginFromPose } from '../../lib/planePose'
 import { AxesHelper } from './AxesHelper'
 import { PlaneGizmo } from './PlaneGizmo'
@@ -16,8 +17,30 @@ const ACTION_NONE = 0
 const ACTION_ROTATE = 1
 const ACTION_TRUCK = 2
 
+function PreviewPlane({ plane }: { plane: SketchPlanePose }) {
+  const position = planeOriginFromPose(plane)
+  const edges = useMemo(() => new EdgesGeometry(new PlaneGeometry(6, 6)), [])
+  return (
+    <group position={[position.x, position.y, position.z]} rotation={plane.rotation}>
+      <mesh>
+        <planeGeometry args={[6, 6]} />
+        <meshStandardMaterial
+          color="#ffff88"
+          transparent
+          opacity={0.16}
+          side={DoubleSide}
+          depthWrite={false}
+        />
+      </mesh>
+      <lineSegments geometry={edges}>
+        <lineBasicMaterial color="#ffff88" transparent opacity={0.6} />
+      </lineSegments>
+    </group>
+  )
+}
+
 export function Scene() {
-  const { activePlane, mode, activeTool, isDraggingPoint, sketchViewResetCounter, hideOtherSketches } = useModelStore()
+  const { activePlane, mode, activeTool, isDraggingPoint, sketchViewResetCounter, hideOtherSketches, previewPlane } = useModelStore()
   const { camera } = useThree()
   const controlsRef = useRef<CameraControls>(null)
 
@@ -87,6 +110,7 @@ export function Scene() {
           <PlaneGizmo id="XY" rotation={[0, 0, 0]}            color="#4488ff" label="XY" />
           <PlaneGizmo id="XZ" rotation={[-Math.PI / 2, 0, 0]} color="#44cc44" label="XZ" />
           <PlaneGizmo id="YZ" rotation={[0, Math.PI / 2, 0]}  color="#ff6644" label="YZ" />
+          {previewPlane && <PreviewPlane plane={previewPlane} />}
         </>
       )}
 

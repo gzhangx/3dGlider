@@ -329,10 +329,12 @@ interface ModelState {
   editingSketchId: string | null
   editingExtrudeId: string | null
   previewExtrude: ExtrudeFeature | null
+  previewPlane: SketchPlanePose | null
   sketchViewResetCounter: number
 
   setHoveredPlane: (plane: PlaneId | null) => void
   setActiveTool: (tool: SketchTool) => void
+  setPreviewPlane: (plane: SketchPlanePose | null) => void
   setConstructionMode: (on: boolean) => void
   setSnapToGrid: (on: boolean) => void
   setSnapToOtherPlanes: (on: boolean) => void
@@ -407,6 +409,7 @@ export const useModelStore = create<ModelState>((set) => ({
   editingSketchId: null,
   editingExtrudeId: null,
   previewExtrude: null,
+  previewPlane: null,
   sketchViewResetCounter: 0,
 
   setHoveredPlane: (hoveredPlane) => set({ hoveredPlane }),
@@ -505,6 +508,7 @@ export const useModelStore = create<ModelState>((set) => ({
   setEditingExtrudeId: (editingExtrudeId) => set({ editingExtrudeId }),
 
   setPreviewExtrude: (previewExtrude) => set({ previewExtrude }),
+  setPreviewPlane: (previewPlane) => set({ previewPlane }),
 
   addRevolve: (sketchId, axisType, angle, axisElementId) =>
     set((s) => ({
@@ -573,12 +577,13 @@ export const useModelStore = create<ModelState>((set) => ({
   armNewSketch: () =>
     set((s) => (s.mode === 'view' ? { newSketchArmed: true } : s)),
 
-  cancelNewSketch: () => set({ newSketchArmed: false }),
+  cancelNewSketch: () => set({ newSketchArmed: false, previewPlane: null }),
 
   startNewSketch: (plane, offset = 0) =>
     set({
       mode: 'sketch',
       activePlane: typeof plane === 'string' ? presetPlanePose(plane, offset) : plane,
+      previewPlane: null,
       newSketchArmed: false,
       activeTool: 'select',
       constructionMode: false,

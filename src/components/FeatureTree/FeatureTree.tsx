@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
-import { useModelStore, Sketch, PlaneId, ExtrudeFeature, RevolveFeature, RevolveAxis } from '../../store/modelStore'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { useModelStore, Sketch, PlaneId, SketchPlanePose, presetPlanePose, ExtrudeFeature, RevolveFeature, RevolveAxis } from '../../store/modelStore'
 import { planeIdFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { sketchElementsToShape } from '../../lib/sketchToShape'
 import { SCENE_TO_MM } from '../../lib/units'
@@ -826,7 +826,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
 }
 
 function NewSketchRow() {
-  const { mode, newSketchArmed, armNewSketch, cancelNewSketch, startNewSketch } = useModelStore()
+  const { mode, newSketchArmed, armNewSketch, cancelNewSketch, startNewSketch, setPreviewPlane } = useModelStore()
   const [planeMode, setPlaneMode] = useState<'preset' | 'custom'>('preset')
   const [plane, setPlane] = useState<PlaneId>('XY')
   const [offsetMm, setOffsetMm] = useState('0')
@@ -838,6 +838,34 @@ function NewSketchRow() {
     const n = parseFloat(v)
     return Number.isFinite(n) ? n : null
   }
+
+  const previewPlanePose = useMemo<SketchPlanePose | null>(() => {
+    const offsetVal = parseFinite(offsetMm)
+    if (offsetVal === null) return null
+    const offset = offsetVal / SCENE_TO_MM
+
+    if (planeMode === 'preset') {
+      return presetPlanePose(plane, offset)
+    }
+
+    const rx = parseFinite(rotXDeg)
+    const ry = parseFinite(rotYDeg)
+    const rz = parseFinite(rotZDeg)
+    if (rx === null || ry === null || rz === null) return null
+
+    return {
+      rotation: [rx * Math.PI / 180, ry * Math.PI / 180, rz * Math.PI / 180],
+      offset,
+    }
+  }, [planeMode, plane, offsetMm, rotXDeg, rotYDeg, rotZDeg])
+
+  useEffect(() => {
+    if (!newSketchArmed) {
+      setPreviewPlane(null)
+      return
+    }
+    setPreviewPlane(previewPlanePose)
+  }, [newSketchArmed, previewPlanePose, setPreviewPlane])
 
   const startSketch = () => {
     const offsetVal = parseFinite(offsetMm)
