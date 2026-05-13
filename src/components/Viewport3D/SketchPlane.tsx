@@ -139,12 +139,39 @@ function elementEndpoints(el: SketchElement): { pt: SketchPoint; ref: PointRef }
 }
 
 const SNAP_ENDPOINT_THRESHOLD = 0.3
+const SNAP_OBJECT_THRESHOLD = 0.5
+
+// Helper: closest point on line segment to a point
+function closestPointOnSegment(p: SketchPoint, a: SketchPoint, b: SketchPoint): SketchPoint {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const lenSq = dx * dx + dy * dy
+  if (lenSq === 0) return a
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq))
+  return { x: a.x + t * dx, y: a.y + t * dy }
+}
+
+// Helper: closest point on circle to a point
+function closestPointOnCircle(p: SketchPoint, center: SketchPoint, radius: number): SketchPoint {
+  const dx = p.x - center.x
+  const dy = p.y - center.y
+  const dist = Math.hypot(dx, dy)
+  if (dist === 0) return { x: center.x + radius, y: center.y }
+  return { x: center.x + (dx / dist) * radius, y: center.y + (dy / dist) * radius }
+}
+
+// Helper: distance from point to circle perimeter
+function distToCirclePerimeter(p: SketchPoint, center: SketchPoint, radius: number): number {
+  const dist = Math.hypot(p.x - center.x, p.y - center.y)
+  return Math.abs(dist - radius)
+}
+
 
 // ─── main component ───────────────────────────────────────────────────────────
 
 export function SketchPlane() {
   const {
-    activePlane, activeTool, constructionMode, snapToGrid, snapToOtherPlanes,
+    activePlane, activeTool, constructionMode, snapToGrid, snapToOtherPlanes, snapToObjects,
     sketchElements, sketchConstraints, sketches, editingSketchId,
     selectedElementIds, selectElement, selectElements,
     addSketchElement, updateSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
@@ -203,9 +230,11 @@ export function SketchPlane() {
   const getRaw = (e: ThreeEvent<PointerEvent | MouseEvent>) => toSketch(e.point, plane)
   const doSnap = (p: SketchPoint) => snapToGrid ? snapPt(p) : p
 
-  // Find nearest endpoint within snap threshold (current plane + optionally other planes)
+  // Find nearest snap target: endpoints, line segments, circle centers, circle perimeters
   const findSnapTarget = (raw: SketchPoint): { pt: SketchPoint; ref: PointRef | null } | null => {
     let best: { pt: SketchPoint; ref: PointRef | null; dist: number } | null = null
+
+    // ── Snap to endpoints ──────────────────────────────────────────────────
     for (const el of sketchElements) {
       for (const { pt, ref } of elementEndpoints(el)) {
         const d = Math.hypot(raw.x - pt.x, raw.y - pt.y)
@@ -214,6 +243,60 @@ export function SketchPlane() {
         }
       }
     }
+
+    // ── Snap to object geometry (if enabled) ──────────────────────────────
+    if (snapToObjects) {
+      for (const el of sketchElements) {
+        // Snap to line segment points
+        if (el.type === 'line') {
+          const closest = closestPointOnSegment(raw, el.start, el.end)
+          const d = Math.hypot(raw.x - closest.x, raw.y - closest.y)
+          if (d < SNAP_OBJECT_THRESHOLD && (!best || d < best.dist)) {
+            best = { pt: closest, ref: null, dist: d }
+          }
+        }
+
+        // Snap to circle center
+        if (el.type === 'circle') {
+          const d = Math.hypot(raw.x - el.center.x, raw.y - el.center.y)
+          if (d < SNAP_OBJECT_THRESHOLD && (!best || d < best.dist)) {
+            best = { pt: el.center, ref: null, dist: d }
+          }
+        }
+
+        // Snap to circle perimeter (tangent)
+        if (el.type === 'circle') {
+          const closest = closestPointOnCircle(raw, el.center, el.radius)
+          const d = distToCirclePerimeter(raw, el.center, el.radius)
+          if (d < SNAP_OBJECT_THRESHOLD && (!best || d < best.dist)) {
+            best = { pt: closest, ref: null, dist: d }
+          }
+        }
+
+        // Snap to rect corners and edges
+        if (el.type === 'rect') {
+          const corners = rectCorners(el)
+          for (const corner of corners) {
+            const d = Math.hypot(raw.x - corner.x, raw.y - corner.y)
+            if (d < SNAP_OBJECT_THRESHOLD && (!best || d < best.dist)) {
+              best = { pt: corner, ref: null, dist: d }
+            }
+          }
+          // Snap to rect edges
+          for (let i = 0; i < 4; i++) {
+            const a = corners[i]
+            const b = corners[(i + 1) % 4]
+            const closest = closestPointOnSegment(raw, a, b)
+            const d = Math.hypot(raw.x - closest.x, raw.y - closest.y)
+            if (d < SNAP_OBJECT_THRESHOLD && (!best || d < best.dist)) {
+              best = { pt: closest, ref: null, dist: d }
+            }
+          }
+        }
+      }
+    }
+
+    // ── Snap to other planes ──────────────────────────────────────────────────
     if (snapToOtherPlanes) {
       for (const sketch of sketches) {
         if (sketch.id === editingSketchId) continue
@@ -229,6 +312,7 @@ export function SketchPlane() {
         }
       }
     }
+
     return best ? { pt: best.pt, ref: best.ref } : null
   }
 
@@ -245,10 +329,12 @@ export function SketchPlane() {
     // ── drag mode ────────────────────────────────────────────────────────────
     if (dragTarget) {
       const key = dragTarget.pointType
-      // Check for snap to another element's endpoint (excluding dragged element)
+      // Check for snap to another element's endpoint or geometry (excluding dragged element)
       let snap: { pt: SketchPoint; ref: PointRef | null } | null = null
       if (key === 'start' || key === 'end') {
         let bestDist = SNAP_ENDPOINT_THRESHOLD
+        
+        // Snap to endpoints
         for (const el of sketchElements) {
           if (el.id === dragTarget.elementId) continue
           for (const { pt, ref } of elementEndpoints(el)) {
@@ -256,6 +342,51 @@ export function SketchPlane() {
             if (d < bestDist) { bestDist = d; snap = { pt, ref } }
           }
         }
+        
+        // Snap to object geometry
+        if (snapToObjects) {
+          for (const el of sketchElements) {
+            if (el.id === dragTarget.elementId) continue
+            
+            // Line segments
+            if (el.type === 'line') {
+              const closest = closestPointOnSegment(raw, el.start, el.end)
+              const d = Math.hypot(raw.x - closest.x, raw.y - closest.y)
+              if (d < bestDist) { bestDist = d; snap = { pt: closest, ref: null } }
+            }
+            
+            // Circle center
+            if (el.type === 'circle') {
+              const d = Math.hypot(raw.x - el.center.x, raw.y - el.center.y)
+              if (d < bestDist) { bestDist = d; snap = { pt: el.center, ref: null } }
+            }
+            
+            // Circle perimeter
+            if (el.type === 'circle') {
+              const closest = closestPointOnCircle(raw, el.center, el.radius)
+              const d = distToCirclePerimeter(raw, el.center, el.radius)
+              if (d < bestDist) { bestDist = d; snap = { pt: closest, ref: null } }
+            }
+            
+            // Rect corners and edges
+            if (el.type === 'rect') {
+              const corners = rectCorners(el)
+              for (const corner of corners) {
+                const d = Math.hypot(raw.x - corner.x, raw.y - corner.y)
+                if (d < bestDist) { bestDist = d; snap = { pt: corner, ref: null } }
+              }
+              for (let i = 0; i < 4; i++) {
+                const a = corners[i]
+                const b = corners[(i + 1) % 4]
+                const closest = closestPointOnSegment(raw, a, b)
+                const d = Math.hypot(raw.x - closest.x, raw.y - closest.y)
+                if (d < bestDist) { bestDist = d; snap = { pt: closest, ref: null } }
+              }
+            }
+          }
+        }
+        
+        // Snap to other planes
         if (snapToOtherPlanes) {
           for (const sketch of sketches) {
             if (sketch.id === editingSketchId) continue

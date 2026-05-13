@@ -31,8 +31,8 @@ const ENDPOINT_PAIRS: EndpointPair[] = [
 
 export function SketchSidebar() {
   const {
-    mode, activeTool, constructionMode, snapToGrid, snapToOtherPlanes, showSketchNavigator,
-    setActiveTool, setConstructionMode, setSnapToGrid, setSnapToOtherPlanes, setShowSketchNavigator,
+    mode, activeTool, constructionMode, snapToGrid, snapToOtherPlanes, snapToObjects, showSketchNavigator,
+    setActiveTool, setConstructionMode, setSnapToGrid, setSnapToOtherPlanes, setSnapToObjects, setShowSketchNavigator,
     sketchElements, sketchConstraints, parameters,
     selectedElementIds, selectElement2,
     updateSketchElement, addSketchConstraint, deleteSketchConstraint,
@@ -243,6 +243,15 @@ export function SketchSidebar() {
       >
         <span className={styles.icon}>⊕</span>
         <span className={styles.label}>Snap Planes</span>
+      </button>
+
+      <button
+        className={`${styles.btn} ${styles.snapBtn} ${snapToObjects ? styles.snapActive : ''}`}
+        onClick={() => setSnapToObjects(!snapToObjects)}
+        title="Auto-snap to nearby objects: endpoints, line segments, circle centers, tangents"
+      >
+        <span className={styles.icon}>⚪</span>
+        <span className={styles.label}>Snap Objects</span>
       </button>
 
       <button

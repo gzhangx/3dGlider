@@ -310,6 +310,7 @@ interface ModelState {
   constructionMode: boolean
   snapToGrid: boolean
   snapToOtherPlanes: boolean
+  snapToObjects: boolean
   sketchElements: SketchElement[]
   sketchConstraints: SketchConstraint[]   // constraints for current working sketch
   sketches: Sketch[]
@@ -338,6 +339,7 @@ interface ModelState {
   setConstructionMode: (on: boolean) => void
   setSnapToGrid: (on: boolean) => void
   setSnapToOtherPlanes: (on: boolean) => void
+  setSnapToObjects: (on: boolean) => void
   selectElement: (id: string | null) => void
   selectElement2: (id: string | null) => void
   toggleElementSelection: (id: string) => void
@@ -390,6 +392,7 @@ export const useModelStore = create<ModelState>((set) => ({
   constructionMode: false,
   snapToGrid: true,
   snapToOtherPlanes: false,
+  snapToObjects: true,
   sketchElements: [],
   sketchConstraints: [],
   sketches: [],
@@ -417,6 +420,7 @@ export const useModelStore = create<ModelState>((set) => ({
   setConstructionMode: (constructionMode) => set({ constructionMode }),
   setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
   setSnapToOtherPlanes: (snapToOtherPlanes) => set({ snapToOtherPlanes }),
+  setSnapToObjects: (snapToObjects) => set({ snapToObjects }),
   selectElement: (id) => set({ selectedElementId: id, selectedElementId2: null, selectedElementIds: id ? [id] : [], highlightElementIds: [] }),
   selectElement2: (id) => set((s) => ({
     selectedElementId2: id,
