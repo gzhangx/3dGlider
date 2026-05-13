@@ -6,6 +6,9 @@
 /** Millimetres per scene unit — used for STL export and UI display. */
 export const SCENE_TO_MM = 10   // 1 scene unit = 1 cm = 10 mm
 
+/** Size of viewport plane gizmos and previews (scene units). */
+export const PLANE_SIZE = 256
+
 // Aliases for other common targets (unused by default):
 // export const SCENE_TO_MM = 1    // if scene units were already mm
 // export const SCENE_TO_MM = 25.4 // if scene units were inches

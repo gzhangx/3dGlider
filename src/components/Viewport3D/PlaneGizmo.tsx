@@ -4,6 +4,7 @@ import { Mesh, DoubleSide, PlaneGeometry, EdgesGeometry } from 'three'
 import { Text } from '@react-three/drei'
 import { useModelStore, PlaneId } from '../../store/modelStore'
 import { planePoseFromHit } from '../../lib/planePose'
+import { PLANE_SIZE } from '../../lib/units'
 
 interface PlaneGizmoProps {
   id: PlaneId
@@ -12,7 +13,7 @@ interface PlaneGizmoProps {
   label: string
 }
 
-const SIZE = 4
+const SIZE = PLANE_SIZE
 
 export function PlaneGizmo({ id, rotation, color, label }: PlaneGizmoProps) {
   const ref = useRef<Mesh>(null)
@@ -49,7 +50,7 @@ export function PlaneGizmo({ id, rotation, color, label }: PlaneGizmoProps) {
       <lineSegments geometry={edges}>
         <lineBasicMaterial color={color} transparent opacity={isHovered ? 0.9 : 0.4} />
       </lineSegments>
-      <Text position={[SIZE / 2 + 0.2, SIZE / 2 + 0.2, 0]} fontSize={0.3} color={color}>
+      <Text position={[SIZE / 2 + 0.2, SIZE / 2 + 0.2, 0]} fontSize={0.3} anchorX="left" anchorY="middle" color={color}>
         {label}
       </Text>
     </group>

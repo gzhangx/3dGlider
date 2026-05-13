@@ -4,6 +4,7 @@ import { useThree } from '@react-three/fiber'
 import { PlaneGeometry, EdgesGeometry, DoubleSide } from 'three'
 import { useModelStore, SketchPlanePose } from '../../store/modelStore'
 import { planeNormalFromPose, planeOriginFromPose } from '../../lib/planePose'
+import { PLANE_SIZE } from '../../lib/units'
 import { AxesHelper } from './AxesHelper'
 import { PlaneGizmo } from './PlaneGizmo'
 import { SketchPlane } from './SketchPlane'
@@ -19,11 +20,11 @@ const ACTION_TRUCK = 2
 
 function PreviewPlane({ plane }: { plane: SketchPlanePose }) {
   const position = planeOriginFromPose(plane)
-  const edges = useMemo(() => new EdgesGeometry(new PlaneGeometry(6, 6)), [])
+  const edges = useMemo(() => new EdgesGeometry(new PlaneGeometry(PLANE_SIZE, PLANE_SIZE)), [])
   return (
     <group position={[position.x, position.y, position.z]} rotation={plane.rotation}>
       <mesh>
-        <planeGeometry args={[6, 6]} />
+        <planeGeometry args={[PLANE_SIZE, PLANE_SIZE]} />
         <meshStandardMaterial
           color="#ffff88"
           transparent
