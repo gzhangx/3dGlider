@@ -314,7 +314,8 @@ export function SketchPlane() {
       }
     }
 
-    return best ? { pt: best.pt, ref: best.ref } : null
+    //return best ? { pt: best.pt, ref: best.ref, constraintHint: best.constraintHint } : null
+    return best;
   }
 
   const onMove = (e: ThreeEvent<PointerEvent>) => {
