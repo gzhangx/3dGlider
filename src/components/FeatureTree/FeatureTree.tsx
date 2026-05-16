@@ -52,6 +52,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
   const [showLoft, setShowLoft] = useState(false)
   const [showSweep, setShowSweep] = useState(false)
   const [showShell, setShowShell] = useState(false)
+  const [showTools, setShowTools] = useState(false)
   const [loftTargetSketchId, setLoftTargetSketchId] = useState<string>('')
   const [loftOperation, setLoftOperation] = useState<'add' | 'cut'>('add')
   const [sweepPathSketchId, setSweepPathSketchId] = useState<string>('')
@@ -274,46 +275,30 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     <div className={styles.sketchGroup}>
       <div className={styles.sketchRow}>
         <button
-          className={`${styles.sketchIconBtn} ${showExtrude ? styles.sketchIconActive : ''}`}
-          title="Add extrude / pocket"
-          onClick={() => { setShowExtrude((v) => !v); setShowRevolve(false) }}
+          className={`${styles.revolveSketchBtn} ${showTools ? styles.revolveSketchActive : ''}`}
+          title={showTools ? 'Hide sketch tools' : 'Show sketch tools'}
+          onClick={() => {
+            if (showTools) {
+              setShowTools(false)
+              setShowExtrude(false)
+              setShowRevolve(false)
+              setShowLoft(false)
+              setShowSweep(false)
+              setShowShell(false)
+            } else {
+              setShowTools(true)
+            }
+          }}
         >
-          ✏
+          ☰
         </button>
         <button
-          className={`${styles.revolveSketchBtn} ${showRevolve ? styles.revolveSketchActive : ''}`}
-          title="Add revolve"
-          onClick={() => { setShowRevolve((v) => !v); setShowExtrude(false) }}
+          className={styles.editBtn}
+          title="Re-open sketch"
+          onClick={() => editSketch(sketch.id)}
         >
-          ↻
+          ✎
         </button>
-        <button
-          className={`${styles.revolveSketchBtn} ${showLoft ? styles.revolveSketchActive : ''}`}
-          title="Add loft"
-          onClick={() => { setShowLoft((v) => !v); setShowSweep(false); setShowShell(false) }}
-        >
-          ⇅
-        </button>
-        <button
-          className={`${styles.revolveSketchBtn} ${showSweep ? styles.revolveSketchActive : ''}`}
-          title="Add sweep"
-          onClick={() => { setShowSweep((v) => !v); setShowLoft(false); setShowShell(false) }}
-        >
-          ↝
-        </button>
-        <button
-          className={`${styles.revolveSketchBtn} ${showShell ? styles.revolveSketchActive : ''}`}
-          title="Add shell"
-          onClick={() => { setShowShell((v) => !v); setShowLoft(false); setShowSweep(false) }}
-        >
-          ◍
-        </button>
-        <button
-          className={`${styles.colorSwatch} ${showSketchAppearance ? styles.colorSwatchActive : ''}`}
-          style={{ background: sketchColor }}
-          title="Appearance"
-          onClick={() => setShowSketchAppearance((v) => !v)}
-        />
         <span className={styles.sketchLabel}>
           <input
             className={styles.sketchNameInput}
@@ -325,14 +310,53 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
           <span className={styles.sketchPlaneLabel}>({planeLabel})</span>
           <span className={styles.count}>{sketch.elements.length} el</span>
         </span>
-        <button
-          className={styles.editBtn}
-          title="Re-open sketch"
-          onClick={() => editSketch(sketch.id)}
-        >
-          ✎
-        </button>
       </div>
+
+      {showTools && (
+        <div className={styles.toolRow}>
+          <button
+            className={`${styles.revolveSketchBtn} ${showExtrude ? styles.revolveSketchActive : ''}`}
+            title="Add extrude"
+            onClick={() => { setShowExtrude((v) => !v); setShowRevolve(false); setShowLoft(false); setShowSweep(false); setShowShell(false) }}
+          >
+            ⬛
+          </button>
+          <button
+            className={`${styles.revolveSketchBtn} ${showRevolve ? styles.revolveSketchActive : ''}`}
+            title="Add revolve"
+            onClick={() => { setShowRevolve((v) => !v); setShowExtrude(false) }}
+          >
+            ↻
+          </button>
+          <button
+            className={`${styles.revolveSketchBtn} ${showLoft ? styles.revolveSketchActive : ''}`}
+            title="Add loft"
+            onClick={() => { setShowLoft((v) => !v); setShowSweep(false); setShowShell(false) }}
+          >
+            ⇅
+          </button>
+          <button
+            className={`${styles.revolveSketchBtn} ${showSweep ? styles.revolveSketchActive : ''}`}
+            title="Add sweep"
+            onClick={() => { setShowSweep((v) => !v); setShowLoft(false); setShowShell(false) }}
+          >
+            ↝
+          </button>
+          <button
+            className={`${styles.revolveSketchBtn} ${showShell ? styles.revolveSketchActive : ''}`}
+            title="Add shell"
+            onClick={() => { setShowShell((v) => !v); setShowLoft(false); setShowSweep(false) }}
+          >
+            ◍
+          </button>
+          <button
+            className={`${styles.colorSwatch} ${showSketchAppearance ? styles.colorSwatchActive : ''}`}
+            style={{ background: sketchColor }}
+            title="Appearance"
+            onClick={() => setShowSketchAppearance((v) => !v)}
+          />
+        </div>
+      )}
 
       {showSketchAppearance && (
         <div className={styles.appearanceForm}>
