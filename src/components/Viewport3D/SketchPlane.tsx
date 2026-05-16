@@ -187,7 +187,8 @@ function isLineTangentToCircle(lineStart: SketchPoint, lineEnd: SketchPoint, cen
 }
 
 // Helper: find the tangent point on a circle where a line from lineStart through a direction is tangent
-function getTangentPointOnCircle(lineStart: SketchPoint, lineEnd: SketchPoint, center: SketchPoint, radius: number): SketchPoint | null {
+// Returns the tangent point closest to the cursor position (raw)
+function getTangentPointOnCircle(lineStart: SketchPoint, lineEnd: SketchPoint, center: SketchPoint, radius: number, rawCursor: SketchPoint): SketchPoint | null {
   // Direction vector of the line
   const dx = lineEnd.x - lineStart.x
   const dy = lineEnd.y - lineStart.y
@@ -209,7 +210,6 @@ function getTangentPointOnCircle(lineStart: SketchPoint, lineEnd: SketchPoint, c
   
   if (distToLine > radius + 0.1) return null // not tangent
   
-  // The tangent point is at the perpendicular from center to line
   // Perpendicular direction (normalized)
   const perpDx = center.x - closestX
   const perpDy = center.y - closestY
@@ -217,11 +217,24 @@ function getTangentPointOnCircle(lineStart: SketchPoint, lineEnd: SketchPoint, c
   
   if (perpLen < 1e-9) return null
   
-  // Tangent point = closest point on line, projected to circle radius
-  return {
+  // There are two possible tangent points, perpendicular to the line on both sides
+  // Tangent point 1: in the direction of the perpendicular
+  const tangent1 = {
     x: center.x - (perpDx / perpLen) * radius,
     y: center.y - (perpDy / perpLen) * radius,
   }
+  
+  // Tangent point 2: in the opposite direction
+  const tangent2 = {
+    x: center.x + (perpDx / perpLen) * radius,
+    y: center.y + (perpDy / perpLen) * radius,
+  }
+  
+  // Return the tangent point closer to the cursor
+  const dist1 = Math.hypot(rawCursor.x - tangent1.x, rawCursor.y - tangent1.y)
+  const dist2 = Math.hypot(rawCursor.x - tangent2.x, rawCursor.y - tangent2.y)
+  
+  return dist1 <= dist2 ? tangent1 : tangent2
 }
 
 
@@ -330,7 +343,7 @@ export function SketchPlane() {
             // Check if line is tangent (only when drawing a line with a start point)
             if (lineStart && activeTool === 'line' && isLineTangentToCircle(lineStart, closest, el.center, el.radius)) {
               // Use actual tangent point when tangent
-              const tangentPt = getTangentPointOnCircle(lineStart, closest, el.center, el.radius)
+              const tangentPt = getTangentPointOnCircle(lineStart, closest, el.center, el.radius, raw)
               const snapPt = tangentPt || closest
               best = { 
                 pt: snapPt, 
