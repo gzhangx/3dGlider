@@ -167,6 +167,25 @@ function distToCirclePerimeter(p: SketchPoint, center: SketchPoint, radius: numb
   return Math.abs(dist - radius)
 }
 
+// Helper: distance from a point to a line
+function distancePointToLine(p: SketchPoint, lineStart: SketchPoint, lineEnd: SketchPoint): number {
+  const dx = lineEnd.x - lineStart.x
+  const dy = lineEnd.y - lineStart.y
+  const lenSq = dx * dx + dy * dy
+  if (lenSq === 0) return Math.hypot(p.x - lineStart.x, p.y - lineStart.y)
+  const t = ((p.x - lineStart.x) * dx + (p.y - lineStart.y) * dy) / lenSq
+  const clampedT = Math.max(0, Math.min(1, t))
+  const closestX = lineStart.x + clampedT * dx
+  const closestY = lineStart.y + clampedT * dy
+  return Math.hypot(p.x - closestX, p.y - closestY)
+}
+
+// Helper: check if a line segment is tangent to a circle
+function isLineTangentToCircle(lineStart: SketchPoint, lineEnd: SketchPoint, center: SketchPoint, radius: number, tolerance = 0.05): boolean {
+  const dist = distancePointToLine(center, lineStart, lineEnd)
+  return Math.abs(dist - radius) < tolerance
+}
+
 
 // ─── main component ───────────────────────────────────────────────────────────
 
@@ -181,7 +200,7 @@ export function SketchPlane() {
 
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
   const [cursorPt, setCursorPt] = useState<SketchPoint | null>(null)
-  const [snapTarget, setSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef | null; constraintHint?: string; tangentCircleId?: string } | null>(null)
+  const [snapTarget, setSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef | null; constraintHint?: string } | null>(null)
   const [cutPreview, setCutPreview] = useState<CutResult | CircleCutResult | ArcCutResult | null>(null)
   const [cutTarget, setCutTarget] = useState<
     | { kind: 'line'; line: SketchLine }
@@ -191,7 +210,7 @@ export function SketchPlane() {
     | null
   >(null)
   const [dragTarget, setDragTarget] = useState<{ elementId: string; pointType: 'start' | 'end' | 'center' } | null>(null)
-  const [dragSnapTarget, setDragSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef | null; constraintHint?: string; tangentCircleId?: string } | null>(null)
+  const [dragSnapTarget, setDragSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef | null; constraintHint?: string } | null>(null)
   const [startSnapRef, setStartSnapRef] = useState<PointRef | null>(null)
   // Drag-box selection state (sketch-local coordinates)
   const [selectBoxStart, setSelectBoxStart] = useState<SketchPoint | null>(null)
@@ -232,8 +251,8 @@ export function SketchPlane() {
   const doSnap = (p: SketchPoint) => snapToGrid ? snapPt(p) : p
 
   // Find nearest snap target: endpoints, line segments, circle centers, circle perimeters
-  const findSnapTarget = (raw: SketchPoint): { pt: SketchPoint; ref: PointRef | null; constraintHint?: string; tangentCircleId?: string } | null => {
-    let best: { pt: SketchPoint; ref: PointRef | null; constraintHint?: string; tangentCircleId?: string; dist: number } | null = null
+  const findSnapTarget = (raw: SketchPoint): { pt: SketchPoint; ref: PointRef | null; constraintHint?: string } | null => {
+    let best: { pt: SketchPoint; ref: PointRef | null; constraintHint?: string; dist: number } | null = null
 
     // ── Snap to endpoints ──────────────────────────────────────────────────
     for (const el of sketchElements) {
@@ -265,12 +284,12 @@ export function SketchPlane() {
           }
         }
 
-        // Snap to circle perimeter (tangent) with a wider threshold
+        // Snap to circle perimeter with a wider threshold
         if (el.type === 'circle') {
           const closest = closestPointOnCircle(raw, el.center, el.radius)
           const d = distToCirclePerimeter(raw, el.center, el.radius)
           if (d < SNAP_TANGENT_THRESHOLD && (!best || d < best.dist)) {
-            best = { pt: closest, ref: null, constraintHint: '⌶ Tangent to circle', tangentCircleId: el.id, dist: d }
+            best = { pt: closest, ref: null, constraintHint: '⊙ Coincident on circle', dist: d }
           }
         }
 
@@ -561,13 +580,7 @@ export function SketchPlane() {
         })
       }
       // Auto-coincident for end point if it snapped (same-plane only)
-      if (snapTarget?.tangentCircleId && activeTool === 'line') {
-        addSketchConstraint({
-          id: crypto.randomUUID(), type: 'tangent',
-          elementId1: id,
-          elementId2: snapTarget.tangentCircleId,
-        })
-      } else if (snapTarget?.ref) {
+      if (snapTarget?.ref) {
         addSketchConstraint({
           id: crypto.randomUUID(), type: 'coincident',
           p1: snapTarget.ref,
