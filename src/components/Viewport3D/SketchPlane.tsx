@@ -341,9 +341,9 @@ export function SketchPlane() {
           const d = distToCirclePerimeter(raw, el.center, el.radius)
           if (d < SNAP_TANGENT_THRESHOLD && (!best || d < best.dist)) {
             // Check if line is tangent (only when drawing a line with a start point)
-            if (lineStart && activeTool === 'line' && isLineTangentToCircle(lineStart, closest, el.center, el.radius)) {
+            if (lineStart && activeTool === 'line' && isLineTangentToCircle(lineStart, raw, el.center, el.radius)) {
               // Use actual tangent point when tangent
-              const tangentPt = getTangentPointOnCircle(lineStart, closest, el.center, el.radius, raw)
+              const tangentPt = getTangentPointOnCircle(lineStart, raw, el.center, el.radius, raw)
               const snapPt = tangentPt || closest
               best = { 
                 pt: snapPt, 
