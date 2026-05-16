@@ -14,6 +14,7 @@ function AxisLabel({ position, color, children }: { position: [number, number, n
     const distance = camera.position.distanceTo(worldPos)
     const scale = Math.max(0.32, distance * 0.03)
     ref.current.scale.setScalar(scale)
+    ref.current.lookAt(camera.position)
   })
 
   return (
@@ -23,7 +24,6 @@ function AxisLabel({ position, color, children }: { position: [number, number, n
         color={color}
         anchorX="center"
         anchorY="middle"
-        billboard={true}
       >
         {children}
       </Text>

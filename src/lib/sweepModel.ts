@@ -1,4 +1,4 @@
-import { BufferGeometry, CurvePath, Euler, ExtrudeGeometry, LineCurve3, Matrix4, Vector3 } from 'three'
+import { BufferGeometry, CurvePath, Euler, ExtrudeGeometry, LineCurve3, Vector3 } from 'three'
 import { SweepFeature, Sketch, SketchLine, SketchArc } from '../store/modelStore'
 import { sketchElementsToShape } from './sketchToShape'
 
@@ -32,31 +32,6 @@ function approxArcPoints(arc: SketchArc, segments = 16): Array<{ x: number; y: n
   return points
 }
 
-function approxCirclePoints(circle: { center: { x: number; y: number }; radius: number }, segments = 32) {
-  const points: Array<{ x: number; y: number }> = []
-  for (let i = 0; i <= segments; i++) {
-    const t = (Math.PI * 2 * i) / segments
-    points.push({
-      x: circle.center.x + Math.cos(t) * circle.radius,
-      y: circle.center.y + Math.sin(t) * circle.radius,
-    })
-  }
-  return points
-}
-
-function approxRectPoints(rect: { start: { x: number; y: number }; end: { x: number; y: number } }) {
-  const x0 = Math.min(rect.start.x, rect.end.x)
-  const x1 = Math.max(rect.start.x, rect.end.x)
-  const y0 = Math.min(rect.start.y, rect.end.y)
-  const y1 = Math.max(rect.start.y, rect.end.y)
-  return [
-    { x: x0, y: y0 },
-    { x: x1, y: y0 },
-    { x: x1, y: y1 },
-    { x: x0, y: y1 },
-    { x: x0, y: y0 },
-  ]
-}
 
 function keyForPoint(pt: { x: number; y: number }, eps = 1e-4): string {
   return `${Math.round(pt.x / eps)},${Math.round(pt.y / eps)}`
