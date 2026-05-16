@@ -62,6 +62,7 @@ export interface Sketch {
   plane: SketchPlanePose
   elements: SketchElement[]
   constraints?: SketchConstraint[]
+  name?: string
   color?: string
   opacity?: number
 }
@@ -173,6 +174,7 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
         },
         elements: s.elements,
         ...(constraints.length > 0 ? { constraints } : {}),
+        ...(typeof r.name === 'string' ? { name: r.name } : {}),
         ...(typeof r.color === 'string' ? { color: r.color } : {}),
         ...(typeof r.opacity === 'number' && Number.isFinite(r.opacity) ? { opacity: r.opacity } : {}),
       }
@@ -359,6 +361,7 @@ interface ModelState {
   updateExtrude: (id: string, depth: number, operation: 'add' | 'cut', direction?: [number, number, number], symmetric?: boolean) => void
   deleteExtrude: (id: string) => void
   setSketchAppearance: (id: string, color: string, opacity: number) => void
+  setSketchName: (id: string, name: string) => void
   setExtrudeAppearance: (id: string, color: string, opacity: number) => void
   setEditingExtrudeId: (id: string | null) => void
   setPreviewExtrude: (preview: ExtrudeFeature | null) => void
@@ -505,6 +508,9 @@ export const useModelStore = create<ModelState>((set) => ({
 
   setSketchAppearance: (id, color, opacity) =>
     set((s) => ({ sketches: s.sketches.map((sk) => sk.id === id ? { ...sk, color, opacity } : sk) })),
+
+  setSketchName: (id, name) =>
+    set((s) => ({ sketches: s.sketches.map((sk) => sk.id === id ? { ...sk, name } : sk) })),
 
   setExtrudeAppearance: (id, color, opacity) =>
     set((s) => ({ extrudes: s.extrudes.map((e) => e.id === id ? { ...e, color, opacity } : e) })),

@@ -186,6 +186,26 @@
   gap: 6px;
 }
 
+.sketchNameInput {
+  background: transparent;
+  border: 1px solid rgba(170, 204, 255, 0.3);
+  border-radius: 3px;
+  padding: 2px 4px;
+  color: #eef;
+  min-width: 120px;
+  max-width: 180px;
+  font-size: 12px;
+}
+
+.sketchNameInput:focus {
+  outline: none;
+  border-color: #88aaff;
+}
+
+.sketchPlaneLabel {
+  color: #889;
+}
+
 .count {
   font-size: 10px;
   color: #555;

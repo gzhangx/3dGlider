@@ -16,7 +16,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     addExtrude, updateExtrude, deleteExtrude, editSketch,
     addRevolve, updateRevolve, deleteRevolve, setRevolveAppearance,
     addLoft, deleteLoft, addSweep, deleteSweep, addShell, deleteShell,
-    setSketchAppearance, setExtrudeAppearance, setEditingExtrudeId, setPreviewExtrude,
+    setSketchAppearance, setSketchName, setExtrudeAppearance, setEditingExtrudeId, setPreviewExtrude,
     selectedElementId, selectElement, parameters,
   } = useModelStore()
 
@@ -257,10 +257,15 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     axisType === 'element' ? `line ${axisElementId?.slice(0, 6)}…` : axisType.toUpperCase()
 
   const sketchLabelById = (id: string) => {
-    const idx = allSketches.findIndex((s) => s.id === id)
-    if (idx < 0) return 'Sketch ?'
-    return `Sketch ${idx + 1}`
+    const target = allSketches.find((s) => s.id === id)
+    if (!target) return 'Sketch ?'
+    return target.name?.trim() || `Sketch ${allSketches.findIndex((s) => s.id === id) + 1}`
   }
+
+  const [sketchName, setSketchNameState] = useState(sketch.name ?? '')
+  useEffect(() => {
+    setSketchNameState(sketch.name ?? '')
+  }, [sketch.name])
 
   const sketchColor = sketch.color ?? '#ffdd44'
   const sketchOpacity = sketch.opacity ?? 1
@@ -310,7 +315,14 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
           onClick={() => setShowSketchAppearance((v) => !v)}
         />
         <span className={styles.sketchLabel}>
-          Sketch ({planeLabel})
+          <input
+            className={styles.sketchNameInput}
+            value={sketchName}
+            placeholder={`Sketch ${allSketches.findIndex((s) => s.id === sketch.id) + 1}`}
+            onChange={(e) => setSketchNameState(e.target.value)}
+            onBlur={() => setSketchName(sketch.id, sketchName.trim())}
+          />
+          <span className={styles.sketchPlaneLabel}>({planeLabel})</span>
           <span className={styles.count}>{sketch.elements.length} el</span>
         </span>
         <button
@@ -760,8 +772,8 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
               onChange={(e) => setLoftTargetSketchId(e.target.value)}
             >
               <option value="">Target sketch…</option>
-              {otherSketches.map((s, idx) => (
-                <option key={s.id} value={s.id}>Sketch {idx + 1}</option>
+              {otherSketches.map((s) => (
+                <option key={s.id} value={s.id}>{sketchLabelById(s.id)}</option>
               ))}
             </select>
           </div>
@@ -789,8 +801,8 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
               onChange={(e) => setSweepPathSketchId(e.target.value)}
             >
               <option value="">Path sketch…</option>
-              {otherSketches.map((s, idx) => (
-                <option key={s.id} value={s.id}>Sketch {idx + 1}</option>
+              {otherSketches.map((s) => (
+                <option key={s.id} value={s.id}>{sketchLabelById(s.id)}</option>
               ))}
             </select>
           </div>
