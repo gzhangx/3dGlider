@@ -2,7 +2,7 @@ import { Line, Text } from '@react-three/drei'
 import { PLANE_SIZE } from '../../lib/units'
 
 export function AxesHelper() {
-  const len = PLANE_SIZE * 0.16
+  const len = PLANE_SIZE*.55;
   const labelOffset = 0.6
   return (
     <group>

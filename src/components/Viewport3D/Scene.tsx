@@ -132,7 +132,7 @@ export function Scene() {
         ref={controlsRef}
         makeDefault
         minDistance={2}
-        maxDistance={50}
+        maxDistance={PLANE_SIZE * 1.5}
         smoothTime={0.25}
       />
     </>
