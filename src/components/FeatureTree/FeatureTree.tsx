@@ -606,7 +606,6 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
             <span className={styles.revolveLabel}>
               Sweep profile {sketchLabelById(sw.profileSketchId)} along {sketchLabelById(sw.pathSketchId)}
               <span className={styles.dirLabel}> [{sw.operation}]</span>
-              <span className={styles.dirLabel}> (pending mesh)</span>
             </span>
             <button
               className={styles.deleteBtn}

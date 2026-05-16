@@ -1,12 +1,13 @@
 import { Group, Mesh } from 'three'
-import { ExtrudeFeature, LoftFeature, RevolveFeature, Sketch } from '../store/modelStore'
+import { ExtrudeFeature, LoftFeature, RevolveFeature, Sketch, SweepFeature } from '../store/modelStore'
 import { buildSolidMeshes, disposeSolidMeshes } from './solidModel'
 import { buildRevolveGeometry } from './revolveModel'
 import { buildLoftGeometry } from './loftModel'
+import { buildSweepGeometry } from './sweepModel'
 import { SCENE_TO_MM } from './units'
 
-export function exportSTEP(extrudes: ExtrudeFeature[], revolves: RevolveFeature[], lofts: LoftFeature[], sketches: Sketch[]) {
-  if (extrudes.length === 0 && revolves.length === 0 && lofts.length === 0) return
+export function exportSTEP(extrudes: ExtrudeFeature[], revolves: RevolveFeature[], lofts: LoftFeature[], sweeps: SweepFeature[], sketches: Sketch[]) {
+  if (extrudes.length === 0 && revolves.length === 0 && lofts.length === 0 && sweeps.length === 0) return
 
   const group = new Group()
   const solids = buildSolidMeshes(extrudes, sketches)
@@ -22,6 +23,11 @@ export function exportSTEP(extrudes: ExtrudeFeature[], revolves: RevolveFeature[
 
   const loftGeos = lofts.map((l) => buildLoftGeometry(l, sketches)).filter(Boolean)
   for (const geo of loftGeos) {
+    group.add(new Mesh(geo!))
+  }
+
+  const sweepGeos = sweeps.map((s) => buildSweepGeometry(s, sketches)).filter(Boolean)
+  for (const geo of sweepGeos) {
     group.add(new Mesh(geo!))
   }
 
@@ -44,6 +50,7 @@ export function exportSTEP(extrudes: ExtrudeFeature[], revolves: RevolveFeature[
   disposeSolidMeshes(solids)
   revolveGeos.forEach((g) => g?.dispose())
   loftGeos.forEach((g) => g?.dispose())
+  sweepGeos.forEach((g) => g?.dispose())
 }
 
 function generateSTEPContent(group: Group): string {

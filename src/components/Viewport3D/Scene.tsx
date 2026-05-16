@@ -12,6 +12,7 @@ import { CommittedSketches } from './CommittedSketches'
 import { ExtrudedSolids } from './ExtrudedSolids'
 import { RevolvedSolids } from './RevolvedSolids'
 import { LoftedSolids } from './LoftedSolids'
+import { SweepedSolids } from './SweepedSolids'
 
 // camera-controls ACTION enum values
 const ACTION_NONE = 0
@@ -120,6 +121,7 @@ export function Scene() {
           <ExtrudedSolids />
           <RevolvedSolids />
           <LoftedSolids />
+          <SweepedSolids />
           <CommittedSketches />
         </>
       )}
