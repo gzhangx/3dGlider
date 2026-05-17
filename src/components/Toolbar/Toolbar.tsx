@@ -54,6 +54,8 @@ export function Toolbar() {
     }
   }
 
+  const hasExports = extrudes.length > 0 || revolves.length > 0 || lofts.length > 0 || sweeps.length > 0
+
   return (
     <>
       <header className={styles.toolbar}>
@@ -111,24 +113,24 @@ export function Toolbar() {
           onChange={handleFileChange}
         />
 
-        {(extrudes.length > 0 || revolves.length > 0 || lofts.length > 0 || sweeps.length > 0) && (
-          <div className={styles.exportActions}>
-            <button
-              className={styles.exportBtn}
-              onClick={() => exportSTL(extrudes, revolves, lofts, sweeps, sketches)}
-              title="Export all solids as STL"
-            >
-              ⬇ Export STL
-            </button>
-            <button
-              className={styles.exportBtn}
-              onClick={() => exportSTEP(extrudes, revolves, lofts, sweeps, sketches)}
-              title="Export all solids as STEP"
-            >
-              ⬇ Export STEP
-            </button>
-          </div>
-        )}
+        <div className={styles.exportActions}>
+          <button
+            className={styles.exportBtn}
+            onClick={() => exportSTL(extrudes, revolves, lofts, sweeps, sketches)}
+            title={hasExports ? 'Export all solids as STL' : 'No solids to export'}
+            disabled={!hasExports}
+          >
+            ⬇ Export STL
+          </button>
+          <button
+            className={styles.exportBtn}
+            onClick={() => exportSTEP(extrudes, revolves, lofts, sweeps, sketches)}
+            title={hasExports ? 'Export all solids as STEP' : 'No solids to export'}
+            disabled={!hasExports}
+          >
+            ⬇ Export STEP
+          </button>
+        </div>
       </header>
 
       {showParams && <ParametersDialog onClose={() => setShowParams(false)} />}
