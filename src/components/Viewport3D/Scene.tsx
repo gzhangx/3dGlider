@@ -1,7 +1,7 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { Grid, CameraControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { PlaneGeometry, EdgesGeometry, DoubleSide } from 'three'
+import { Box3, PlaneGeometry, EdgesGeometry, DoubleSide, Vector3 } from 'three'
 import { useModelStore, SketchPlanePose } from '../../store/modelStore'
 import { planeNormalFromPose, planeOriginFromPose } from '../../lib/planePose'
 import { PLANE_SIZE } from '../../lib/units'
@@ -45,6 +45,18 @@ export function Scene() {
   const { activePlane, mode, activeTool, isDraggingPoint, sketchViewResetCounter, hideOtherSketches, previewPlane } = useModelStore()
   const { camera } = useThree()
   const controlsRef = useRef<CameraControls>(null)
+  const initialViewSet = useRef(false)
+
+  useEffect(() => {
+    if (initialViewSet.current || !controlsRef.current) return
+    const half = PLANE_SIZE / 2
+    const sceneBounds = new Box3(
+      new Vector3(-half, -half, -half),
+      new Vector3(half, half, half),
+    )
+    controlsRef.current.fitToBox(sceneBounds, true)
+    initialViewSet.current = true
+  }, [])
 
   // Snap camera perpendicular to plane when entering sketch mode
   useEffect(() => {

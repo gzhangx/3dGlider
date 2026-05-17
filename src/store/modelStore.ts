@@ -393,7 +393,7 @@ export const useModelStore = create<ModelState>((set) => ({
   newSketchArmed: false,
   activeTool: 'select',
   constructionMode: false,
-  snapToGrid: true,
+  snapToGrid: false,
   snapToOtherPlanes: false,
   snapToObjects: true,
   sketchElements: [],
