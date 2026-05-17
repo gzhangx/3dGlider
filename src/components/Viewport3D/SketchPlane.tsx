@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
-import { DoubleSide } from 'three'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { DoubleSide, Vector3 } from 'three'
 import { Line, Text } from '@react-three/drei'
-import { ThreeEvent } from '@react-three/fiber'
+import { ThreeEvent, useThree } from '@react-three/fiber'
 import {
   useModelStore,
   SketchPlanePose,
@@ -28,6 +28,13 @@ import { distToSeg, distToCircle, distToArc, computeCut, computeCircleCut, compu
 import { solveConstraints } from '../../lib/constraintSolve'
 
 const HIT_PLANE_SIZE = PLANE_SIZE * 4
+const SNAP_ENDPOINT_SCREEN = 24
+const SNAP_OBJECT_SCREEN = 36
+const SNAP_TANGENT_SCREEN = 72
+const SNAP_RING_SCREEN = 18
+const SNAP_DOT_SCREEN = 10
+const SNAP_MIN_WORLD = 0.08
+const DOT_MIN_WORLD = 0.04
 
 // ─── dot marker ──────────────────────────────────────────────────────────────
 
@@ -153,9 +160,6 @@ function elementEndpoints(el: SketchElement): { pt: SketchPoint; ref: PointRef }
   return []
 }
 
-const SNAP_ENDPOINT_THRESHOLD = 0.3
-const SNAP_OBJECT_THRESHOLD = 0.5
-const SNAP_TANGENT_THRESHOLD = 1.0  // Higher threshold for tangent/circle perimeter snap
 
 // Helper: closest point on line segment to a point
 function closestPointOnSegment(p: SketchPoint, a: SketchPoint, b: SketchPoint): SketchPoint {
@@ -293,6 +297,26 @@ export function SketchPlane() {
   const plane = activePlane
   const planeOrigin = planeOriginFromPose(plane)
   const isDrawTool = activeTool !== 'select'
+  const { camera, size } = useThree()
+
+  const cameraDistance = useMemo(() => {
+    const origin = new Vector3(planeOrigin.x, planeOrigin.y, planeOrigin.z)
+    const direction = new Vector3()
+    camera.getWorldDirection(direction)
+    return Math.abs(direction.dot(origin.sub(camera.position))) || 1
+  }, [camera, planeOrigin])
+
+  const worldPerPixel = useMemo(() => {
+    const fov = 'fov' in camera ? camera.fov * Math.PI / 180 : 50 * Math.PI / 180
+    return 2 * cameraDistance * Math.tan(fov / 2) / size.height
+  }, [camera, cameraDistance, size.height])
+
+  const snapEndpointThreshold = Math.max(worldPerPixel * SNAP_ENDPOINT_SCREEN, SNAP_MIN_WORLD)
+  const snapObjectThreshold = Math.max(worldPerPixel * SNAP_OBJECT_SCREEN, SNAP_MIN_WORLD)
+  const snapTangentThreshold = Math.max(worldPerPixel * SNAP_TANGENT_SCREEN, SNAP_MIN_WORLD)
+  const snapRingSize = Math.max(worldPerPixel * SNAP_RING_SCREEN, DOT_MIN_WORLD)
+  const cursorDotSize = Math.max(worldPerPixel * SNAP_DOT_SCREEN, DOT_MIN_WORLD)
+  const anchorDotSize = Math.max(worldPerPixel * 8, DOT_MIN_WORLD)
 
   const getRaw = (e: ThreeEvent<PointerEvent | MouseEvent>) => toSketch(e.point, plane)
   const doSnap = (p: SketchPoint) => snapToGrid ? snapPt(p) : p
@@ -305,7 +329,7 @@ export function SketchPlane() {
     for (const el of sketchElements) {
       for (const { pt, ref } of elementEndpoints(el)) {
         const d = Math.hypot(raw.x - pt.x, raw.y - pt.y)
-        if (d < SNAP_ENDPOINT_THRESHOLD && (!best || d < best.dist)) {
+        if (d < snapEndpointThreshold && (!best || d < best.dist)) {
           best = { pt, ref, dist: d }
         }
       }
@@ -318,7 +342,7 @@ export function SketchPlane() {
         if (el.type === 'line') {
           const closest = closestPointOnSegment(raw, el.start, el.end)
           const d = Math.hypot(raw.x - closest.x, raw.y - closest.y)
-          if (d < SNAP_OBJECT_THRESHOLD && (!best || d < best.dist)) {
+          if (d < snapObjectThreshold && (!best || d < best.dist)) {
             best = { pt: closest, ref: null, constraintHint: '⊙ Coincident on line', dist: d }
           }
         }
@@ -326,7 +350,7 @@ export function SketchPlane() {
         // Snap to circle center
         if (el.type === 'circle') {
           const d = Math.hypot(raw.x - el.center.x, raw.y - el.center.y)
-          if (d < SNAP_OBJECT_THRESHOLD && (!best || d < best.dist)) {
+          if (d < snapObjectThreshold && (!best || d < best.dist)) {
             best = { pt: el.center, ref: null, constraintHint: '⊙ Coincident at center', dist: d }
           }
         }
@@ -335,7 +359,7 @@ export function SketchPlane() {
         if (el.type === 'circle') {
           const closest = closestPointOnCircle(raw, el.center, el.radius)
           const d = distToCirclePerimeter(raw, el.center, el.radius)
-          if (d < SNAP_TANGENT_THRESHOLD && (!best || d < best.dist)) {
+          if (d < snapTangentThreshold && (!best || d < best.dist)) {
             // Check if line is tangent (only when drawing a line with a start point)
             if (lineStart && activeTool === 'line' && isLineTangentToCircle(lineStart, raw, el.center, el.radius)) {
               // Use actual tangent point when tangent
@@ -349,8 +373,7 @@ export function SketchPlane() {
                 dist: d 
               }
             } else {
-              // Normal snap to circle perimeter
-              best = { 
+              best = {
                 pt: closest, 
                 ref: null, 
                 constraintHint: '⊙ Coincident on circle',
@@ -365,7 +388,7 @@ export function SketchPlane() {
           const corners = rectCorners(el)
           for (const corner of corners) {
             const d = Math.hypot(raw.x - corner.x, raw.y - corner.y)
-            if (d < SNAP_OBJECT_THRESHOLD && (!best || d < best.dist)) {
+            if (d < snapObjectThreshold && (!best || d < best.dist)) {
               best = { pt: corner, ref: null, dist: d }
             }
           }
@@ -375,7 +398,7 @@ export function SketchPlane() {
             const b = corners[(i + 1) % 4]
             const closest = closestPointOnSegment(raw, a, b)
             const d = Math.hypot(raw.x - closest.x, raw.y - closest.y)
-            if (d < SNAP_OBJECT_THRESHOLD && (!best || d < best.dist)) {
+            if (d < snapObjectThreshold && (!best || d < best.dist)) {
               best = { pt: closest, ref: null, constraintHint: '⊙ Coincident on edge', dist: d }
             }
           }
@@ -392,7 +415,7 @@ export function SketchPlane() {
             const w = worldPt(pt, sketch.plane)
             const localPt = toSketch({ x: w[0], y: w[1], z: w[2] }, plane)
             const d = Math.hypot(raw.x - localPt.x, raw.y - localPt.y)
-            if (d < SNAP_ENDPOINT_THRESHOLD && (!best || d < best.dist)) {
+            if (d < snapEndpointThreshold && (!best || d < best.dist)) {
               best = { pt: localPt, ref: null, dist: d }
             }
           }
@@ -420,7 +443,7 @@ export function SketchPlane() {
       // Check for snap to another element's endpoint or geometry (excluding dragged element)
       let snap: { pt: SketchPoint; ref: PointRef | null } | null = null
       if (key === 'start' || key === 'end') {
-        let bestDist = SNAP_ENDPOINT_THRESHOLD
+        let bestDist = snapEndpointThreshold
         
         // Snap to endpoints
         for (const el of sketchElements) {
@@ -862,7 +885,7 @@ export function SketchPlane() {
         const world = worldPt(snapTarget.pt, plane)
         return (
           <>
-            <Dot pos={world} color="#44ff88" size={0.14} ring />
+            <Dot pos={world} color="#44ff88" size={snapRingSize} ring />
             {snapTarget.constraintHint && (
               <Text
                 position={[world[0] + 0.2, world[1] + 0.2, world[2]]}
@@ -883,7 +906,7 @@ export function SketchPlane() {
         const world = worldPt(dragSnapTarget.pt, plane)
         return (
           <>
-            <Dot pos={world} color="#44ff88" size={0.14} ring />
+            <Dot pos={world} color="#44ff88" size={snapRingSize} ring />
             {dragSnapTarget.constraintHint && (
               <Text
                 position={[world[0] + 0.2, world[1] + 0.2, world[2]]}
@@ -901,10 +924,10 @@ export function SketchPlane() {
 
       {/* Cursor dot */}
       {isDrawTool && activeTool !== 'cut' && cursorPt && (
-        <Dot pos={worldPt(cursorPt, plane)} color={snapTarget ? '#44ff88' : '#ffffff'} size={0.05} />
+        <Dot pos={worldPt(cursorPt, plane)} color={snapTarget ? '#44ff88' : '#ffffff'} size={cursorDotSize} />
       )}
       {/* Anchor dot */}
-      {isDrawTool && startPt && <Dot pos={worldPt(startPt, plane)} color="#ffdd44" size={0.08} />}
+      {isDrawTool && startPt && <Dot pos={worldPt(startPt, plane)} color="#ffdd44" size={anchorDotSize} />}
 
       {/* Drag-box selection rectangle */}
       {selectBoxStart && selectBoxEnd && (() => {
