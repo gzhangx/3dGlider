@@ -27,6 +27,8 @@ import { PLANE_SIZE } from '../../lib/units'
 import { distToSeg, distToCircle, distToArc, computeCut, computeCircleCut, computeArcCut, CutResult, CircleCutResult, ArcCutResult } from '../../lib/cutTool'
 import { solveConstraints } from '../../lib/constraintSolve'
 
+const HIT_PLANE_SIZE = PLANE_SIZE * 4
+
 // ─── dot marker ──────────────────────────────────────────────────────────────
 
 function Dot({ pos, color, size = 0.06, ring = false }: { pos: [number, number, number]; color: string; size?: number; ring?: boolean }) {
@@ -107,15 +109,27 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: Sketch
 function PointHandle({
   pos,
   onDragStart,
+  onDragMove,
 }: {
   pos: [number, number, number]
   onDragStart: (e: ThreeEvent<PointerEvent>) => void
+  onDragMove?: (e: ThreeEvent<PointerEvent>) => void
 }) {
   const [hovered, setHovered] = useState(false)
   return (
     <mesh
       position={pos}
-      onPointerDown={onDragStart}
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        ;(e.currentTarget as unknown as { setPointerCapture: (id: number) => void }).setPointerCapture(e.pointerId)
+        onDragStart(e)
+      }}
+      onPointerMove={(e) => {
+        if (onDragMove) {
+          e.stopPropagation()
+          onDragMove(e)
+        }
+      }}
       onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
       onPointerOut={() => setHovered(false)}
     >
@@ -724,7 +738,7 @@ export function SketchPlane() {
           onPointerUp={onPointerUp}
           onClick={onClick}
         >
-          <planeGeometry args={[PLANE_SIZE, PLANE_SIZE]} />
+          <planeGeometry args={[HIT_PLANE_SIZE, HIT_PLANE_SIZE]} />
           <meshBasicMaterial visible={false} side={DoubleSide} />
         </mesh>
       )}
@@ -782,7 +796,7 @@ export function SketchPlane() {
           onClick={(e) => { e.stopPropagation() }}
           renderOrder={-1}
         >
-          <planeGeometry args={[PLANE_SIZE, PLANE_SIZE]} />
+          <planeGeometry args={[HIT_PLANE_SIZE, HIT_PLANE_SIZE]} />
           <meshBasicMaterial visible={false} side={DoubleSide} />
         </mesh>
       )}
@@ -801,17 +815,17 @@ export function SketchPlane() {
         }
         if (el.type === 'line') return (
           <group key={el.id + '_handles'}>
-            <PointHandle pos={worldPt(el.start, plane)} onDragStart={startDrag('start')} />
-            <PointHandle pos={worldPt(el.end,   plane)} onDragStart={startDrag('end')} />
+            <PointHandle pos={worldPt(el.start, plane)} onDragStart={startDrag('start')} onDragMove={onMove} />
+            <PointHandle pos={worldPt(el.end,   plane)} onDragStart={startDrag('end')} onDragMove={onMove} />
           </group>
         )
         if (el.type === 'circle') return (
-          <PointHandle key={el.id + '_handle'} pos={worldPt(el.center, plane)} onDragStart={startDrag('center')} />
+          <PointHandle key={el.id + '_handle'} pos={worldPt(el.center, plane)} onDragStart={startDrag('center')} onDragMove={onMove} />
         )
         if (el.type === 'rect') return (
           <group key={el.id + '_handles'}>
-            <PointHandle pos={worldPt(el.start, plane)} onDragStart={startDrag('start')} />
-            <PointHandle pos={worldPt(el.end,   plane)} onDragStart={startDrag('end')} />
+            <PointHandle pos={worldPt(el.start, plane)} onDragStart={startDrag('start')} onDragMove={onMove} />
+            <PointHandle pos={worldPt(el.end,   plane)} onDragStart={startDrag('end')} onDragMove={onMove} />
           </group>
         )
         return null
