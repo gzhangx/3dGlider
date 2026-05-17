@@ -23,6 +23,7 @@ import {
   arcPts,
 } from '../../lib/sketchGeometry'
 import { planeOriginFromPose } from '../../lib/planePose'
+import { PLANE_SIZE } from '../../lib/units'
 import { distToSeg, distToCircle, distToArc, computeCut, computeCircleCut, computeArcCut, CutResult, CircleCutResult, ArcCutResult } from '../../lib/cutTool'
 import { solveConstraints } from '../../lib/constraintSolve'
 
@@ -723,7 +724,7 @@ export function SketchPlane() {
           onPointerUp={onPointerUp}
           onClick={onClick}
         >
-          <planeGeometry args={[200, 200]} />
+          <planeGeometry args={[PLANE_SIZE, PLANE_SIZE]} />
           <meshBasicMaterial visible={false} side={DoubleSide} />
         </mesh>
       )}
@@ -781,7 +782,7 @@ export function SketchPlane() {
           onClick={(e) => { e.stopPropagation() }}
           renderOrder={-1}
         >
-          <planeGeometry args={[200, 200]} />
+          <planeGeometry args={[PLANE_SIZE, PLANE_SIZE]} />
           <meshBasicMaterial visible={false} side={DoubleSide} />
         </mesh>
       )}
