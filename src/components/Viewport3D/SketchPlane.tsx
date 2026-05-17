@@ -38,18 +38,30 @@ const DOT_MIN_WORLD = 0.04
 
 // ─── dot marker ──────────────────────────────────────────────────────────────
 
-function Dot({ pos, color, size = 0.06, ring = false }: { pos: [number, number, number]; color: string; size?: number; ring?: boolean }) {
+function Dot({ pos, color, screenSize, size = 0.06, ring = false }: { pos: [number, number, number]; color: string; screenSize?: number; size?: number; ring?: boolean }) {
+  const { camera, size: viewSize } = useThree()
+  // compute world size so the dot appears approximately `screenSize` CSS pixels on screen
+  let worldSize = size
+  if (screenSize) {
+    const p = new Vector3(pos[0], pos[1], pos[2])
+    const dir = new Vector3()
+    camera.getWorldDirection(dir)
+    const distance = Math.abs(dir.dot(p.sub(camera.position))) || 1
+    const fov = 'fov' in camera ? camera.fov * Math.PI / 180 : 50 * Math.PI / 180
+    const worldPerPixel = 2 * distance * Math.tan(fov / 2) / viewSize.height
+    worldSize = Math.max(worldPerPixel * screenSize, DOT_MIN_WORLD)
+  }
   if (ring) {
     const pts: [number, number, number][] = []
     for (let i = 0; i <= 32; i++) {
       const a = (i / 32) * Math.PI * 2
-      pts.push([pos[0] + Math.cos(a) * size, pos[1] + Math.sin(a) * size, pos[2]])
+      pts.push([pos[0] + Math.cos(a) * worldSize, pos[1] + Math.sin(a) * worldSize, pos[2]])
     }
     return <Line points={pts} color={color} lineWidth={2} />
   }
   return (
     <mesh position={pos}>
-      <sphereGeometry args={[size, 8, 8]} />
+      <sphereGeometry args={[worldSize, 8, 8]} />
       <meshBasicMaterial color={color} depthTest={false} />
     </mesh>
   )
@@ -314,9 +326,6 @@ export function SketchPlane() {
   const snapEndpointThreshold = Math.max(worldPerPixel * SNAP_ENDPOINT_SCREEN, SNAP_MIN_WORLD)
   const snapObjectThreshold = Math.max(worldPerPixel * SNAP_OBJECT_SCREEN, SNAP_MIN_WORLD)
   const snapTangentThreshold = Math.max(worldPerPixel * SNAP_TANGENT_SCREEN, SNAP_MIN_WORLD)
-  const snapRingSize = Math.max(worldPerPixel * SNAP_RING_SCREEN, DOT_MIN_WORLD)
-  const cursorDotSize = Math.max(worldPerPixel * SNAP_DOT_SCREEN, DOT_MIN_WORLD)
-  const anchorDotSize = Math.max(worldPerPixel * 8, DOT_MIN_WORLD)
 
   const getRaw = (e: ThreeEvent<PointerEvent | MouseEvent>) => toSketch(e.point, plane)
   const doSnap = (p: SketchPoint) => snapToGrid ? snapPt(p) : p
@@ -885,7 +894,7 @@ export function SketchPlane() {
         const world = worldPt(snapTarget.pt, plane)
         return (
           <>
-            <Dot pos={world} color="#44ff88" size={snapRingSize} ring />
+              <Dot pos={world} color="#44ff88" screenSize={SNAP_RING_SCREEN} ring />
             {snapTarget.constraintHint && (
               <Text
                 position={[world[0] + 0.2, world[1] + 0.2, world[2]]}
@@ -906,7 +915,7 @@ export function SketchPlane() {
         const world = worldPt(dragSnapTarget.pt, plane)
         return (
           <>
-            <Dot pos={world} color="#44ff88" size={snapRingSize} ring />
+            <Dot pos={world} color="#44ff88" screenSize={SNAP_RING_SCREEN} ring />
             {dragSnapTarget.constraintHint && (
               <Text
                 position={[world[0] + 0.2, world[1] + 0.2, world[2]]}
@@ -924,10 +933,10 @@ export function SketchPlane() {
 
       {/* Cursor dot */}
       {isDrawTool && activeTool !== 'cut' && cursorPt && (
-        <Dot pos={worldPt(cursorPt, plane)} color={snapTarget ? '#44ff88' : '#ffffff'} size={cursorDotSize} />
+        <Dot pos={worldPt(cursorPt, plane)} color={snapTarget ? '#44ff88' : '#ffffff'} screenSize={SNAP_DOT_SCREEN} />
       )}
       {/* Anchor dot */}
-      {isDrawTool && startPt && <Dot pos={worldPt(startPt, plane)} color="#ffdd44" size={anchorDotSize} />}
+      {isDrawTool && startPt && <Dot pos={worldPt(startPt, plane)} color="#ffdd44" screenSize={8} />}
 
       {/* Drag-box selection rectangle */}
       {selectBoxStart && selectBoxEnd && (() => {
