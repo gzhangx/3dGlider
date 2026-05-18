@@ -9,32 +9,46 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 const distDir = path.join(projectRoot, 'dist');
 const target = path.resolve(projectRoot, '..', '3dGliderWeb');
+const targetRepo = process.env.TARGET_REPO || 'git@github.com:gzhangx/3dGliderWeb.git';
 
 function run(cmd, opts = {}) {
   console.log(`> ${cmd}`);
   return execSync(cmd, {stdio: 'inherit', ...opts});
 }
 
-async function ensureWorktree() {
+async function ensureTargetRepo() {
   try {
-    // Try to add or update a worktree for gh-pages
-    run(`git worktree add -B gh-pages "${target}"`, {cwd: projectRoot});
-  } catch (err) {
-    console.log('git worktree add failed, attempting clone/fallback...');
-    try {
-      const remote = execSync(`git -C "${projectRoot}" remote get-url origin`).toString().trim();
-      if (!existsSync(target)) await mkdir(target, {recursive: true});
-      run(`git clone --branch gh-pages --single-branch "${remote}" "${target}"`);
-    } catch (err2) {
-      console.log('Clone fallback failed — initializing an empty gh-pages branch');
-      if (!existsSync(target)) await mkdir(target, {recursive: true});
-      run(`git -C "${target}" init`);
+    if (!existsSync(target)) {
       try {
-        run(`git -C "${target}" checkout gh-pages`);
+        run(`git clone --branch gh-pages --single-branch "${targetRepo}" "${target}"`);
       } catch (e) {
-        run(`git -C "${target}" checkout --orphan gh-pages`);
+        run(`git clone "${targetRepo}" "${target}"`);
       }
     }
+
+    if (!existsSync(path.join(target, '.git'))) {
+      run(`git -C "${target}" init`);
+      run(`git -C "${target}" remote add origin "${targetRepo}"`);
+    } else {
+      try {
+        run(`git -C "${target}" remote get-url origin`);
+        run(`git -C "${target}" remote set-url origin "${targetRepo}"`);
+      } catch (e) {
+        run(`git -C "${target}" remote add origin "${targetRepo}"`);
+      }
+      run(`git -C "${target}" fetch origin --prune`);
+    }
+
+    try {
+      run(`git -C "${target}" checkout gh-pages`);
+      run(`git -C "${target}" pull origin gh-pages`);
+    } catch (e) {
+      run(`git -C "${target}" checkout --orphan gh-pages`);
+      run(`git -C "${target}" rm -rf . || true`);
+    }
+  } catch (err) {
+    console.error('Failed to prepare target repo:', err.message || err);
+    process.exit(1);
   }
 }
 
@@ -64,7 +78,7 @@ async function deploy() {
     process.exit(1);
   }
 
-  await ensureWorktree();
+  await ensureTargetRepo();
   await clearTarget();
   await copyDist();
 
