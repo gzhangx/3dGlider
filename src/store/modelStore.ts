@@ -357,7 +357,7 @@ export interface ModelState {
   cutSketchElement: (id: string, replacements: SketchElement[]) => void
   addSketchConstraint: (c: SketchConstraint) => void
   deleteSketchConstraint: (id: string) => void
-  addExtrude: (sketchId: string, depth: number, operation?: 'add' | 'cut', direction?: [number, number, number], symmetric?: boolean) => void
+  addExtrude: (sketchId: string, depth: number, operation?: 'add' | 'cut', direction?: [number, number, number], symmetric?: boolean, id?: string) => string
   updateExtrude: (id: string, depth: number, operation: 'add' | 'cut', direction?: [number, number, number], symmetric?: boolean) => void
   deleteExtrude: (id: string) => void
   setSketchAppearance: (id: string, color: string, opacity: number) => void
@@ -365,24 +365,24 @@ export interface ModelState {
   setExtrudeAppearance: (id: string, color: string, opacity: number) => void
   setEditingExtrudeId: (id: string | null) => void
   setPreviewExtrude: (preview: ExtrudeFeature | null) => void
-  addRevolve: (sketchId: string, axisType: RevolveAxis, angle: number, axisElementId?: string) => void
+  addRevolve: (sketchId: string, axisType: RevolveAxis, angle: number, axisElementId?: string, id?: string) => string
   updateRevolve: (id: string, axisType: RevolveAxis, angle: number, axisElementId?: string) => void
   deleteRevolve: (id: string) => void
   setRevolveAppearance: (id: string, color: string, opacity: number) => void
-  addLoft: (sketchId1: string, sketchId2: string, operation?: 'add' | 'cut') => void
+  addLoft: (sketchId1: string, sketchId2: string, operation?: 'add' | 'cut', id?: string) => string
   deleteLoft: (id: string) => void
-  addSweep: (profileSketchId: string, pathSketchId: string, operation?: 'add' | 'cut') => void
+  addSweep: (profileSketchId: string, pathSketchId: string, operation?: 'add' | 'cut', id?: string) => string
   deleteSweep: (id: string) => void
-  addShell: (sketchId: string, thickness: number) => void
+  addShell: (sketchId: string, thickness: number, id?: string) => string
   deleteShell: (id: string) => void
-  addParameter: (name: string, value: number) => void
+  addParameter: (name: string, value: number, id?: string) => string
   updateParameter: (id: string, name: string, value: number) => void
   deleteParameter: (id: string) => void
   armNewSketch: () => void
   cancelNewSketch: () => void
   startNewSketch: (plane: PlaneId | SketchPlanePose, offset?: number) => void
   editSketch: (sketchId: string) => void
-  exitSketch: () => void
+  exitSketch: () => string | null
   loadModel: (data: unknown) => boolean
 }
 
@@ -489,10 +489,12 @@ export const useModelStore = create<ModelState>((set) => ({
   deleteSketchConstraint: (id) =>
     set((s) => ({ sketchConstraints: s.sketchConstraints.filter((c) => c.id !== id) })),
 
-  addExtrude: (sketchId, depth, operation = 'add', direction, symmetric) =>
+  addExtrude: (sketchId, depth, operation = 'add', direction, symmetric, id = crypto.randomUUID()) => {
     set((s) => ({
-      extrudes: [...s.extrudes, { id: crypto.randomUUID(), sketchId, operation, depth, ...(direction ? { direction } : {}), ...(symmetric ? { symmetric } : {}) }],
-    })),
+      extrudes: [...s.extrudes, { id, sketchId, operation, depth, ...(direction ? { direction } : {}), ...(symmetric ? { symmetric } : {}) }],
+    }))
+    return id
+  },
 
   updateExtrude: (id, depth, operation, direction, symmetric) =>
     set((s) => ({
@@ -520,13 +522,15 @@ export const useModelStore = create<ModelState>((set) => ({
   setPreviewExtrude: (previewExtrude) => set({ previewExtrude }),
   setPreviewPlane: (previewPlane) => set({ previewPlane }),
 
-  addRevolve: (sketchId, axisType, angle, axisElementId) =>
+  addRevolve: (sketchId, axisType, angle, axisElementId, id = crypto.randomUUID()) => {
     set((s) => ({
       revolves: [...s.revolves, {
-        id: crypto.randomUUID(), sketchId, axisType, angle,
+        id, sketchId, axisType, angle,
         ...(axisType === 'element' && axisElementId ? { axisElementId } : {}),
       }],
-    })),
+    }))
+    return id
+  },
 
   updateRevolve: (id, axisType, angle, axisElementId) =>
     set((s) => ({
@@ -543,32 +547,40 @@ export const useModelStore = create<ModelState>((set) => ({
   setRevolveAppearance: (id, color, opacity) =>
     set((s) => ({ revolves: s.revolves.map((r) => r.id === id ? { ...r, color, opacity } : r) })),
 
-  addLoft: (sketchId1, sketchId2, operation = 'add') =>
+  addLoft: (sketchId1, sketchId2, operation = 'add', id = crypto.randomUUID()) => {
     set((s) => ({
-      lofts: [...s.lofts, { id: crypto.randomUUID(), sketchId1, sketchId2, operation }],
-    })),
+      lofts: [...s.lofts, { id, sketchId1, sketchId2, operation }],
+    }))
+    return id
+  },
 
   deleteLoft: (id) =>
     set((s) => ({ lofts: s.lofts.filter((l) => l.id !== id) })),
 
-  addSweep: (profileSketchId, pathSketchId, operation = 'add') =>
+  addSweep: (profileSketchId, pathSketchId, operation = 'add', id = crypto.randomUUID()) => {
     set((s) => ({
-      sweeps: [...s.sweeps, { id: crypto.randomUUID(), profileSketchId, pathSketchId, operation }],
-    })),
+      sweeps: [...s.sweeps, { id, profileSketchId, pathSketchId, operation }],
+    }))
+    return id
+  },
 
   deleteSweep: (id) =>
     set((s) => ({ sweeps: s.sweeps.filter((sw) => sw.id !== id) })),
 
-  addShell: (sketchId, thickness) =>
+  addShell: (sketchId, thickness, id = crypto.randomUUID()) => {
     set((s) => ({
-      shells: [...s.shells, { id: crypto.randomUUID(), sketchId, thickness }],
-    })),
+      shells: [...s.shells, { id, sketchId, thickness }],
+    }))
+    return id
+  },
 
   deleteShell: (id) =>
     set((s) => ({ shells: s.shells.filter((sh) => sh.id !== id) })),
 
-  addParameter: (name, value) =>
-    set((s) => ({ parameters: [...s.parameters, { id: crypto.randomUUID(), name, value }] })),
+  addParameter: (name, value, id = crypto.randomUUID()) => {
+    set((s) => ({ parameters: [...s.parameters, { id, name, value }] }))
+    return id
+  },
 
   updateParameter: (id, name, value) =>
     set((s) => {
@@ -622,19 +634,22 @@ export const useModelStore = create<ModelState>((set) => ({
       }
     }),
 
-  exitSketch: () =>
+  exitSketch: () => {
+    let newSketchId: string | null = null
     set((s) => {
       let sketches = s.sketches
       if (s.activePlane && s.sketchElements.length > 0) {
         const constraints = s.sketchConstraints.length > 0 ? s.sketchConstraints : undefined
         if (s.editingSketchId) {
+          newSketchId = s.editingSketchId
           sketches = sketches.map((sk) =>
             sk.id === s.editingSketchId
               ? { ...sk, plane: s.activePlane!, elements: s.sketchElements, ...(constraints ? { constraints } : { constraints: undefined }) }
               : sk,
           )
         } else {
-          sketches = [...sketches, { id: crypto.randomUUID(), plane: s.activePlane, elements: s.sketchElements, ...(constraints ? { constraints } : {}) }]
+          newSketchId = crypto.randomUUID()
+          sketches = [...sketches, { id: newSketchId, plane: s.activePlane, elements: s.sketchElements, ...(constraints ? { constraints } : {}) }]
         }
       } else if (s.editingSketchId) {
         sketches = sketches.filter((sk) => sk.id !== s.editingSketchId)
@@ -653,7 +668,9 @@ export const useModelStore = create<ModelState>((set) => ({
         editingSketchId: null,
         sketches,
       }
-    }),
+    })
+    return newSketchId
+  },
 
   loadModel: (data) => {
     const parsed = sanitizeModelData(data)

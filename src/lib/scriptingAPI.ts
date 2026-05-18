@@ -39,12 +39,11 @@ export function createScriptingAPI(store: ModelState) {
    * Exit the current sketch (saves it to the model)
    */
   async function exitSketch(): Promise<string | null> {
-    const sketchId = store.activePlane ? store.sketches[store.sketches.length]?.id || null : null
-    store.exitSketch()
+    const sketchId = store.exitSketch()
     if (sketchId) {
       context.lastSketchId = sketchId
     }
-    return sketchId ?? null
+    return sketchId
   }
 
   /**
@@ -231,8 +230,7 @@ export function createScriptingAPI(store: ModelState) {
     }
     const sketch = store.sketches.find((s: Sketch) => s.id === sketchId)
     if (!sketch) throw new Error(`Sketch not found: ${sketchIdOrName}`)
-    store.addExtrude(sketchId, depth, operation, direction, symmetric)
-    return store.extrudes[store.extrudes.length - 1].id
+    return store.addExtrude(sketchId, depth, operation, direction, symmetric)
   }
 
   /**
@@ -253,8 +251,7 @@ export function createScriptingAPI(store: ModelState) {
     }
     const sketch = store.sketches.find((s: Sketch) => s.id === sketchId)
     if (!sketch) throw new Error(`Sketch not found: ${sketchIdOrName}`)
-    store.addRevolve(sketchId, axisType, angle, axisElementId)
-    return store.revolves[store.revolves.length - 1].id
+    return store.addRevolve(sketchId, axisType, angle, axisElementId)
   }
 
   /**
@@ -271,8 +268,7 @@ export function createScriptingAPI(store: ModelState) {
     const sketch2 = store.sketches.find((s: Sketch) => s.id === sketchId2)
     if (!sketch1) throw new Error(`Sketch not found: ${sketch1IdOrName}`)
     if (!sketch2) throw new Error(`Sketch not found: ${sketch2IdOrName}`)
-    store.addLoft(sketchId1, sketchId2, operation)
-    return store.lofts[store.lofts.length - 1].id
+    return store.addLoft(sketchId1, sketchId2, operation)
   }
 
   /**
@@ -289,8 +285,7 @@ export function createScriptingAPI(store: ModelState) {
     const pathSketch = store.sketches.find((s: Sketch) => s.id === pathSketchId)
     if (!profileSketch) throw new Error(`Sketch not found: ${profileSketchIdOrName}`)
     if (!pathSketch) throw new Error(`Sketch not found: ${pathSketchIdOrName}`)
-    store.addSweep(profileSketchId, pathSketchId, operation)
-    return store.sweeps[store.sweeps.length - 1].id
+    return store.addSweep(profileSketchId, pathSketchId, operation)
   }
 
   /**
