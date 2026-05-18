@@ -303,7 +303,7 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
   return { sketches, extrudes, revolves, lofts, sweeps, shells, parameters }
 }
 
-interface ModelState {
+export interface ModelState {
   mode: AppMode
   activePlane: SketchPlanePose | null
   hoveredPlane: PlaneId | null

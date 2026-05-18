@@ -12,7 +12,8 @@
  * ```
  */
 
-import { useModelStore, type SketchPlanePose } from '../store/modelStore'
+import { type SketchPlanePose, type Sketch, type Parameter } from '../store/modelStore'
+import type { ModelState } from '../store/modelStore'
 
 export interface ScriptingContext {
   lastSketchId: string | null
@@ -20,8 +21,7 @@ export interface ScriptingContext {
   parameters: Map<string, string>  // name -> id mapping
 }
 
-export function createScriptingAPI() {
-  const store = useModelStore()
+export function createScriptingAPI(store: ModelState) {
   const context: ScriptingContext = {
     lastSketchId: null,
     sketches: new Map(),
@@ -52,7 +52,7 @@ export function createScriptingAPI() {
    */
   async function editSketch(sketchIdOrName: string): Promise<void> {
     const sketchId = context.sketches.get(sketchIdOrName) || sketchIdOrName
-    const sketch = store.sketches.find((s) => s.id === sketchId)
+    const sketch = store.sketches.find((s: Sketch) => s.id === sketchId)
     if (!sketch) throw new Error(`Sketch not found: ${sketchIdOrName}`)
     store.editSketch(sketchId)
     context.lastSketchId = sketchId
@@ -207,7 +207,7 @@ export function createScriptingAPI() {
    */
   async function updateParameter(nameOrId: string, newValue?: number, newName?: string): Promise<void> {
     const paramId = context.parameters.get(nameOrId) || nameOrId
-    const param = store.parameters.find((p) => p.id === paramId)
+    const param = store.parameters.find((p: Parameter) => p.id === paramId)
     if (!param) throw new Error(`Parameter not found: ${nameOrId}`)
     store.updateParameter(paramId, newName || param.name, newValue || param.value)
   }
@@ -229,7 +229,7 @@ export function createScriptingAPI() {
     } else {
       sketchId = context.sketches.get(sketchIdOrName) || sketchIdOrName
     }
-    const sketch = store.sketches.find((s) => s.id === sketchId)
+    const sketch = store.sketches.find((s: Sketch) => s.id === sketchId)
     if (!sketch) throw new Error(`Sketch not found: ${sketchIdOrName}`)
     store.addExtrude(sketchId, depth, operation, direction, symmetric)
     return store.extrudes[store.extrudes.length - 1].id
@@ -251,7 +251,7 @@ export function createScriptingAPI() {
     } else {
       sketchId = context.sketches.get(sketchIdOrName) || sketchIdOrName
     }
-    const sketch = store.sketches.find((s) => s.id === sketchId)
+    const sketch = store.sketches.find((s: Sketch) => s.id === sketchId)
     if (!sketch) throw new Error(`Sketch not found: ${sketchIdOrName}`)
     store.addRevolve(sketchId, axisType, angle, axisElementId)
     return store.revolves[store.revolves.length - 1].id
@@ -267,8 +267,8 @@ export function createScriptingAPI() {
   ): Promise<string> {
     const sketchId1 = context.sketches.get(sketch1IdOrName) || sketch1IdOrName
     const sketchId2 = context.sketches.get(sketch2IdOrName) || sketch2IdOrName
-    const sketch1 = store.sketches.find((s) => s.id === sketchId1)
-    const sketch2 = store.sketches.find((s) => s.id === sketchId2)
+    const sketch1 = store.sketches.find((s: Sketch) => s.id === sketchId1)
+    const sketch2 = store.sketches.find((s: Sketch) => s.id === sketchId2)
     if (!sketch1) throw new Error(`Sketch not found: ${sketch1IdOrName}`)
     if (!sketch2) throw new Error(`Sketch not found: ${sketch2IdOrName}`)
     store.addLoft(sketchId1, sketchId2, operation)
@@ -285,8 +285,8 @@ export function createScriptingAPI() {
   ): Promise<string> {
     const profileSketchId = context.sketches.get(profileSketchIdOrName) || profileSketchIdOrName
     const pathSketchId = context.sketches.get(pathSketchIdOrName) || pathSketchIdOrName
-    const profileSketch = store.sketches.find((s) => s.id === profileSketchId)
-    const pathSketch = store.sketches.find((s) => s.id === pathSketchId)
+    const profileSketch = store.sketches.find((s: Sketch) => s.id === profileSketchId)
+    const pathSketch = store.sketches.find((s: Sketch) => s.id === pathSketchId)
     if (!profileSketch) throw new Error(`Sketch not found: ${profileSketchIdOrName}`)
     if (!pathSketch) throw new Error(`Sketch not found: ${pathSketchIdOrName}`)
     store.addSweep(profileSketchId, pathSketchId, operation)
@@ -319,7 +319,7 @@ export function createScriptingAPI() {
    */
   async function setSketchColor(sketchIdOrName: string, color: string, opacity?: number): Promise<void> {
     const sketchId = context.sketches.get(sketchIdOrName) || sketchIdOrName
-    const sketch = store.sketches.find((s) => s.id === sketchId)
+    const sketch = store.sketches.find((s: Sketch) => s.id === sketchId)
     if (!sketch) throw new Error(`Sketch not found: ${sketchIdOrName}`)
     store.setSketchAppearance(sketchId, color, opacity ?? 1)
   }
@@ -329,7 +329,7 @@ export function createScriptingAPI() {
    */
   async function setSketchName(sketchIdOrName: string, name: string): Promise<void> {
     const sketchId = context.sketches.get(sketchIdOrName) || sketchIdOrName
-    const sketch = store.sketches.find((s) => s.id === sketchId)
+    const sketch = store.sketches.find((s: Sketch) => s.id === sketchId)
     if (!sketch) throw new Error(`Sketch not found: ${sketchIdOrName}`)
     store.setSketchName(sketchId, name)
     context.sketches.set(name, sketchId)

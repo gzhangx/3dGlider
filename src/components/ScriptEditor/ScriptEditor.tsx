@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useModelStore } from '../../store/modelStore'
 import { createScriptingAPI } from '../../lib/scriptingAPI'
 import styles from './ScriptEditor.module.css'
 
@@ -23,6 +24,7 @@ await api.addExtrude('last', 2);
 `
 
 export function ScriptEditor({ onClose }: ScriptEditorProps) {
+  const store = useModelStore()
   const [code, setCode] = useState(EXAMPLE_SCRIPT)
   const [output, setOutput] = useState<string[]>([])
   const [isRunning, setIsRunning] = useState(false)
@@ -34,7 +36,7 @@ export function ScriptEditor({ onClose }: ScriptEditorProps) {
     setError(null)
 
     try {
-      const api = createScriptingAPI()
+      const api = createScriptingAPI(store)
       const logs: string[] = []
 
       // Create a custom console for capturing logs
