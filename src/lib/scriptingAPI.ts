@@ -21,7 +21,11 @@ export interface ScriptingContext {
   parameters: Map<string, string>  // name -> id mapping
 }
 
-export function createScriptingAPI(store: ModelState) {
+type LiveModelStore = {
+  getState: () => ModelState
+}
+
+export function createScriptingAPI(store: LiveModelStore) {
   const context: ScriptingContext = {
     lastSketchId: null,
     sketches: new Map(),
@@ -32,14 +36,14 @@ export function createScriptingAPI(store: ModelState) {
    * Start a new sketch on a standard plane (XY, XZ, YZ) or a custom plane pose
    */
   async function startSketch(planeOrId: 'XY' | 'XZ' | 'YZ' | SketchPlanePose, offset?: number): Promise<void> {
-    store.startNewSketch(planeOrId, offset)
+    store.getState().startNewSketch(planeOrId, offset)
   }
 
   /**
    * Exit the current sketch (saves it to the model)
    */
   async function exitSketch(): Promise<string | null> {
-    const sketchId = store.exitSketch()
+    const sketchId = store.getState().exitSketch()
     if (sketchId) {
       context.lastSketchId = sketchId
     }
@@ -50,10 +54,11 @@ export function createScriptingAPI(store: ModelState) {
    * Edit an existing sketch by ID or name
    */
   async function editSketch(sketchIdOrName: string): Promise<void> {
+    const state = store.getState()
     const sketchId = context.sketches.get(sketchIdOrName) || sketchIdOrName
-    const sketch = store.sketches.find((s: Sketch) => s.id === sketchId)
+    const sketch = state.sketches.find((s: Sketch) => s.id === sketchId)
     if (!sketch) throw new Error(`Sketch not found: ${sketchIdOrName}`)
-    store.editSketch(sketchId)
+    state.editSketch(sketchId)
     context.lastSketchId = sketchId
   }
 
@@ -61,9 +66,10 @@ export function createScriptingAPI(store: ModelState) {
    * Add a line from (x1, y1) to (x2, y2) in sketch coordinates
    */
   async function addLine(x1: number, y1: number, x2: number, y2: number, construction?: boolean): Promise<string> {
-    if (!store.activePlane) throw new Error('No active sketch')
+    const state = store.getState()
+    if (!state.activePlane) throw new Error('No active sketch')
     const id = crypto.randomUUID()
-    store.addSketchElement({
+    state.addSketchElement({
       type: 'line',
       id,
       start: { x: x1, y: y1 },
@@ -77,9 +83,10 @@ export function createScriptingAPI(store: ModelState) {
    * Add a rectangle with corners at (x1, y1) and (x2, y2)
    */
   async function addRect(x1: number, y1: number, x2: number, y2: number, construction?: boolean): Promise<string> {
-    if (!store.activePlane) throw new Error('No active sketch')
+    const state = store.getState()
+    if (!state.activePlane) throw new Error('No active sketch')
     const id = crypto.randomUUID()
-    store.addSketchElement({
+    state.addSketchElement({
       type: 'rect',
       id,
       start: { x: x1, y: y1 },
@@ -93,9 +100,10 @@ export function createScriptingAPI(store: ModelState) {
    * Add a circle at (x, y) with given radius
    */
   async function addCircle(x: number, y: number, radius: number, construction?: boolean): Promise<string> {
-    if (!store.activePlane) throw new Error('No active sketch')
+    const state = store.getState()
+    if (!state.activePlane) throw new Error('No active sketch')
     const id = crypto.randomUUID()
-    store.addSketchElement({
+    state.addSketchElement({
       type: 'circle',
       id,
       center: { x, y },
@@ -124,12 +132,13 @@ export function createScriptingAPI(store: ModelState) {
     value?: number
     paramRef?: string
   }): Promise<string> {
-    if (!store.activePlane) throw new Error('No active sketch')
+    const state = store.getState()
+    if (!state.activePlane) throw new Error('No active sketch')
     const id = crypto.randomUUID()
 
     if (constraint.type === 'length') {
       if (!constraint.elementId || constraint.value === undefined) throw new Error('length constraint requires elementId and value')
-      store.addSketchConstraint({
+      state.addSketchConstraint({
         id,
         type: 'length',
         elementId: constraint.elementId,
@@ -138,21 +147,21 @@ export function createScriptingAPI(store: ModelState) {
       })
     } else if (constraint.type === 'horizontal') {
       if (!constraint.elementId) throw new Error('horizontal constraint requires elementId')
-      store.addSketchConstraint({
+      state.addSketchConstraint({
         id,
         type: 'horizontal',
         elementId: constraint.elementId,
       })
     } else if (constraint.type === 'vertical') {
       if (!constraint.elementId) throw new Error('vertical constraint requires elementId')
-      store.addSketchConstraint({
+      state.addSketchConstraint({
         id,
         type: 'vertical',
         elementId: constraint.elementId,
       })
     } else if (constraint.type === 'parallel') {
       if (!constraint.elementId1 || !constraint.elementId2) throw new Error('parallel constraint requires elementId1 and elementId2')
-      store.addSketchConstraint({
+      state.addSketchConstraint({
         id,
         type: 'parallel',
         elementId1: constraint.elementId1,
@@ -160,7 +169,7 @@ export function createScriptingAPI(store: ModelState) {
       })
     } else if (constraint.type === 'perpendicular') {
       if (!constraint.elementId1 || !constraint.elementId2) throw new Error('perpendicular constraint requires elementId1 and elementId2')
-      store.addSketchConstraint({
+      state.addSketchConstraint({
         id,
         type: 'perpendicular',
         elementId1: constraint.elementId1,
@@ -168,7 +177,7 @@ export function createScriptingAPI(store: ModelState) {
       })
     } else if (constraint.type === 'equal') {
       if (!constraint.elementId1 || !constraint.elementId2) throw new Error('equal constraint requires elementId1 and elementId2')
-      store.addSketchConstraint({
+      state.addSketchConstraint({
         id,
         type: 'equal',
         elementId1: constraint.elementId1,
@@ -178,7 +187,7 @@ export function createScriptingAPI(store: ModelState) {
       if (!constraint.elementId1 || !constraint.elementId2 || constraint.value === undefined) {
         throw new Error('angle constraint requires elementId1, elementId2, and value')
       }
-      store.addSketchConstraint({
+      state.addSketchConstraint({
         id,
         type: 'angle',
         elementId1: constraint.elementId1,
@@ -196,7 +205,7 @@ export function createScriptingAPI(store: ModelState) {
    */
   async function addParameter(name: string, value: number): Promise<string> {
     const id = crypto.randomUUID()
-    store.addParameter(name, value)
+    store.getState().addParameter(name, value)
     context.parameters.set(name, id)
     return id
   }
@@ -205,10 +214,11 @@ export function createScriptingAPI(store: ModelState) {
    * Update an existing parameter
    */
   async function updateParameter(nameOrId: string, newValue?: number, newName?: string): Promise<void> {
+    const state = store.getState()
     const paramId = context.parameters.get(nameOrId) || nameOrId
-    const param = store.parameters.find((p: Parameter) => p.id === paramId)
+    const param = state.parameters.find((p: Parameter) => p.id === paramId)
     if (!param) throw new Error(`Parameter not found: ${nameOrId}`)
-    store.updateParameter(paramId, newName || param.name, newValue || param.value)
+    state.updateParameter(paramId, newName || param.name, newValue || param.value)
   }
 
   /**
@@ -228,9 +238,10 @@ export function createScriptingAPI(store: ModelState) {
     } else {
       sketchId = context.sketches.get(sketchIdOrName) || sketchIdOrName
     }
-    const sketch = store.sketches.find((s: Sketch) => s.id === sketchId)
+    const state = store.getState()
+    const sketch = state.sketches.find((s: Sketch) => s.id === sketchId)
     if (!sketch) throw new Error(`Sketch not found: ${sketchIdOrName}`)
-    return store.addExtrude(sketchId, depth, operation, direction, symmetric)
+    return state.addExtrude(sketchId, depth, operation, direction, symmetric)
   }
 
   /**
@@ -249,9 +260,10 @@ export function createScriptingAPI(store: ModelState) {
     } else {
       sketchId = context.sketches.get(sketchIdOrName) || sketchIdOrName
     }
-    const sketch = store.sketches.find((s: Sketch) => s.id === sketchId)
+    const state = store.getState()
+    const sketch = state.sketches.find((s: Sketch) => s.id === sketchId)
     if (!sketch) throw new Error(`Sketch not found: ${sketchIdOrName}`)
-    return store.addRevolve(sketchId, axisType, angle, axisElementId)
+    return state.addRevolve(sketchId, axisType, angle, axisElementId)
   }
 
   /**
@@ -264,11 +276,12 @@ export function createScriptingAPI(store: ModelState) {
   ): Promise<string> {
     const sketchId1 = context.sketches.get(sketch1IdOrName) || sketch1IdOrName
     const sketchId2 = context.sketches.get(sketch2IdOrName) || sketch2IdOrName
-    const sketch1 = store.sketches.find((s: Sketch) => s.id === sketchId1)
-    const sketch2 = store.sketches.find((s: Sketch) => s.id === sketchId2)
+    const state = store.getState()
+    const sketch1 = state.sketches.find((s: Sketch) => s.id === sketchId1)
+    const sketch2 = state.sketches.find((s: Sketch) => s.id === sketchId2)
     if (!sketch1) throw new Error(`Sketch not found: ${sketch1IdOrName}`)
     if (!sketch2) throw new Error(`Sketch not found: ${sketch2IdOrName}`)
-    return store.addLoft(sketchId1, sketchId2, operation)
+    return state.addLoft(sketchId1, sketchId2, operation)
   }
 
   /**
@@ -281,52 +294,55 @@ export function createScriptingAPI(store: ModelState) {
   ): Promise<string> {
     const profileSketchId = context.sketches.get(profileSketchIdOrName) || profileSketchIdOrName
     const pathSketchId = context.sketches.get(pathSketchIdOrName) || pathSketchIdOrName
-    const profileSketch = store.sketches.find((s: Sketch) => s.id === profileSketchId)
-    const pathSketch = store.sketches.find((s: Sketch) => s.id === pathSketchId)
+    const state = store.getState()
+    const profileSketch = state.sketches.find((s: Sketch) => s.id === profileSketchId)
+    const pathSketch = state.sketches.find((s: Sketch) => s.id === pathSketchId)
     if (!profileSketch) throw new Error(`Sketch not found: ${profileSketchIdOrName}`)
     if (!pathSketch) throw new Error(`Sketch not found: ${pathSketchIdOrName}`)
-    return store.addSweep(profileSketchId, pathSketchId, operation)
+    return state.addSweep(profileSketchId, pathSketchId, operation)
   }
 
   /**
    * Get current sketches (read-only)
    */
   function getSketches() {
-    return store.sketches
+    return store.getState().sketches
   }
 
   /**
    * Get current parameters (read-only)
    */
   function getParameters() {
-    return store.parameters
+    return store.getState().parameters
   }
 
   /**
    * Get current extrudes (read-only)
    */
   function getExtrudes() {
-    return store.extrudes
+    return store.getState().extrudes
   }
 
   /**
    * Set sketch appearance (color and opacity)
    */
   async function setSketchColor(sketchIdOrName: string, color: string, opacity?: number): Promise<void> {
+    const state = store.getState()
     const sketchId = context.sketches.get(sketchIdOrName) || sketchIdOrName
-    const sketch = store.sketches.find((s: Sketch) => s.id === sketchId)
+    const sketch = state.sketches.find((s: Sketch) => s.id === sketchId)
     if (!sketch) throw new Error(`Sketch not found: ${sketchIdOrName}`)
-    store.setSketchAppearance(sketchId, color, opacity ?? 1)
+    state.setSketchAppearance(sketchId, color, opacity ?? 1)
   }
 
   /**
    * Set sketch name
    */
   async function setSketchName(sketchIdOrName: string, name: string): Promise<void> {
+    const state = store.getState()
     const sketchId = context.sketches.get(sketchIdOrName) || sketchIdOrName
-    const sketch = store.sketches.find((s: Sketch) => s.id === sketchId)
+    const sketch = state.sketches.find((s: Sketch) => s.id === sketchId)
     if (!sketch) throw new Error(`Sketch not found: ${sketchIdOrName}`)
-    store.setSketchName(sketchId, name)
+    state.setSketchName(sketchId, name)
     context.sketches.set(name, sketchId)
   }
 

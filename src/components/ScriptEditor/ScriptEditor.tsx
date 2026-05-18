@@ -24,7 +24,6 @@ await api.addExtrude('last', 2);
 `
 
 export function ScriptEditor({ onClose }: ScriptEditorProps) {
-  const store = useModelStore()
   const [code, setCode] = useState(EXAMPLE_SCRIPT)
   const [output, setOutput] = useState<string[]>([])
   const [isRunning, setIsRunning] = useState(false)
@@ -36,7 +35,7 @@ export function ScriptEditor({ onClose }: ScriptEditorProps) {
     setError(null)
 
     try {
-      const api = createScriptingAPI(store)
+      const api = createScriptingAPI(useModelStore)
       const logs: string[] = []
 
       // Create a custom console for capturing logs
