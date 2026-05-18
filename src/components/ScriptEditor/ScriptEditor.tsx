@@ -47,8 +47,9 @@ export function ScriptEditor({ onClose }: ScriptEditorProps) {
         info: (...args: any[]) => logs.push('INFO: ' + args.map((a) => String(a)).join(' ')),
       }
 
-      // Create the execution function
-      const execFn = new Function('api', 'console', code)
+      // Wrap user code in an async function so await works
+      const wrappedCode = `(async function() { ${code} })()`
+      const execFn = new Function('api', 'console', `return ${wrappedCode}`)
       await execFn(api, customConsole)
 
       setOutput([...logs, 'Script executed successfully!'])
