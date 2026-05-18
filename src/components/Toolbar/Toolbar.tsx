@@ -4,6 +4,7 @@ import { exportSTEP } from '../../lib/exportSTEP'
 import { exportSTL } from '../../lib/exportSTL'
 import { planeIdFromPose } from '../../lib/planePose'
 import { ParametersDialog } from '../ParametersDialog/ParametersDialog'
+import { ScriptEditor } from '../ScriptEditor/ScriptEditor'
 import styles from './Toolbar.module.css'
 
 export function Toolbar() {
@@ -11,6 +12,7 @@ export function Toolbar() {
   const activePlaneLabel = activePlane ? planeIdFromPose(activePlane) : null
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showParams, setShowParams] = useState(false)
+  const [showScriptEditor, setShowScriptEditor] = useState(false)
 
   const handleSaveJson = () => {
     const payload = {
@@ -90,6 +92,14 @@ export function Toolbar() {
         </button>
 
         <button
+          className={styles.scriptBtn}
+          onClick={() => setShowScriptEditor(true)}
+          title="Open script editor"
+        >
+          {'<>'} Script
+        </button>
+
+        <button
           className={styles.saveBtn}
           onClick={handleSaveJson}
           title="Save current model as JSON"
@@ -134,6 +144,7 @@ export function Toolbar() {
       </header>
 
       {showParams && <ParametersDialog onClose={() => setShowParams(false)} />}
+      {showScriptEditor && <ScriptEditor onClose={() => setShowScriptEditor(false)} />}
     </>
   )
 }

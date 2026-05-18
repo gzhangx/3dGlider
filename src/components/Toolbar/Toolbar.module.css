@@ -118,3 +118,16 @@
   transition: background 0.15s;
 }
 .paramsBtn:hover { background: #2a2450; }
+
+.scriptBtn {
+  padding: 5px 12px;
+  background: #1a2a3a;
+  color: #99d0ff;
+  border: 1px solid #334455;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: monospace;
+  transition: background 0.15s;
+}
+.scriptBtn:hover { background: #253545; }
