@@ -1,11 +1,7 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches:
-      - master
-
-  # Allow manual trigger from the Actions tab
+  # Manual trigger only — disable automatic deploys
   workflow_dispatch:
 
 permissions:
