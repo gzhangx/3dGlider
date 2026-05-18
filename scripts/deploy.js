@@ -2,8 +2,11 @@ import {cp as copy, rm as remove, readdir, mkdir, access} from 'fs/promises';
 import {existsSync} from 'fs';
 import path from 'path';
 import {execSync} from 'child_process';
+import {fileURLToPath} from 'url';
 
-const projectRoot = path.resolve(new URL(import.meta.url).pathname, '..', '..');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, '..');
 const distDir = path.join(projectRoot, 'dist');
 const target = path.resolve(projectRoot, '..', '3dGliderWeb');
 
@@ -26,7 +29,11 @@ async function ensureWorktree() {
       console.log('Clone fallback failed — initializing an empty gh-pages branch');
       if (!existsSync(target)) await mkdir(target, {recursive: true});
       run(`git -C "${target}" init`);
-      run(`git -C "${target}" checkout --orphan gh-pages`);
+      try {
+        run(`git -C "${target}" checkout gh-pages`);
+      } catch (e) {
+        run(`git -C "${target}" checkout --orphan gh-pages`);
+      }
     }
   }
 }
