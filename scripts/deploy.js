@@ -1,4 +1,4 @@
-import {cp as copy, rm as remove, readdir, mkdir, access} from 'fs/promises';
+import {cp as copy, rm as remove, readdir, mkdir, access, readFile, writeFile} from 'fs/promises';
 import {existsSync} from 'fs';
 import path from 'path';
 import {execSync} from 'child_process';
@@ -70,6 +70,23 @@ async function copyDist() {
   }
 }
 
+async function patchIndexHtml() {
+  const indexPath = path.join(target, 'index.html');
+  try {
+    let contents = await readFile(indexPath, 'utf8');
+    const updated = contents
+      .replace(/\/3dGlider\//g, '/3dGliderWeb/')
+      .replace(/href="\/vite\.svg"/g, 'href="/3dGliderWeb/vite.svg"')
+      .replace(/src="\/vite\.svg"/g, 'src="/3dGliderWeb/vite.svg"');
+    if (updated !== contents) {
+      await writeFile(indexPath, updated, 'utf8');
+      console.log('Patched index.html for 3dGliderWeb paths');
+    }
+  } catch (err) {
+    console.warn('Warning: could not patch index.html:', err.message || err);
+  }
+}
+
 async function deploy() {
   try {
     await access(distDir);
@@ -81,6 +98,7 @@ async function deploy() {
   await ensureTargetRepo();
   await clearTarget();
   await copyDist();
+  await patchIndexHtml();
 
   try {
     run(`git -C "${target}" add --all`);
