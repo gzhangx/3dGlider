@@ -132,9 +132,20 @@ function PointHandle({
   highlighted?: boolean
 }) {
   const [hovered, setHovered] = useState(false)
+  const { camera, size: viewSize } = useThree()
+  // Keep handle approximately this many CSS pixels on screen
+  const HANDLE_SCREEN = 18
+  const p = new Vector3(pos[0], pos[1], pos[2])
+  const dir = new Vector3()
+  camera.getWorldDirection(dir)
+  const distance = Math.abs(dir.dot(p.sub(camera.position))) || 1
+  const fov = 'fov' in camera ? camera.fov * Math.PI / 180 : 50 * Math.PI / 180
+  const worldPerPixel = 2 * distance * Math.tan(fov / 2) / viewSize.height
+  const worldSize = Math.max(worldPerPixel * HANDLE_SCREEN, DOT_MIN_WORLD)
   return (
     <mesh
       position={pos}
+      scale={[worldSize, worldSize, worldSize]}
       onPointerDown={(e) => {
         if (e.button !== 0) return
         e.stopPropagation()
@@ -161,7 +172,7 @@ function PointHandle({
       onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
       onPointerOut={() => setHovered(false)}
     >
-      <sphereGeometry args={[0.12, 8, 8]} />
+      <sphereGeometry args={[1, 8, 8]} />
       <meshBasicMaterial color={hovered ? '#ffffff' : highlighted ? '#88ff88' : '#ffdd44'} depthTest={false} />
     </mesh>
   )
