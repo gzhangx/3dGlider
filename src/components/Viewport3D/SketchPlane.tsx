@@ -22,6 +22,7 @@ import {
   circlePts,
   arcPts,
 } from '../../lib/sketchGeometry'
+import { findSnapTarget, rectCorners } from '../../lib/sketchInteraction'
 import { planeOriginFromPose } from '../../lib/planePose'
 import { PLANE_SIZE } from '../../lib/units'
 import { distToSeg, distToCircle, distToArc, computeCut, computeCircleCut, computeArcCut, CutResult, CircleCutResult, ArcCutResult } from '../../lib/cutTool'
@@ -65,15 +66,6 @@ function Dot({ pos, color, screenSize, size = 0.06, ring = false }: { pos: [numb
       <meshBasicMaterial color={color} depthTest={false} />
     </mesh>
   )
-}
-
-function rectCorners(rect: SketchRect): SketchPoint[] {
-  return [
-    { x: rect.start.x, y: rect.start.y },
-    { x: rect.end.x, y: rect.start.y },
-    { x: rect.end.x, y: rect.end.y },
-    { x: rect.start.x, y: rect.end.y },
-  ]
 }
 
 // ─── single element renderer (with hover/select) ──────────────────────────────
@@ -160,94 +152,6 @@ function PointHandle({
 
 // ─── collect element endpoints for snap ──────────────────────────────────────
 
-function elementEndpoints(el: SketchElement): { pt: SketchPoint; ref: PointRef }[] {
-  if (el.type === 'line') return [
-    { pt: el.start, ref: { elementId: el.id, which: 'start' } },
-    { pt: el.end,   ref: { elementId: el.id, which: 'end' } },
-  ]
-  if (el.type === 'rect') return [
-    { pt: el.start, ref: { elementId: el.id, which: 'start' } },
-    { pt: el.end,   ref: { elementId: el.id, which: 'end' } },
-  ]
-  return []
-}
-
-
-// Helper: closest point on line segment to a point
-function closestPointOnSegment(p: SketchPoint, a: SketchPoint, b: SketchPoint): SketchPoint {
-  const dx = b.x - a.x
-  const dy = b.y - a.y
-  const lenSq = dx * dx + dy * dy
-  if (lenSq === 0) return a
-  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq))
-  return { x: a.x + t * dx, y: a.y + t * dy }
-}
-
-// Helper: closest point on circle to a point
-function closestPointOnCircle(p: SketchPoint, center: SketchPoint, radius: number): SketchPoint {
-  const dx = p.x - center.x
-  const dy = p.y - center.y
-  const dist = Math.hypot(dx, dy)
-  if (dist === 0) return { x: center.x + radius, y: center.y }
-  return { x: center.x + (dx / dist) * radius, y: center.y + (dy / dist) * radius }
-}
-
-// Helper: distance from point to circle perimeter
-function distToCirclePerimeter(p: SketchPoint, center: SketchPoint, radius: number): number {
-  const dist = Math.hypot(p.x - center.x, p.y - center.y)
-  return Math.abs(dist - radius)
-}
-
-// Helper: distance from a point to a line
-function distancePointToLine(p: SketchPoint, lineStart: SketchPoint, lineEnd: SketchPoint): number {
-  const dx = lineEnd.x - lineStart.x
-  const dy = lineEnd.y - lineStart.y
-  const lenSq = dx * dx + dy * dy
-  if (lenSq === 0) return Math.hypot(p.x - lineStart.x, p.y - lineStart.y)
-  const t = ((p.x - lineStart.x) * dx + (p.y - lineStart.y) * dy) / lenSq
-  const clampedT = Math.max(0, Math.min(1, t))
-  const closestX = lineStart.x + clampedT * dx
-  const closestY = lineStart.y + clampedT * dy
-  return Math.hypot(p.x - closestX, p.y - closestY)
-}
-
-// Helper: check if a line segment is tangent to a circle
-function isLineTangentToCircle(lineStart: SketchPoint, lineEnd: SketchPoint, center: SketchPoint, radius: number, tolerance = 0.05): boolean {
-  const dist = distancePointToLine(center, lineStart, lineEnd)
-  return Math.abs(dist - radius) < tolerance
-}
-
-// Helper: find the tangent point on a circle from a fixed start point
-// Returns the tangent point closest to the cursor position (raw)
-function getTangentPointOnCircle(lineStart: SketchPoint, center: SketchPoint, radius: number, rawCursor: SketchPoint): SketchPoint | null {
-  const dx = lineStart.x - center.x
-  const dy = lineStart.y - center.y
-  const distSq = dx * dx + dy * dy
-  const dist = Math.sqrt(distSq)
-
-  // Point must lie outside the circle for a tangent to exist
-  if (dist <= radius + 1e-9) return null
-
-  const angleToStart = Math.atan2(dy, dx)
-  const angleOffset = Math.acos(radius / dist)
-
-  const tangentA = angleToStart + angleOffset
-  const tangentB = angleToStart - angleOffset
-
-  const tangent1 = {
-    x: center.x + Math.cos(tangentA) * radius,
-    y: center.y + Math.sin(tangentA) * radius,
-  }
-  const tangent2 = {
-    x: center.x + Math.cos(tangentB) * radius,
-    y: center.y + Math.sin(tangentB) * radius,
-  }
-
-  const dist1 = Math.hypot(rawCursor.x - tangent1.x, rawCursor.y - tangent1.y)
-  const dist2 = Math.hypot(rawCursor.x - tangent2.x, rawCursor.y - tangent2.y)
-
-  return dist1 <= dist2 ? tangent1 : tangent2
-}
 
 
 // ─── main component ───────────────────────────────────────────────────────────
@@ -330,112 +234,6 @@ export function SketchPlane() {
   const getRaw = (e: ThreeEvent<PointerEvent | MouseEvent>) => toSketch(e.point, plane)
   const doSnap = (p: SketchPoint) => snapToGrid ? snapPt(p) : p
 
-  // Find nearest snap target: endpoints, line segments, circle centers, circle perimeters
-  const findSnapTarget = (raw: SketchPoint, lineStart: SketchPoint | null = null): { pt: SketchPoint; ref: PointRef | null; constraintHint?: string; tangentCircleId?: string } | null => {
-    let best: { pt: SketchPoint; ref: PointRef | null; constraintHint?: string; tangentCircleId?: string; dist: number } | null = null
-
-    // ── Snap to endpoints ──────────────────────────────────────────────────
-    for (const el of sketchElements) {
-      for (const { pt, ref } of elementEndpoints(el)) {
-        const d = Math.hypot(raw.x - pt.x, raw.y - pt.y)
-        if (d < snapEndpointThreshold && (!best || d < best.dist)) {
-          best = { pt, ref, dist: d }
-        }
-      }
-    }
-
-    // ── Snap to object geometry (if enabled) ──────────────────────────────
-    if (snapToObjects) {
-      for (const el of sketchElements) {
-        // Snap to line segment points
-        if (el.type === 'line') {
-          const closest = closestPointOnSegment(raw, el.start, el.end)
-          const d = Math.hypot(raw.x - closest.x, raw.y - closest.y)
-          if (d < snapObjectThreshold && (!best || d < best.dist)) {
-            best = { pt: closest, ref: null, constraintHint: '⊙ Coincident on line', dist: d }
-          }
-        }
-
-        // Snap to circle center
-        if (el.type === 'circle') {
-          const d = Math.hypot(raw.x - el.center.x, raw.y - el.center.y)
-          if (d < snapObjectThreshold && (!best || d < best.dist)) {
-            best = { pt: el.center, ref: null, constraintHint: '⊙ Coincident at center', dist: d }
-          }
-        }
-
-        // Snap to circle perimeter with a wider threshold
-        if (el.type === 'circle') {
-          const closest = closestPointOnCircle(raw, el.center, el.radius)
-          const d = distToCirclePerimeter(raw, el.center, el.radius)
-          if (d < snapTangentThreshold && (!best || d < best.dist)) {
-            // Check if line is tangent (only when drawing a line with a start point)
-            if (lineStart && activeTool === 'line' && isLineTangentToCircle(lineStart, raw, el.center, el.radius)) {
-              // Use actual tangent point when tangent
-              const tangentPt = getTangentPointOnCircle(lineStart, el.center, el.radius, raw)
-              const snapPt = tangentPt || closest
-              best = { 
-                pt: snapPt, 
-                ref: null, 
-                constraintHint: '⌶ Tangent to circle',
-                tangentCircleId: el.id,
-                dist: d 
-              }
-            } else {
-              best = {
-                pt: closest, 
-                ref: null, 
-                constraintHint: '⊙ Coincident on circle',
-                dist: d 
-              }
-            }
-          }
-        }
-
-        // Snap to rect corners and edges
-        if (el.type === 'rect') {
-          const corners = rectCorners(el)
-          for (const corner of corners) {
-            const d = Math.hypot(raw.x - corner.x, raw.y - corner.y)
-            if (d < snapObjectThreshold && (!best || d < best.dist)) {
-              best = { pt: corner, ref: null, dist: d }
-            }
-          }
-          // Snap to rect edges
-          for (let i = 0; i < 4; i++) {
-            const a = corners[i]
-            const b = corners[(i + 1) % 4]
-            const closest = closestPointOnSegment(raw, a, b)
-            const d = Math.hypot(raw.x - closest.x, raw.y - closest.y)
-            if (d < snapObjectThreshold && (!best || d < best.dist)) {
-              best = { pt: closest, ref: null, constraintHint: '⊙ Coincident on edge', dist: d }
-            }
-          }
-        }
-      }
-    }
-
-    // ── Snap to other planes ──────────────────────────────────────────────────
-    if (snapToOtherPlanes) {
-      for (const sketch of sketches) {
-        if (sketch.id === editingSketchId) continue
-        for (const el of sketch.elements) {
-          for (const { pt } of elementEndpoints(el)) {
-            const w = worldPt(pt, sketch.plane)
-            const localPt = toSketch({ x: w[0], y: w[1], z: w[2] }, plane)
-            const d = Math.hypot(raw.x - localPt.x, raw.y - localPt.y)
-            if (d < snapEndpointThreshold && (!best || d < best.dist)) {
-              best = { pt: localPt, ref: null, dist: d }
-            }
-          }
-        }
-      }
-    }
-
-    //return best ? { pt: best.pt, ref: best.ref, constraintHint: best.constraintHint } : null
-    return best;
-  }
-
   const onMove = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     const raw = getRaw(e)
@@ -448,94 +246,33 @@ export function SketchPlane() {
 
     // ── drag mode ────────────────────────────────────────────────────────────
     if (dragTarget) {
-      const key = dragTarget.pointType
-      // Check for snap to another element's endpoint or geometry (excluding dragged element)
-      let snap: { pt: SketchPoint; ref: PointRef | null } | null = null
-      if (key === 'start' || key === 'end') {
-        let bestDist = snapEndpointThreshold
-        
-        // Snap to endpoints
-        for (const el of sketchElements) {
-          if (el.id === dragTarget.elementId) continue
-          for (const { pt, ref } of elementEndpoints(el)) {
-            const d = Math.hypot(raw.x - pt.x, raw.y - pt.y)
-            if (d < bestDist) { bestDist = d; snap = { pt, ref } }
-          }
-        }
-        
-        // Snap to object geometry
-        if (snapToObjects) {
-          for (const el of sketchElements) {
-            if (el.id === dragTarget.elementId) continue
-            
-            // Line segments
-            if (el.type === 'line') {
-              const closest = closestPointOnSegment(raw, el.start, el.end)
-              const d = Math.hypot(raw.x - closest.x, raw.y - closest.y)
-              if (d < bestDist) { bestDist = d; snap = { pt: closest, ref: null } }
-            }
-            
-            // Circle center
-            if (el.type === 'circle') {
-              const d = Math.hypot(raw.x - el.center.x, raw.y - el.center.y)
-              if (d < bestDist) { bestDist = d; snap = { pt: el.center, ref: null } }
-            }
-            
-            // Circle perimeter
-            if (el.type === 'circle') {
-              const closest = closestPointOnCircle(raw, el.center, el.radius)
-              const d = distToCirclePerimeter(raw, el.center, el.radius)
-              if (d < bestDist) { bestDist = d; snap = { pt: closest, ref: null } }
-            }
-            
-            // Rect corners and edges
-            if (el.type === 'rect') {
-              const corners = rectCorners(el)
-              for (const corner of corners) {
-                const d = Math.hypot(raw.x - corner.x, raw.y - corner.y)
-                if (d < bestDist) { bestDist = d; snap = { pt: corner, ref: null } }
-              }
-              for (let i = 0; i < 4; i++) {
-                const a = corners[i]
-                const b = corners[(i + 1) % 4]
-                const closest = closestPointOnSegment(raw, a, b)
-                const d = Math.hypot(raw.x - closest.x, raw.y - closest.y)
-                if (d < bestDist) { bestDist = d; snap = { pt: closest, ref: null } }
-              }
-            }
-          }
-        }
-        
-        // Snap to other planes
-        if (snapToOtherPlanes) {
-          for (const sketch of sketches) {
-            if (sketch.id === editingSketchId) continue
-            for (const el of sketch.elements) {
-              for (const { pt } of elementEndpoints(el)) {
-                const w = worldPt(pt, sketch.plane)
-                const localPt = toSketch({ x: w[0], y: w[1], z: w[2] }, plane)
-                const d = Math.hypot(raw.x - localPt.x, raw.y - localPt.y)
-                if (d < bestDist) { bestDist = d; snap = { pt: localPt, ref: null } }
-              }
-            }
-          }
-        }
-      }
+      const snap = findSnapTarget(
+        raw,
+        sketchElements,
+        sketches,
+        editingSketchId,
+        plane,
+        activeTool,
+        snapToObjects,
+        snapToOtherPlanes,
+        snapEndpointThreshold,
+        snapObjectThreshold,
+        snapTangentThreshold,
+        null,
+        dragTarget.elementId,
+      )
       setDragSnapTarget(snap)
       const pt = snap ? snap.pt : doSnap(raw)
 
-      // Update the dragged point position
       let updated = sketchElements.map((el) =>
         el.id === dragTarget.elementId
-          ? { ...el, [key]: pt } as SketchElement
+          ? { ...el, [dragTarget.pointType]: pt } as SketchElement
           : el
       )
 
-      // Solve constraints to maintain all constraints simultaneously
       const fixedPoints = new Set<string>([`${dragTarget.elementId}:${dragTarget.pointType}`])
       updated = solveConstraints(updated, sketchConstraints, fixedPoints)
 
-      // Apply updates to store - update all elements that were in the solved result
       for (const newEl of updated) {
         updateSketchElement(newEl.id, newEl as Parameters<typeof updateSketchElement>[1])
       }
@@ -604,7 +341,21 @@ export function SketchPlane() {
     }
 
     // Draw tools: check endpoint snap first
-    const snap = findSnapTarget(raw, startPt)
+    const snap = findSnapTarget(
+      raw,
+      sketchElements,
+      sketches,
+      editingSketchId,
+      plane,
+      activeTool,
+      snapToObjects,
+      snapToOtherPlanes,
+      snapEndpointThreshold,
+      snapObjectThreshold,
+      snapTangentThreshold,
+      startPt,
+      null,
+    )
     if (snap) {
       setSnapTarget(snap)
       setCursorPt(snap.pt)
@@ -729,8 +480,7 @@ export function SketchPlane() {
 
   const onPointerUp = () => {
     if (dragTarget) {
-      // If snapped to another endpoint, add a coincident constraint (unless already linked)
-      if (dragSnapTarget?.ref && (dragTarget.pointType === 'start' || dragTarget.pointType === 'end')) {
+      if (dragSnapTarget?.ref) {
         const p1: PointRef = { elementId: dragTarget.elementId, which: dragTarget.pointType }
         const p2 = dragSnapTarget.ref
         const alreadyLinked = sketchConstraints.some(
@@ -842,6 +592,7 @@ export function SketchPlane() {
       {activeTool === 'select' && sketchElements.map((el) => {
         const startDrag = (pointType: 'start' | 'end' | 'center') => (e: ThreeEvent<PointerEvent>) => {
           e.stopPropagation()
+          selectElement(el.id)
           setDragTarget({ elementId: el.id, pointType })
           setIsDraggingPoint(true)
         }
