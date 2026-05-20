@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { DoubleSide, Vector3 } from 'three'
+import { DoubleSide, Plane as ThreePlane, Vector3 } from 'three'
 import { Line, Text } from '@react-three/drei'
 import { ThreeEvent, useThree } from '@react-three/fiber'
 import {
@@ -23,7 +23,7 @@ import {
   arcPts,
 } from '../../lib/sketchGeometry'
 import { findSnapTarget, rectCorners } from '../../lib/sketchInteraction'
-import { planeOriginFromPose } from '../../lib/planePose'
+import { planeOriginFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { PLANE_SIZE } from '../../lib/units'
 import { distToSeg, distToCircle, distToArc, computeCut, computeCircleCut, computeArcCut, CutResult, CircleCutResult, ArcCutResult } from '../../lib/cutTool'
 import { solveConstraints } from '../../lib/constraintSolve'
@@ -121,16 +121,21 @@ function PointHandle({
   pos,
   onDragStart,
   onDragMove,
+  onDragEnd,
+  highlighted,
 }: {
   pos: [number, number, number]
   onDragStart: (e: ThreeEvent<PointerEvent>) => void
   onDragMove?: (e: ThreeEvent<PointerEvent>) => void
+  onDragEnd?: (e: ThreeEvent<PointerEvent>) => void
+  highlighted?: boolean
 }) {
   const [hovered, setHovered] = useState(false)
   return (
     <mesh
       position={pos}
       onPointerDown={(e) => {
+        if (e.button !== 0) return
         e.stopPropagation()
         ;(e.currentTarget as unknown as { setPointerCapture: (id: number) => void }).setPointerCapture(e.pointerId)
         onDragStart(e)
@@ -141,11 +146,22 @@ function PointHandle({
           onDragMove(e)
         }
       }}
+      onPointerUp={(e) => {
+        if (e.button !== 0) return
+        e.stopPropagation()
+        ;(e.currentTarget as unknown as { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(e.pointerId)
+        onDragEnd?.(e)
+      }}
+      onPointerCancel={(e) => {
+        e.stopPropagation()
+        ;(e.currentTarget as unknown as { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(e.pointerId)
+        onDragEnd?.(e)
+      }}
       onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
       onPointerOut={() => setHovered(false)}
     >
       <sphereGeometry args={[0.12, 8, 8]} />
-      <meshBasicMaterial color={hovered ? '#ffffff' : '#ffdd44'} depthTest={false} />
+      <meshBasicMaterial color={hovered ? '#ffffff' : highlighted ? '#88ff88' : '#ffdd44'} depthTest={false} />
     </mesh>
   )
 }
@@ -162,7 +178,7 @@ export function SketchPlane() {
     sketchElements, sketchConstraints, sketches, editingSketchId,
     selectedElementIds, selectElement, selectElements,
     addSketchElement, updateSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
-    addSketchConstraint, setIsDraggingPoint, setHighlightElementIds,
+    addSketchConstraint, setIsDraggingPoint, highlightElementIds, setHighlightElementIds,
   } = useModelStore()
 
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
@@ -212,6 +228,7 @@ export function SketchPlane() {
   if (!activePlane) return null
   const plane = activePlane
   const planeOrigin = planeOriginFromPose(plane)
+  const planeNormal = planeNormalFromPose(plane)
   const isDrawTool = activeTool !== 'select'
   const { camera, size } = useThree()
 
@@ -227,11 +244,25 @@ export function SketchPlane() {
     return 2 * cameraDistance * Math.tan(fov / 2) / size.height
   }, [camera, cameraDistance, size.height])
 
+  const getHandlePoint = (p: SketchPoint): [number, number, number] => {
+    const [x, y, z] = worldPt(p, plane)
+    return [x + planeNormal.x * 0.01, y + planeNormal.y * 0.01, z + planeNormal.z * 0.01]
+  }
+
   const snapEndpointThreshold = Math.max(worldPerPixel * SNAP_ENDPOINT_SCREEN, SNAP_MIN_WORLD)
   const snapObjectThreshold = Math.max(worldPerPixel * SNAP_OBJECT_SCREEN, SNAP_MIN_WORLD)
   const snapTangentThreshold = Math.max(worldPerPixel * SNAP_TANGENT_SCREEN, SNAP_MIN_WORLD)
 
-  const getRaw = (e: ThreeEvent<PointerEvent | MouseEvent>) => toSketch(e.point, plane)
+  const getRaw = (e: ThreeEvent<PointerEvent | MouseEvent>) => {
+    const plane3 = new ThreePlane().setFromNormalAndCoplanarPoint(
+      planeNormalFromPose(plane),
+      planeOrigin,
+    )
+    const world = new Vector3()
+    return e.ray.intersectPlane(plane3, world)
+      ? toSketch(world, plane)
+      : toSketch(e.point, plane)
+  }
   const doSnap = (p: SketchPoint) => snapToGrid ? snapPt(p) : p
 
   const onMove = (e: ThreeEvent<PointerEvent>) => {
@@ -242,6 +273,27 @@ export function SketchPlane() {
     if (selectBoxStart) {
       setSelectBoxEnd(raw)
       return
+    }
+
+    // In select mode, highlight any nearby endpoint to indicate readiness to drag
+    if (activeTool === 'select' && !dragTarget && !selectBoxStart) {
+      const hoverSnap = findSnapTarget(
+        raw,
+        sketchElements,
+        sketches,
+        editingSketchId,
+        plane,
+        activeTool,
+        snapToObjects,
+        snapToOtherPlanes,
+        snapEndpointThreshold,
+        snapObjectThreshold,
+        snapTangentThreshold,
+        null,
+        null,
+      )
+      if (hoverSnap && hoverSnap.ref) setHighlightElementIds([hoverSnap.ref.elementId])
+      else setHighlightElementIds([])
     }
 
     // ── drag mode ────────────────────────────────────────────────────────────
@@ -598,17 +650,17 @@ export function SketchPlane() {
         }
         if (el.type === 'line') return (
           <group key={el.id + '_handles'}>
-            <PointHandle pos={worldPt(el.start, plane)} onDragStart={startDrag('start')} onDragMove={onMove} />
-            <PointHandle pos={worldPt(el.end,   plane)} onDragStart={startDrag('end')} onDragMove={onMove} />
+            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} highlighted={highlightElementIds.includes(el.id)} />
+            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} highlighted={highlightElementIds.includes(el.id)} />
           </group>
         )
         if (el.type === 'circle') return (
-          <PointHandle key={el.id + '_handle'} pos={worldPt(el.center, plane)} onDragStart={startDrag('center')} onDragMove={onMove} />
+          <PointHandle key={el.id + '_handle'} pos={getHandlePoint(el.center)} onDragStart={startDrag('center')} onDragMove={onMove} onDragEnd={onPointerUp} highlighted={highlightElementIds.includes(el.id)} />
         )
         if (el.type === 'rect') return (
           <group key={el.id + '_handles'}>
-            <PointHandle pos={worldPt(el.start, plane)} onDragStart={startDrag('start')} onDragMove={onMove} />
-            <PointHandle pos={worldPt(el.end,   plane)} onDragStart={startDrag('end')} onDragMove={onMove} />
+            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} highlighted={highlightElementIds.includes(el.id)} />
+            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} highlighted={highlightElementIds.includes(el.id)} />
           </group>
         )
         return null
