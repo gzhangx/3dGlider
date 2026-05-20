@@ -45,9 +45,8 @@ function Dot({ pos, color, screenSize, size = 0.06, ring = false }: { pos: [numb
   let worldSize = size
   if (screenSize) {
     const p = new Vector3(pos[0], pos[1], pos[2])
-    const dir = new Vector3()
-    camera.getWorldDirection(dir)
-    const distance = Math.abs(dir.dot(p.sub(camera.position))) || 1
+    // Use Euclidean distance so dot size remains constant regardless of view angle
+    const distance = camera.position.distanceTo(p) || 1
     const fov = 'fov' in camera ? camera.fov * Math.PI / 180 : 50 * Math.PI / 180
     const worldPerPixel = 2 * distance * Math.tan(fov / 2) / viewSize.height
     worldSize = Math.max(worldPerPixel * screenSize, DOT_MIN_WORLD)
@@ -136,9 +135,8 @@ function PointHandle({
   // Keep handle approximately this many CSS pixels on screen
   const HANDLE_SCREEN = 18
   const p = new Vector3(pos[0], pos[1], pos[2])
-  const dir = new Vector3()
-  camera.getWorldDirection(dir)
-  const distance = Math.abs(dir.dot(p.sub(camera.position))) || 1
+  // Use Euclidean distance from camera to handle so size is stable for all view angles
+  const distance = camera.position.distanceTo(p) || 1
   const fov = 'fov' in camera ? camera.fov * Math.PI / 180 : 50 * Math.PI / 180
   const worldPerPixel = 2 * distance * Math.tan(fov / 2) / viewSize.height
   const worldSize = Math.max(worldPerPixel * HANDLE_SCREEN, DOT_MIN_WORLD)
