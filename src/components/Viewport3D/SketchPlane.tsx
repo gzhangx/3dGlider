@@ -482,28 +482,31 @@ export function SketchPlane() {
     const cFlag = constructionMode ? { construction: true as const } : {}
 
     if (activeTool === 'line') {
-      addSketchElement({ type: 'line', id, start: startPt, end: pt, ...cFlag } satisfies SketchLine)
+      const newEl: SketchLine = { type: 'line', id, start: startPt, end: pt, ...cFlag }
+      addSketchElement(newEl)
+      const addedConstraints: SketchConstraint[] = []
       // Auto-coincident for start point if it snapped (same-plane only)
       if (startSnapRef) {
-        addSketchConstraint({
-          id: crypto.randomUUID(), type: 'coincident',
-          p1: startSnapRef,
-          p2: { elementId: id, which: 'start' },
-        })
+        const c = { id: crypto.randomUUID(), type: 'coincident' as const, p1: startSnapRef, p2: { elementId: id, which: 'start' } }
+        addSketchConstraint(c)
+        addedConstraints.push(c)
       }
       // Auto-coincident for end point if it snapped (same-plane only)
       if (snapTarget?.tangentCircleId && activeTool === 'line') {
-        addSketchConstraint({
-          id: crypto.randomUUID(), type: 'tangent',
-          elementId1: id,
-          elementId2: snapTarget.tangentCircleId,
-        })
+        const c = { id: crypto.randomUUID(), type: 'tangent' as const, elementId1: id, elementId2: snapTarget.tangentCircleId }
+        addSketchConstraint(c)
+        addedConstraints.push(c)
       } else if (snapTarget?.ref) {
-        addSketchConstraint({
-          id: crypto.randomUUID(), type: 'coincident',
-          p1: snapTarget.ref,
-          p2: { elementId: id, which: 'end' },
-        })
+        const c = { id: crypto.randomUUID(), type: 'coincident' as const, p1: snapTarget.ref, p2: { elementId: id, which: 'end' } }
+        addSketchConstraint(c)
+        addedConstraints.push(c)
+      }
+      // If we added coincident constraints, immediately apply solver so the new element snaps
+      if (addedConstraints.length > 0) {
+        const combined = [...sketchElements, newEl]
+        const allConstraints = [...sketchConstraints, ...addedConstraints]
+        const solved = solveConstraints(combined, allConstraints, new Set())
+        for (const sEl of solved) updateSketchElement(sEl.id, sEl as Parameters<typeof updateSketchElement>[1])
       }
     } else if (activeTool === 'rect') {
       // Rect → 4 connected lines with coincident constraints at corners
@@ -515,20 +518,24 @@ export function SketchPlane() {
         { x: s.x, y: e.y },
       ]
       const lineIds = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()]
+      const newLines: SketchLine[] = []
       for (let i = 0; i < 4; i++) {
-        addSketchElement({
-          type: 'line', id: lineIds[i],
-          start: corners[i], end: corners[(i + 1) % 4],
-          ...cFlag,
-        } satisfies SketchLine)
+        const newL: SketchLine = { type: 'line', id: lineIds[i], start: corners[i], end: corners[(i + 1) % 4], ...cFlag }
+        addSketchElement(newL)
+        newLines.push(newL)
       }
       // Coincident constraints at each shared corner (end[i] = start[i+1])
+      const addedConstraints: SketchConstraint[] = []
       for (let i = 0; i < 4; i++) {
-        addSketchConstraint({
-          id: crypto.randomUUID(), type: 'coincident',
-          p1: { elementId: lineIds[i], which: 'end' },
-          p2: { elementId: lineIds[(i + 1) % 4], which: 'start' },
-        })
+        const c = { id: crypto.randomUUID(), type: 'coincident' as const, p1: { elementId: lineIds[i], which: 'end' }, p2: { elementId: lineIds[(i + 1) % 4], which: 'start' } }
+        addSketchConstraint(c)
+        addedConstraints.push(c)
+      }
+      if (addedConstraints.length > 0) {
+        const combined = [...sketchElements, ...newLines]
+        const allConstraints = [...sketchConstraints, ...addedConstraints]
+        const solved = solveConstraints(combined, allConstraints, new Set())
+        for (const sEl of solved) updateSketchElement(sEl.id, sEl as Parameters<typeof updateSketchElement>[1])
       }
     } else if (activeTool === 'circle') {
       const r = Math.hypot(pt.x - startPt.x, pt.y - startPt.y)
@@ -552,7 +559,12 @@ export function SketchPlane() {
           )
         )
         if (!alreadyLinked) {
-          addSketchConstraint({ id: crypto.randomUUID(), type: 'coincident', p1, p2 })
+          const c = { id: crypto.randomUUID(), type: 'coincident' as const, p1, p2 }
+          addSketchConstraint(c)
+          // Immediately apply the new coincident constraint so elements stay snapped
+          const allConstraints = [...sketchConstraints, c]
+          const solved = solveConstraints(sketchElements, allConstraints, new Set())
+          for (const sEl of solved) updateSketchElement(sEl.id, sEl as Parameters<typeof updateSketchElement>[1])
         }
       }
       setDragTarget(null)

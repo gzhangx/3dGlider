@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { reapplyParametricConstraints } from '../lib/constraintSolve'
+import { reapplyParametricConstraints, solveConstraints } from '../lib/constraintSolve'
 
 export type PlaneId = 'XY' | 'XZ' | 'YZ'
 export type AppMode = 'view' | 'sketch'
@@ -356,6 +356,8 @@ export interface ModelState {
   deleteSketchElement: (id: string) => void
   cutSketchElement: (id: string, replacements: SketchElement[]) => void
   addSketchConstraint: (c: SketchConstraint) => void
+  addSketchConstraintsBatch: (constraints: SketchConstraint[], apply?: boolean) => void
+  applyConstraints: (fixedPoints?: Set<string>) => void
   deleteSketchConstraint: (id: string) => void
   addExtrude: (sketchId: string, depth: number, operation?: 'add' | 'cut', direction?: [number, number, number], symmetric?: boolean, id?: string) => string
   updateExtrude: (id: string, depth: number, operation: 'add' | 'cut', direction?: [number, number, number], symmetric?: boolean) => void
@@ -448,6 +450,16 @@ export const useModelStore = create<ModelState>((set) => ({
   }),
   setIsDraggingPoint: (isDraggingPoint) => set({ isDraggingPoint }),
   setHighlightElementIds: (highlightElementIds) => set({ highlightElementIds }),
+  addSketchConstraintsBatch: (constraints, apply = true) => set((s) => {
+    const sketchConstraints = [...s.sketchConstraints, ...constraints]
+    if (!apply) return { sketchConstraints }
+    const solved = solveConstraints(s.sketchElements, sketchConstraints, new Set())
+    return { sketchConstraints, sketchElements: solved }
+  }),
+  applyConstraints: (fixedPoints) => set((s) => {
+    const solved = solveConstraints(s.sketchElements, s.sketchConstraints, fixedPoints ?? new Set())
+    return { sketchElements: solved }
+  }),
   resetSketchView: () => set((s) => ({ sketchViewResetCounter: s.sketchViewResetCounter + 1 })),
   setShowSketchNavigator: (showSketchNavigator) => set({ showSketchNavigator }),
   setHideOtherSketches: (hideOtherSketches) => set({ hideOtherSketches }),
