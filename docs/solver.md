@@ -109,3 +109,91 @@ Some constraints are flagged with higher priority (e.g., coincident constraints 
 ---
 
 If you want, I can also add annotated examples showing: (a) the exact variable vector and Jacobian for a small sketch (two lines sharing a coincident point), and (b) runtime traces (residuals/J entries) for a failing case to diagnose convergence issues.
+
+## Appendix A — Worked example: two lines sharing a coincident point
+
+Consider two lines L1 and L2 in the sketch with ids `l1` and `l2`.
+- `l1` has `start = A = (0,0)` (fixed) and `end = B` (free).
+- `l2` has `start = C` (should be coincident with `B`) and `end = D` (free).
+
+Initial geometry (example):
+- A = (0, 0) (fixed)
+- B = (1.00, 0.00)
+- C = (1.20, 0.10)
+- D = (2.00, 1.00)
+
+The solver will enumerate variables for every movable coordinate (here both endpoints of `l1` and `l2` except the fixed `A`). Using the code's convention the variable vector x can be ordered as:
+
+```
+v0 = l1.end.x   (B.x)
+v1 = l1.end.y   (B.y)
+v2 = l2.start.x (C.x)
+v3 = l2.start.y (C.y)
+v4 = l2.end.x   (D.x)
+v5 = l2.end.y   (D.y)
+```
+
+Constraints for this minimal example:
+- Coincident: B == C → two scalar equations:
+   r1(x) = v0 - v2
+   r2(x) = v1 - v3
+
+If we also had a length constraint on `l1` of length 1.0, it would contribute:
+   r3(x) = sqrt((v0 - A.x)^2 + (v1 - A.y)^2) - 1.0
+
+Jacobian rows (analytic):
+- For r1: ∂r1/∂v = [1, 0, -1, 0, 0, 0]
+- For r2: ∂r2/∂v = [0, 1, 0, -1, 0, 0]
+- For r3 (length): let dx = v0 - A.x, dy = v1 - A.y, len = sqrt(dx^2+dy^2).
+   ∂r3/∂v = [dx/len, dy/len, 0, 0, 0, 0]
+
+Numeric residuals with the example initial guess above:
+- r1 = 1.00 - 1.20 = -0.20
+- r2 = 0.00 - 0.10 = -0.10
+- r3 = sqrt(1^2 + 0^2) - 1 = 0.00
+
+So the residual vector r = [-0.2, -0.1, 0.0]. The Jacobian J is the 3×6 matrix with rows as shown. The solver forms the normal system (J^T J + λI) δ = -J^T r and solves for the correction δ to apply to the variables. Because the first two equations are simple differences, the solution will move `B` and `C` toward each other (and any length constraint will also bias the move to preserve `l1`'s length).
+
+This small worked example demonstrates how the code maps high-level geometric constraints to simple rows in J for linear constraints (coincident, horizontal/vertical) and to analytic derivatives for length/angle constraints.
+
+## Appendix B — Sample runtime trace for a stalled convergence
+
+When debugging a case where the solver appears to stall (residuals stop decreasing) it's useful to log the per-iteration `maxResidual` and optionally the largest residual constraint and its Jacobian row. Below is an illustrative trace you might see for a problematic case (values are synthetic but representative):
+
+```
+Iteration 0: maxResidual = 0.312   (largest eq #7: coincident, r = 0.312)
+Iteration 1: maxResidual = 0.158   (largest eq #7: r = 0.158)
+Iteration 2: maxResidual = 0.079   (largest eq #12: angle, r = -0.079)
+Iteration 3: maxResidual = 0.082   (largest eq #12: r = -0.082)  <-- slight increase, possible plateau
+Iteration 4: maxResidual = 0.081   (largest eq #12: r = -0.081)
+Iteration 5: maxResidual = 0.081   (no meaningful change)
+Reached max iterations or early-stopped due to plateau.
+```
+
+What to inspect when you see this pattern:
+- Which equation is the largest residual? If it's a nonlinear constraint (angle, tangent, length near zero), the Jacobian may be poorly scaled.
+- Inspect the corresponding Jacobian row (or rows). If the row is near-zero (all small entries) the solver cannot move variables to reduce that residual — this indicates a degeneracy (e.g., zero-length line, coincident points collapsing DOFs).
+- Check conditioning of J^T J: small pivots during Gaussian elimination indicate ill-conditioning. Options: increase damping λ, reduce the set of free variables via `fixedPoints`, or reparameterize the constraint (avoid atan2 differences very near branch cuts).
+
+Suggested debugging steps (practical):
+1. Log residuals and the index/type of the largest residual each iteration (add a temporary console.log in `solveConstraints`).
+2. Print the corresponding Jacobian row for that equation and the active variable indices — look for tiny norms or unexpected zeros.
+3. Try solving the same set with extra damping (increase λ) to see if convergence resumes — this points to conditioning issues.
+4. Isolate the failing constraint by commenting it out or solving only a small subset (use `fixedPoints` to keep most DOFs fixed). If the smaller problem converges, the issue is with interaction between constraints.
+
+Example diagnostic log snippet you can add inside the iteration loop:
+
+```ts
+// inside solveConstraints iteration
+const residuals = equations.map((eq) => eq.residual(currentElements))
+const maxResidual = Math.max(...residuals.map(Math.abs))
+const worstIndex = residuals.map(Math.abs).indexOf(Math.max(...residuals.map(Math.abs)))
+console.log(`iter=${iteration} maxResidual=${maxResidual.toFixed(6)} worstEq=${worstIndex} type=${equations[worstIndex].type}`)
+console.log('jacobian row:', equations[worstIndex].jacobian(currentElements, variables))
+```
+
+This will quickly point you to the problematic constraint and its sensitivity to variables.
+
+---
+
+If you'd like, I can (a) insert an optional debug flag into `solveConstraints` that prints these traces when enabled, and (b) add a unit test that reproduces the small worked example and asserts the solver reduces the coincident residual to near zero. Which would you prefer?
