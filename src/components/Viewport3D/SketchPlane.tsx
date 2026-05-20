@@ -73,7 +73,7 @@ function Dot({ pos, color, screenSize, size = 0.06, ring = false }: { pos: [numb
 /** Let the invisible sketch plane receive hits in cut mode (Line2 otherwise wins the raycast). */
 const noopRaycast: () => void = () => {}
 
-function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean }) {
+function SketchEl({ el, plane, highlighted, onPointerMove }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean; onPointerMove?: (e: ThreeEvent<PointerEvent>) => void }) {
   const { activeTool, selectedElementIds, highlightElementIds, selectElement, toggleElementSelection } = useModelStore()
   const [hovered, setHovered] = useState(false)
 
@@ -96,6 +96,7 @@ function SketchEl({ el, plane, highlighted }: { el: SketchElement; plane: Sketch
         },
         onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setHovered(true) },
         onPointerOut: () => setHovered(false),
+        onPointerMove: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); onPointerMove?.(e) },
       }
     : {}
 
@@ -637,7 +638,7 @@ export function SketchPlane() {
 
       {/* Elements — clickable in select mode, highlighted when targeted by cut */}
       {sketchElements.map((el) => (
-        <SketchEl key={el.id} el={el} plane={plane} highlighted={cutPreview?.lineId === el.id} />
+        <SketchEl key={el.id} el={el} plane={plane} highlighted={cutPreview?.lineId === el.id} onPointerMove={onMove} />
       ))}
 
       {/* Point handles — shown in select mode for dragging endpoints/centers */}
