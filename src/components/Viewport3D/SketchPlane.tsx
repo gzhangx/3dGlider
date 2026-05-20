@@ -188,7 +188,7 @@ export function SketchPlane() {
     sketchElements, sketchConstraints, sketches, editingSketchId,
     selectedElementIds, selectElement, selectElements,
     addSketchElement, updateSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
-    addSketchConstraint, setIsDraggingPoint, highlightElementIds, setHighlightElementIds,
+    addSketchConstraint, addSketchConstraintsBatch, applyConstraints, setIsDraggingPoint, highlightElementIds, setHighlightElementIds,
   } = useModelStore()
 
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
@@ -487,26 +487,20 @@ export function SketchPlane() {
       const addedConstraints: SketchConstraint[] = []
       // Auto-coincident for start point if it snapped (same-plane only)
       if (startSnapRef) {
-        const c = { id: crypto.randomUUID(), type: 'coincident' as const, p1: startSnapRef, p2: { elementId: id, which: 'start' } }
-        addSketchConstraint(c)
+        const c: CoincidentConstraint = { id: crypto.randomUUID(), type: 'coincident', p1: startSnapRef, p2: { elementId: id, which: 'start' } }
         addedConstraints.push(c)
       }
-      // Auto-coincident for end point if it snapped (same-plane only)
-      if (snapTarget?.tangentCircleId && activeTool === 'line') {
-        const c = { id: crypto.randomUUID(), type: 'tangent' as const, elementId1: id, elementId2: snapTarget.tangentCircleId }
-        addSketchConstraint(c)
+      // Auto-coincident or tangent for end point if it snapped (same-plane only)
+      if (snapTarget?.tangentCircleId) {
+        const c: TangentConstraint = { id: crypto.randomUUID(), type: 'tangent', elementId1: id, elementId2: snapTarget.tangentCircleId }
         addedConstraints.push(c)
       } else if (snapTarget?.ref) {
-        const c = { id: crypto.randomUUID(), type: 'coincident' as const, p1: snapTarget.ref, p2: { elementId: id, which: 'end' } }
-        addSketchConstraint(c)
+        const c: CoincidentConstraint = { id: crypto.randomUUID(), type: 'coincident', p1: snapTarget.ref, p2: { elementId: id, which: 'end' } }
         addedConstraints.push(c)
       }
-      // If we added coincident constraints, immediately apply solver so the new element snaps
+      // Use the store's batch API to append constraints and apply solver once
       if (addedConstraints.length > 0) {
-        const combined = [...sketchElements, newEl]
-        const allConstraints = [...sketchConstraints, ...addedConstraints]
-        const solved = solveConstraints(combined, allConstraints, new Set())
-        for (const sEl of solved) updateSketchElement(sEl.id, sEl as Parameters<typeof updateSketchElement>[1])
+        addSketchConstraintsBatch(addedConstraints, true)
       }
     } else if (activeTool === 'rect') {
       // Rect → 4 connected lines with coincident constraints at corners
