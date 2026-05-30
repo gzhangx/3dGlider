@@ -42,6 +42,7 @@ export function SketchSidebar() {
   const [input1, setInput1] = useState('')   // length / width / radius
   const [input2, setInput2] = useState('')   // height (rect)
   const [angleInput, setAngleInput] = useState('')
+  const [detailConstraint, setDetailConstraint] = useState<SketchConstraint | null>(null)
 
   if (mode !== 'sketch') return null
 
@@ -408,13 +409,54 @@ export function SketchSidebar() {
                 <div
                   key={c.id}
                   className={styles.constraintItem}
-                  onClick={() => setHighlightElementIds(constraintElementIds(c))}
+                  onClick={() => { setDetailConstraint(c); setHighlightElementIds(constraintElementIds(c)) }}
                   style={{ cursor: 'pointer' }}
                 >
                   <span className={styles.constraintItemLabel}>{constraintLabel(c)}</span>
-                  <button className={styles.constraintDeleteBtn} onClick={(e) => { e.stopPropagation(); deleteSketchConstraint(c.id) }}>✕</button>
+                  <button
+                    className={styles.constraintDeleteBtn}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      deleteSketchConstraint(c.id)
+                      if (detailConstraint && detailConstraint.id === c.id) {
+                        setDetailConstraint(null)
+                        setHighlightElementIds([])
+                      }
+                    }}
+                  >✕</button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Constraint detail dialog */}
+          {detailConstraint && (
+            <div className={styles.constraintDialog} onClick={() => { setDetailConstraint(null); setHighlightElementIds([]) }}>
+              <div className={styles.constraintDialogContent} onClick={(e) => e.stopPropagation()}>
+                <div className={styles.detailHeader}>
+                  <strong>{constraintLabel(detailConstraint)}</strong>
+                  <button className={styles.closeBtn} onClick={() => { setDetailConstraint(null); setHighlightElementIds([]) }}>Close</button>
+                </div>
+                <div className={styles.detailBody}>
+                  <div className={styles.detailRow}><strong>Type:</strong> {detailConstraint.type}</div>
+                  <div className={styles.detailRow}><strong>Elements:</strong></div>
+                  {constraintElementIds(detailConstraint).map((id) => {
+                    const el = sketchElements.find((s) => s.id === id)
+                    return (
+                      <div key={id} className={styles.detailRow}>
+                        - {el ? `${el.type} (${el.id})` : id}
+                      </div>
+                    )
+                  })}
+                  {detailConstraint.type === 'coincident' && (
+                    <>
+                      <div className={styles.detailRow}><strong>Points:</strong></div>
+                      <div className={styles.detailRow}>- p1: {detailConstraint.p1.which} of {detailConstraint.p1.elementId}</div>
+                      <div className={styles.detailRow}>- p2: {detailConstraint.p2.which} of {detailConstraint.p2.elementId}</div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </>
