@@ -36,7 +36,7 @@ export function SketchSidebar() {
     sketchElements, sketchConstraints, parameters,
     selectedElementIds, selectElement2,
     updateSketchElement, addSketchConstraint, deleteSketchConstraint,
-    setHighlightElementIds,
+    setHighlightElementIds, showElementNames, setShowElementNames,
   } = useModelStore()
 
   const [input1, setInput1] = useState('')   // length / width / radius
@@ -264,6 +264,15 @@ export function SketchSidebar() {
         <span className={styles.label}>Navigator</span>
       </button>
 
+      <button
+        className={`${styles.btn} ${showElementNames ? styles.active : ''}`}
+        onClick={() => setShowElementNames(!showElementNames)}
+        title="Toggle element names on-screen"
+      >
+        <span className={styles.icon}>Aa</span>
+        <span className={styles.label}>Names</span>
+      </button>
+
       {showConstraints && (
         <>
           <div className={styles.divider} />
@@ -444,15 +453,15 @@ export function SketchSidebar() {
                     const el = sketchElements.find((s) => s.id === id)
                     return (
                       <div key={id} className={styles.detailRow}>
-                        - {el ? `${el.type} (${el.id})` : id}
+                        - {el ? `${(el as any).name ?? el.type} (${el.id})` : id}
                       </div>
                     )
                   })}
                   {detailConstraint.type === 'coincident' && (
                     <>
                       <div className={styles.detailRow}><strong>Points:</strong></div>
-                      <div className={styles.detailRow}>- p1: {detailConstraint.p1.which} of {detailConstraint.p1.elementId}</div>
-                      <div className={styles.detailRow}>- p2: {detailConstraint.p2.which} of {detailConstraint.p2.elementId}</div>
+                      <div className={styles.detailRow}>- p1: {detailConstraint.p1.which} of {sketchElements.find((s) => s.id === detailConstraint.p1.elementId)?.name ?? detailConstraint.p1.elementId}</div>
+                      <div className={styles.detailRow}>- p2: {detailConstraint.p2.which} of {sketchElements.find((s) => s.id === detailConstraint.p2.elementId)?.name ?? detailConstraint.p2.elementId}</div>
                     </>
                   )}
                 </div>

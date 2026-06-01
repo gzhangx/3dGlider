@@ -73,7 +73,7 @@ function Dot({ pos, color, screenSize, size = 0.06, ring = false }: { pos: [numb
 const noopRaycast: () => void = () => {}
 
 function SketchEl({ el, plane, highlighted, onPointerMove }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean; onPointerMove?: (e: ThreeEvent<PointerEvent>) => void }) {
-  const { activeTool, selectedElementIds, highlightElementIds, selectElement, toggleElementSelection } = useModelStore()
+  const { activeTool, selectedElementIds, highlightElementIds, selectElement, toggleElementSelection, showElementNames } = useModelStore()
   const [hovered, setHovered] = useState(false)
 
   const isConstruction = !!el.construction
@@ -104,15 +104,35 @@ function SketchEl({ el, plane, highlighted, onPointerMove }: { el: SketchElement
   const hitPlanePassthrough = activeTool !== 'select' ? { raycast: noopRaycast } : {}
   const dashProps = isConstruction ? { dashed: true, dashSize: 0.18, gapSize: 0.12 } : {}
 
-  if (el.type === 'line')
-    return <Line points={linePts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
-  if (el.type === 'rect')
-    return <Line points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
-  if (el.type === 'circle')
-    return <Line points={circlePts(el.center, el.radius, plane, 64)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
-  if (el.type === 'arc')
-    return <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
-  return null
+  // Render geometry and optional name label
+  let shape: JSX.Element | null = null
+  let labelPos: [number, number, number] | null = null
+  if (el.type === 'line') {
+    shape = <Line points={linePts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+    const mid = { x: (el.start.x + el.end.x) / 2, y: (el.start.y + el.end.y) / 2 }
+    labelPos = worldPt(mid, plane)
+  } else if (el.type === 'rect') {
+    shape = <Line points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+    const mid = { x: (el.start.x + el.end.x) / 2, y: (el.start.y + el.end.y) / 2 }
+    labelPos = worldPt(mid, plane)
+  } else if (el.type === 'circle') {
+    shape = <Line points={circlePts(el.center, el.radius, plane, 64)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+    labelPos = worldPt(el.center, plane)
+  } else if (el.type === 'arc') {
+    shape = <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+    labelPos = worldPt(el.center, plane)
+  }
+
+  return (
+    <>
+      {shape}
+      {showElementNames && labelPos && (
+        <Text position={labelPos} fontSize={0.06} color="#ffffff" anchorX="center" anchorY="middle" depthWrite={false}>
+          {(el as any).name ?? el.id}
+        </Text>
+      )}
+    </>
+  )
 }
 
 // ─── draggable point handle ───────────────────────────────────────────────────

@@ -26,18 +26,22 @@ export type SketchPoint = { x: number; y: number }
 export interface SketchLine {
   type: 'line'; id: string; start: SketchPoint; end: SketchPoint
   construction?: boolean
+  name?: string
 }
 export interface SketchRect {
   type: 'rect'; id: string; start: SketchPoint; end: SketchPoint
   construction?: boolean
+  name?: string
 }
 export interface SketchCircle {
   type: 'circle'; id: string; center: SketchPoint; radius: number
   construction?: boolean
+  name?: string
 }
 export interface SketchArc {
   type: 'arc'; id: string; center: SketchPoint; radius: number; startAngle: number; endAngle: number
   construction?: boolean
+  name?: string
 }
 export type SketchElement = SketchLine | SketchRect | SketchCircle | SketchArc
 
@@ -334,6 +338,12 @@ export interface ModelState {
   previewExtrude: ExtrudeFeature | null
   previewPlane: SketchPlanePose | null
   sketchViewResetCounter: number
+  // element name counters and toggle
+  lineCounter: number
+  rectCounter: number
+  circleCounter: number
+  arcCounter: number
+  showElementNames: boolean
 
   setHoveredPlane: (plane: PlaneId | null) => void
   setActiveTool: (tool: SketchTool) => void
@@ -351,6 +361,7 @@ export interface ModelState {
   resetSketchView: () => void
   setShowSketchNavigator: (v: boolean) => void
   setHideOtherSketches: (v: boolean) => void
+  setShowElementNames: (v: boolean) => void
   addSketchElement: (el: SketchElement) => void
   updateSketchElement: (id: string, updates: Partial<SketchElement>) => void
   deleteSketchElement: (id: string) => void
@@ -419,6 +430,11 @@ export const useModelStore = create<ModelState>((set) => ({
   previewExtrude: null,
   previewPlane: null,
   sketchViewResetCounter: 0,
+  lineCounter: 0,
+  rectCounter: 0,
+  circleCounter: 0,
+  arcCounter: 0,
+  showElementNames: false,
 
   setHoveredPlane: (hoveredPlane) => set({ hoveredPlane }),
   setActiveTool: (activeTool) => set({ activeTool, selectedElementId: null, selectedElementId2: null, selectedElementIds: [] }),
@@ -463,8 +479,26 @@ export const useModelStore = create<ModelState>((set) => ({
   resetSketchView: () => set((s) => ({ sketchViewResetCounter: s.sketchViewResetCounter + 1 })),
   setShowSketchNavigator: (showSketchNavigator) => set({ showSketchNavigator }),
   setHideOtherSketches: (hideOtherSketches) => set({ hideOtherSketches }),
+  setShowElementNames: (showElementNames) => set({ showElementNames }),
 
-  addSketchElement: (el) => set((s) => ({ sketchElements: [...s.sketchElements, el] })),
+  addSketchElement: (el) => set((s) => {
+    // assign a friendly name if not present
+    let name = (el as any).name as string | undefined
+    if (!name) {
+      if (el.type === 'line') { name = `Line${s.lineCounter + 1}` }
+      else if (el.type === 'rect') { name = `Rect${s.rectCounter + 1}` }
+      else if (el.type === 'circle') { name = `Circle${s.circleCounter + 1}` }
+      else if (el.type === 'arc') { name = `Arc${s.arcCounter + 1}` }
+    }
+    const nextEl = { ...el, ...(name ? { name } : {}) }
+    return {
+      sketchElements: [...s.sketchElements, nextEl],
+      lineCounter: el.type === 'line' ? s.lineCounter + 1 : s.lineCounter,
+      rectCounter: el.type === 'rect' ? s.rectCounter + 1 : s.rectCounter,
+      circleCounter: el.type === 'circle' ? s.circleCounter + 1 : s.circleCounter,
+      arcCounter: el.type === 'arc' ? s.arcCounter + 1 : s.arcCounter,
+    }
+  }),
 
   updateSketchElement: (id, updates) =>
     set((s) => ({
@@ -687,6 +721,22 @@ export const useModelStore = create<ModelState>((set) => ({
   loadModel: (data) => {
     const parsed = sanitizeModelData(data)
     if (!parsed) return false
+    // estimate counters from loaded element names to avoid duplicates
+    let lineCounter = 0, rectCounter = 0, circleCounter = 0, arcCounter = 0
+    for (const sk of parsed.sketches) {
+      for (const el of sk.elements) {
+        const name = (el as any).name as string | undefined
+        if (!name) continue
+        const mLine = name.match(/^Line(\d+)$/i)
+        if (mLine) lineCounter = Math.max(lineCounter, parseInt(mLine[1], 10))
+        const mRect = name.match(/^Rect(\d+)$/i)
+        if (mRect) rectCounter = Math.max(rectCounter, parseInt(mRect[1], 10))
+        const mCircle = name.match(/^Circle(\d+)$/i)
+        if (mCircle) circleCounter = Math.max(circleCounter, parseInt(mCircle[1], 10))
+        const mArc = name.match(/^Arc(\d+)$/i)
+        if (mArc) arcCounter = Math.max(arcCounter, parseInt(mArc[1], 10))
+      }
+    }
     set({
       mode: 'view',
       activePlane: null,
@@ -706,6 +756,10 @@ export const useModelStore = create<ModelState>((set) => ({
       sweeps: parsed.sweeps,
       shells: parsed.shells,
       parameters: parsed.parameters,
+      lineCounter,
+      rectCounter,
+      circleCounter,
+      arcCounter,
     })
     return true
   },
