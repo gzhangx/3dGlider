@@ -11,6 +11,9 @@ import {
   SketchRect,
   SketchCircle,
   SketchArc,
+  SketchConstraint,
+  CoincidentConstraint,
+  TangentConstraint,
   PointRef,
 } from '../../store/modelStore'
 import {
@@ -127,7 +130,7 @@ function SketchEl({ el, plane, highlighted, onPointerMove }: { el: SketchElement
     <>
       {shape}
       {showElementNames && labelPos && (
-        <Text position={labelPos} fontSize={0.06} color="#ffffff" anchorX="center" anchorY="middle" depthWrite={false}>
+        <Text position={labelPos} fontSize={0.06} color="#ffffff" anchorX="center" anchorY="middle">
           {(el as any).name ?? el.id}
         </Text>
       )}
@@ -208,7 +211,7 @@ export function SketchPlane() {
     sketchElements, sketchConstraints, sketches, editingSketchId,
     selectedElementIds, selectElement, selectElements,
     addSketchElement, updateSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
-    addSketchConstraint, addSketchConstraintsBatch, applyConstraints, setIsDraggingPoint, highlightElementIds, setHighlightElementIds,
+    addSketchConstraint, addSketchConstraintsBatch, setIsDraggingPoint, highlightElementIds, setHighlightElementIds,
   } = useModelStore()
 
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
@@ -541,7 +544,7 @@ export function SketchPlane() {
       // Coincident constraints at each shared corner (end[i] = start[i+1])
       const addedConstraints: SketchConstraint[] = []
       for (let i = 0; i < 4; i++) {
-        const c = { id: crypto.randomUUID(), type: 'coincident' as const, p1: { elementId: lineIds[i], which: 'end' }, p2: { elementId: lineIds[(i + 1) % 4], which: 'start' } }
+        const c: CoincidentConstraint = { id: crypto.randomUUID(), type: 'coincident', p1: { elementId: lineIds[i], which: 'end' }, p2: { elementId: lineIds[(i + 1) % 4], which: 'start' } }
         addSketchConstraint(c)
         addedConstraints.push(c)
       }
