@@ -8,16 +8,36 @@ import { ScriptEditor } from '../ScriptEditor/ScriptEditor'
 import styles from './Toolbar.module.css'
 
 export function Toolbar() {
-  const { mode, activePlane, extrudes, revolves, lofts, sweeps, shells, sketches, parameters, exitSketch, loadModel, resetSketchView, hideOtherSketches, setHideOtherSketches } = useModelStore()
+  const {
+    mode, activePlane, extrudes, revolves, lofts, sweeps, shells, sketches, parameters,
+    sketchElements, sketchConstraints, editingSketchId,
+    exitSketch, loadModel, resetSketchView, hideOtherSketches, setHideOtherSketches,
+  } = useModelStore()
   const activePlaneLabel = activePlane ? planeIdFromPose(activePlane) : null
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showParams, setShowParams] = useState(false)
   const [showScriptEditor, setShowScriptEditor] = useState(false)
 
   const handleSaveJson = () => {
+    // Include the active, in-progress sketch when in sketch mode so the
+    // exported JSON contains what the user currently sees on-screen.
+    const exportSketches = [...sketches]
+    if (mode === 'sketch' && activePlane && sketchElements && sketchElements.length > 0) {
+      const id = editingSketchId ?? crypto.randomUUID()
+      const constraints = sketchConstraints && sketchConstraints.length > 0 ? sketchConstraints : undefined
+      const current = { id, plane: activePlane, elements: sketchElements, ...(constraints ? { constraints } : {}) }
+      if (editingSketchId) {
+        const idx = exportSketches.findIndex((s) => s.id === editingSketchId)
+        if (idx >= 0) exportSketches[idx] = current
+        else exportSketches.push(current)
+      } else {
+        exportSketches.push(current)
+      }
+    }
+
     const payload = {
       version: 1,
-      sketches,
+      sketches: exportSketches,
       extrudes,
       revolves,
       lofts,
