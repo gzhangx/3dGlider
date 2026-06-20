@@ -1,6 +1,6 @@
-import { Mesh, BufferGeometry, ExtrudeGeometry, Matrix4, Euler, Vector3, Quaternion } from 'three'
+import { Mesh, BufferGeometry, ExtrudeGeometry, Matrix4, Euler, Vector3, Quaternion, Shape } from 'three'
 import { CSG } from 'three-csg-ts'
-import { ExtrudeFeature, Sketch } from '../store/modelStore'
+import { ExtrudeFeature, ShellFeature, Sketch } from '../store/modelStore'
 import { sketchElementsToShape } from './sketchToShape'
 
 function planeOffsetPosition(rotation: [number, number, number], offset: number): [number, number, number] {
@@ -14,12 +14,45 @@ function bakeGeometry(geometry: BufferGeometry, matrix: Matrix4): BufferGeometry
   return g
 }
 
-function featureGeometry(ext: ExtrudeFeature, sketch: Sketch): BufferGeometry | null {
+interface FeatureGeometryOptions {
+  profileInset?: number
+  axialShift?: number
+}
+
+function profileBounds(shapes: Shape[]) {
+  const points = shapes.flatMap((shape) => shape.extractPoints(12).shape)
+  if (points.length === 0) return null
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const point of points) {
+    minX = Math.min(minX, point.x)
+    minY = Math.min(minY, point.y)
+    maxX = Math.max(maxX, point.x)
+    maxY = Math.max(maxY, point.y)
+  }
+  return { minX, minY, maxX, maxY }
+}
+
+function featureGeometry(ext: ExtrudeFeature, sketch: Sketch, options: FeatureGeometryOptions = {}): BufferGeometry | null {
   const shapes = sketchElementsToShape(sketch.elements)
   if (shapes.length === 0) return null
 
   const depth = Math.abs(ext.depth)
   const geo = new ExtrudeGeometry(shapes, { depth, bevelEnabled: false })
+  if (options.profileInset) {
+    const bounds = profileBounds(shapes)
+    if (!bounds) { geo.dispose(); return null }
+    const width = bounds.maxX - bounds.minX
+    const height = bounds.maxY - bounds.minY
+    if (width <= options.profileInset * 2 || height <= options.profileInset * 2) {
+      geo.dispose()
+      return null
+    }
+    const cx = (bounds.minX + bounds.maxX) / 2
+    const cy = (bounds.minY + bounds.maxY) / 2
+    geo.translate(-cx, -cy, 0)
+    geo.scale((width - options.profileInset * 2) / width, (height - options.profileInset * 2) / height, 1)
+    geo.translate(cx, cy, 0)
+  }
   if (ext.symmetric) {
     // Center geometry on the sketch plane: shift back by half depth.
     geo.translate(0, 0, -depth / 2)
@@ -28,6 +61,7 @@ function featureGeometry(ext: ExtrudeFeature, sketch: Sketch): BufferGeometry | 
     // sketch plane remains the reference face and the solid extends the other way.
     geo.translate(0, 0, -depth)
   }
+  if (options.axialShift) geo.translate(0, 0, options.axialShift)
   const [rx, ry, rz] = sketch.plane.rotation
   const [px, py, pz] = planeOffsetPosition(sketch.plane.rotation, sketch.plane.offset)
   const m = new Matrix4()
@@ -97,6 +131,47 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
   }
 
   return solids
+}
+
+/** Apply shell cuts after the ordered extrusion/boolean feature history. */
+export function applyShellFeatures(
+  solids: Mesh[],
+  shells: ShellFeature[],
+  extrudes: ExtrudeFeature[],
+  sketches: Sketch[],
+): Mesh[] {
+  for (const shell of shells) {
+    const source = [...extrudes].reverse().find((ext) => ext.sketchId === shell.sketchId && ext.operation === 'add')
+    const sketch = sketches.find((item) => item.id === shell.sketchId)
+    if (!source || !sketch || shell.thickness <= 0 || shell.thickness >= Math.abs(source.depth)) continue
+
+    const directionSign = source.symmetric || source.depth > 0 ? 1 : -1
+    const innerGeometry = featureGeometry(source, sketch, {
+      profileInset: shell.thickness,
+      axialShift: directionSign * shell.thickness,
+    })
+    if (!innerGeometry) continue
+    const tool = new Mesh(innerGeometry)
+
+    for (let i = 0; i < solids.length; i++) {
+      const next = CSG.subtract(solids[i], tool)
+      next.geometry.computeVertexNormals()
+      next.geometry.computeBoundingBox()
+      next.geometry.computeBoundingSphere()
+      solids[i].geometry.dispose()
+      solids[i] = next
+    }
+    innerGeometry.dispose()
+  }
+  return solids
+}
+
+export function buildModelSolidMeshes(
+  extrudes: ExtrudeFeature[],
+  shells: ShellFeature[],
+  sketches: Sketch[],
+): Mesh[] {
+  return applyShellFeatures(buildSolidMeshes(extrudes, sketches), shells, extrudes, sketches)
 }
 
 export function buildPreviewGeometry(extrude: ExtrudeFeature, sketches: Sketch[]): BufferGeometry | null {

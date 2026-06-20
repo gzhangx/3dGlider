@@ -218,7 +218,7 @@ export function createScriptingAPI(store: LiveModelStore) {
     const paramId = context.parameters.get(nameOrId) || nameOrId
     const param = state.parameters.find((p: Parameter) => p.id === paramId)
     if (!param) throw new Error(`Parameter not found: ${nameOrId}`)
-    state.updateParameter(paramId, newName || param.name, newValue || param.value)
+    state.updateParameter(paramId, newName ?? param.name, newValue ?? param.value)
   }
 
   /**

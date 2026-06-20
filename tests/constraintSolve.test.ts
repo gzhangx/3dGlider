@@ -1,5 +1,6 @@
-import { solveConstraints, applyLength, applyHorizontal } from './constraintSolve'
-import { SketchLine, SketchConstraint } from '../store/modelStore'
+import { describe, expect, it } from 'vitest'
+import { solveConstraints } from '../src/lib/constraintSolve'
+import type { SketchCircle, SketchConstraint, SketchLine } from '../src/store/modelStore'
 
 describe('Constraint Solver', () => {
   it('should maintain length constraint during dragging', () => {
@@ -55,14 +56,14 @@ describe('Constraint Solver', () => {
       end: { x: 2, y: 4 },
     }
 
-    const constraints: any[] = [
+    const constraints: SketchConstraint[] = [
       { id: 'poc1', type: 'pointOnCircle', p: { elementId: 'l1', which: 'start' }, circleId: 'c1' },
     ]
 
-    const solved = solveConstraints([circle as any, line as any], constraints as any[])
+    const solved = solveConstraints([circle, line], constraints)
 
-    const solvedCircle = solved.find((e) => e.id === 'c1') as any
-    const solvedLine = solved.find((e) => e.id === 'l1') as any
+    const solvedCircle = solved.find((e): e is SketchCircle => e.id === 'c1' && e.type === 'circle')
+    const solvedLine = solved.find((e): e is SketchLine => e.id === 'l1' && e.type === 'line')
 
     if (solvedCircle && solvedLine) {
       const dx = solvedLine.start.x - solvedCircle.center.x

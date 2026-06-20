@@ -1,19 +1,27 @@
-import { ChangeEvent, useRef, useState } from 'react'
+import { ChangeEvent, lazy, Suspense, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useModelStore } from '../../store/modelStore'
-import { exportSTEP } from '../../lib/exportSTEP'
-import { exportSTL } from '../../lib/exportSTL'
 import { planeIdFromPose } from '../../lib/planePose'
 import { ParametersDialog } from '../ParametersDialog/ParametersDialog'
-import { ScriptEditor } from '../ScriptEditor/ScriptEditor'
 import styles from './Toolbar.module.css'
 import { SCENE_TO_MM } from '../../lib/units'
+
+const ScriptEditor = lazy(() => import('../ScriptEditor/ScriptEditor').then((module) => ({ default: module.ScriptEditor })))
 
 export function Toolbar() {
   const {
     mode, activePlane, extrudes, revolves, lofts, sweeps, shells, sketches, parameters,
     sketchElements, sketchConstraints, editingSketchId,
     exitSketch, loadModel, resetSketchView, hideOtherSketches, setHideOtherSketches,
-  } = useModelStore()
+  } = useModelStore(useShallow((state) => ({
+    mode: state.mode, activePlane: state.activePlane, extrudes: state.extrudes,
+    revolves: state.revolves, lofts: state.lofts, sweeps: state.sweeps,
+    shells: state.shells, sketches: state.sketches, parameters: state.parameters,
+    sketchElements: state.sketchElements, sketchConstraints: state.sketchConstraints,
+    editingSketchId: state.editingSketchId, exitSketch: state.exitSketch,
+    loadModel: state.loadModel, resetSketchView: state.resetSketchView,
+    hideOtherSketches: state.hideOtherSketches, setHideOtherSketches: state.setHideOtherSketches,
+  })))
   const activePlaneLabel = activePlane ? planeIdFromPose(activePlane) : null
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showParams, setShowParams] = useState(false)
@@ -85,6 +93,14 @@ export function Toolbar() {
   }
 
   const hasExports = extrudes.length > 0 || revolves.length > 0 || lofts.length > 0 || sweeps.length > 0
+  const handleExportSTL = async () => {
+    const { exportSTL } = await import('../../lib/exportSTL')
+    exportSTL(extrudes, revolves, lofts, sweeps, shells, sketches)
+  }
+  const handleExportSTEP = async () => {
+    const { exportSTEP } = await import('../../lib/exportSTEP')
+    exportSTEP(extrudes, revolves, lofts, sweeps, shells, sketches)
+  }
 
   return (
     <>
@@ -200,7 +216,7 @@ export function Toolbar() {
         <div className={styles.exportActions}>
           <button
             className={styles.exportBtn}
-            onClick={() => exportSTL(extrudes, revolves, lofts, sweeps, sketches)}
+            onClick={handleExportSTL}
             title={hasExports ? 'Export all solids as STL' : 'No solids to export'}
             disabled={!hasExports}
           >
@@ -208,7 +224,7 @@ export function Toolbar() {
           </button>
           <button
             className={styles.exportBtn}
-            onClick={() => exportSTEP(extrudes, revolves, lofts, sweeps, sketches)}
+            onClick={handleExportSTEP}
             title={hasExports ? 'Export all solids as STEP' : 'No solids to export'}
             disabled={!hasExports}
           >
@@ -218,7 +234,11 @@ export function Toolbar() {
       </header>
 
       {showParams && <ParametersDialog onClose={() => setShowParams(false)} />}
-      {showScriptEditor && <ScriptEditor onClose={() => setShowScriptEditor(false)} />}
+      {showScriptEditor && (
+        <Suspense fallback={null}>
+          <ScriptEditor onClose={() => setShowScriptEditor(false)} />
+        </Suspense>
+      )}
     </>
   )
 }

@@ -1,9 +1,10 @@
 import { Canvas } from '@react-three/fiber'
+import { useShallow } from 'zustand/react/shallow'
 import { useModelStore } from '../../store/modelStore'
 import { Scene } from './Scene'
 
 export function Viewport3D() {
-  const { mode, activeTool } = useModelStore()
+  const { mode, activeTool } = useModelStore(useShallow((state) => ({ mode: state.mode, activeTool: state.activeTool })))
   const cursor = mode === 'sketch' && activeTool !== 'select' ? 'crosshair' : 'default'
 
   return (

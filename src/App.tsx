@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { Viewport3D } from './components/Viewport3D/Viewport3D'
 import { Toolbar } from './components/Toolbar/Toolbar'
 import { SketchSidebar } from './components/SketchSidebar/SketchSidebar'
@@ -12,7 +13,11 @@ const KEY_TOOL: Record<string, SketchTool> = {
 }
 
 export default function App() {
-  const { mode, showSketchNavigator, setActiveTool } = useModelStore()
+  const { mode, showSketchNavigator, setActiveTool } = useModelStore(useShallow((state) => ({
+    mode: state.mode,
+    showSketchNavigator: state.showSketchNavigator,
+    setActiveTool: state.setActiveTool,
+  })))
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -40,4 +45,3 @@ export default function App() {
     </div>
   )
 }
-

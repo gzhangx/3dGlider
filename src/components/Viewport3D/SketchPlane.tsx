@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { DoubleSide, Plane as ThreePlane, Vector3 } from 'three'
 import { Line, Text } from '@react-three/drei'
 import { ThreeEvent, useThree } from '@react-three/fiber'
@@ -76,7 +77,12 @@ function Dot({ pos, color, screenSize, size = 0.06, ring = false }: { pos: [numb
 const noopRaycast: () => void = () => {}
 
   function SketchEl({ el, plane, highlighted, onPointerMove }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean; onPointerMove?: (e: ThreeEvent<PointerEvent>) => void }) {
-  const { activeTool, selectedElementIds, highlightElementIds, selectElement, toggleElementSelection, showElementNames, addSketchConstraint, applyConstraints } = useModelStore()
+  const { activeTool, selectedElementIds, highlightElementIds, selectElement, toggleElementSelection, showElementNames, addSketchConstraint, applyConstraints } = useModelStore(useShallow((state) => ({
+    activeTool: state.activeTool, selectedElementIds: state.selectedElementIds,
+    highlightElementIds: state.highlightElementIds, selectElement: state.selectElement,
+    toggleElementSelection: state.toggleElementSelection, showElementNames: state.showElementNames,
+    addSketchConstraint: state.addSketchConstraint, applyConstraints: state.applyConstraints,
+  })))
   const [hovered, setHovered] = useState(false)
 
   const isConstruction = !!el.construction
@@ -241,7 +247,21 @@ export function SketchPlane() {
     selectedElementIds, selectElement, selectElements,
     addSketchElement, updateSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
     addSketchConstraint, addSketchConstraintsBatch, setIsDraggingPoint, highlightElementIds, setHighlightElementIds,
-  } = useModelStore()
+  } = useModelStore(useShallow((state) => ({
+    activePlane: state.activePlane, activeTool: state.activeTool,
+    constructionMode: state.constructionMode, snapToGrid: state.snapToGrid,
+    snapToOtherPlanes: state.snapToOtherPlanes, snapToObjects: state.snapToObjects,
+    sketchElements: state.sketchElements, sketchConstraints: state.sketchConstraints,
+    sketches: state.sketches, editingSketchId: state.editingSketchId,
+    selectedElementIds: state.selectedElementIds, selectElement: state.selectElement,
+    selectElements: state.selectElements, addSketchElement: state.addSketchElement,
+    updateSketchElement: state.updateSketchElement, deleteSketchElement: state.deleteSketchElement,
+    cutSketchElement: state.cutSketchElement, exitSketch: state.exitSketch,
+    addSketchConstraint: state.addSketchConstraint,
+    addSketchConstraintsBatch: state.addSketchConstraintsBatch,
+    setIsDraggingPoint: state.setIsDraggingPoint, highlightElementIds: state.highlightElementIds,
+    setHighlightElementIds: state.setHighlightElementIds,
+  })))
 
   const [startPt, setStartPt] = useState<SketchPoint | null>(null)
   const [cursorPt, setCursorPt] = useState<SketchPoint | null>(null)

@@ -1,9 +1,15 @@
 import { useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useModelStore } from '../../store/modelStore'
 import styles from './ParametersDialog.module.css'
 
 export function ParametersDialog({ onClose }: { onClose: () => void }) {
-  const { parameters, addParameter, updateParameter, deleteParameter } = useModelStore()
+  const { parameters, addParameter, updateParameter, deleteParameter } = useModelStore(useShallow((state) => ({
+    parameters: state.parameters,
+    addParameter: state.addParameter,
+    updateParameter: state.updateParameter,
+    deleteParameter: state.deleteParameter,
+  })))
 
   // Local editable state mirrors the store so edits are batched on blur
   const [drafts, setDrafts] = useState<Record<string, { name: string; value: string }>>({})

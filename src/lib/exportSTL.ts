@@ -1,17 +1,17 @@
 import { Group, Mesh } from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import { ExtrudeFeature, LoftFeature, RevolveFeature, Sketch, SweepFeature } from '../store/modelStore'
-import { buildSolidMeshes, disposeSolidMeshes } from './solidModel'
+import { ExtrudeFeature, LoftFeature, RevolveFeature, ShellFeature, Sketch, SweepFeature } from '../store/modelStore'
+import { buildModelSolidMeshes, disposeSolidMeshes } from './solidModel'
 import { buildRevolveGeometry } from './revolveModel'
 import { buildLoftGeometry } from './loftModel'
 import { buildSweepGeometry } from './sweepModel'
 import { SCENE_TO_MM } from './units'
 
-export function exportSTL(extrudes: ExtrudeFeature[], revolves: RevolveFeature[], lofts: LoftFeature[], sweeps: SweepFeature[], sketches: Sketch[]) {
+export function exportSTL(extrudes: ExtrudeFeature[], revolves: RevolveFeature[], lofts: LoftFeature[], sweeps: SweepFeature[], shells: ShellFeature[], sketches: Sketch[]) {
   if (extrudes.length === 0 && revolves.length === 0 && lofts.length === 0 && sweeps.length === 0) return
 
   const group = new Group()
-  const solids = buildSolidMeshes(extrudes, sketches)
+  const solids = buildModelSolidMeshes(extrudes, shells, sketches)
 
   for (const solid of solids) {
     group.add(new Mesh(solid.geometry))

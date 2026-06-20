@@ -1,4 +1,5 @@
 import { useMemo, useEffect, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { Mesh, BufferGeometry, DoubleSide } from 'three'
 import { useModelStore } from '../../store/modelStore'
 import { buildSweepGeometry } from '../../lib/sweepModel'
@@ -16,7 +17,7 @@ function SweepMesh({ geo, color, opacity }: { geo: BufferGeometry; color: string
 }
 
 export function SweepedSolids() {
-  const { sweeps, sketches } = useModelStore()
+  const { sweeps, sketches } = useModelStore(useShallow((state) => ({ sweeps: state.sweeps, sketches: state.sketches })))
 
   const geos = useMemo(
     () =>

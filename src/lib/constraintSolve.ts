@@ -1,4 +1,5 @@
 import { SketchLine, SketchRect, SketchCircle, SketchPoint, SketchElement, SketchConstraint, Parameter } from '../store/modelStore'
+import { solveDampedLeastSquares } from './solverMath'
 
 // ── Line helpers ──────────────────────────────────────────────────────────────
 
@@ -705,8 +706,26 @@ export function solveConstraints(
   maxIterations: number = 50,
   tolerance: number = 1e-6,
 ): SketchElement[] {
-  if (constraints.length === 0) return elements
-  if (elements.length === 0) return elements
+  return solveConstraintsDetailed(elements, constraints, fixedPoints, maxIterations, tolerance).elements
+}
+
+export interface ConstraintSolveResult {
+  elements: SketchElement[]
+  converged: boolean
+  iterations: number
+  maxResidual: number
+}
+
+export function solveConstraintsDetailed(
+  elements: SketchElement[],
+  constraints: SketchConstraint[],
+  fixedPoints?: Set<string>,
+  maxIterations: number = 50,
+  tolerance: number = 1e-6,
+): ConstraintSolveResult {
+  if (constraints.length === 0 || elements.length === 0) {
+    return { elements, converged: true, iterations: 0, maxResidual: 0 }
+  }
 
   // Find all variables (movable element points)
   const variables: SolverVariable[] = []
@@ -749,22 +768,23 @@ export function solveConstraints(
     }
   }
 
-  if (variables.length === 0) return elements
+  if (variables.length === 0) return { elements, converged: false, iterations: 0, maxResidual: Infinity }
 
   // Build constraint equations
   const equations = buildConstraintEquations(constraints)
-  if (equations.length === 0) return elements
+  if (equations.length === 0) return { elements, converged: true, iterations: 0, maxResidual: 0 }
 
   // Sort by priority (lower first)
   equations.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
 
   let currentElements = [...elements]
   let iteration = 0
+  let maxResidual = Infinity
 
   for (iteration; iteration < maxIterations; iteration++) {
     // Compute residuals
     const residuals = equations.map((eq) => eq.residual(currentElements))
-    const maxResidual = Math.max(...residuals.map(Math.abs))
+    maxResidual = Math.max(...residuals.map(Math.abs))
 
     if (maxResidual < tolerance) break
 
@@ -773,94 +793,25 @@ export function solveConstraints(
 
     // Solve using damped least-squares: (J^T J + λI) δ = -J^T r
     // This is robust for underdetermined and overdetermined systems.
-    const n = variables.length
-    const m = jacobian.length
-    const lambda = 1e-6
-
-    const normal: number[][] = Array.from({ length: n }, () => new Array(n).fill(0))
-    const rhs: number[] = new Array(n).fill(0)
-
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        let sum = 0
-        for (let k = 0; k < m; k++) {
-          sum += jacobian[k][i] * jacobian[k][j]
-        }
-        normal[i][j] = sum
-      }
-      normal[i][i] += lambda
-
-      let sum = 0
-      for (let k = 0; k < m; k++) {
-        sum += jacobian[k][i] * residuals[k]
-      }
-      rhs[i] = -sum
-    }
-
-    const augmented = normal.map((row, i) => [...row, rhs[i]])
-    gaussianElimination(augmented)
-
-    // Extract solution via back substitution
-    const delta = new Array(n).fill(0)
-    for (let i = n - 1; i >= 0; i--) {
-      let sum = 0
-      for (let j = i + 1; j < n; j++) {
-        sum += augmented[i][j] * delta[j]
-      }
-      if (Math.abs(augmented[i][i]) > 1e-12) {
-        delta[i] = (augmented[i][n] - sum) / augmented[i][i]
-      }
-    }
+    const delta = solveDampedLeastSquares(jacobian, residuals, 1e-6)
 
     // Update variables with damping (0.5 for stability)
     const dampingFactor = 0.5
+    const elementById = new Map(currentElements.map((element) => [element.id, element]))
+    const updates = new Map<string, SketchElement>()
     for (const v of variables) {
-      const el = currentElements.find((e) => e.id === v.elementId)
+      const el = updates.get(v.elementId) ?? elementById.get(v.elementId)
       if (!el) continue
 
-      const oldPt = getPoint(currentElements, v.elementId, v.pointType)
+      const oldPt = getPoint([el], v.elementId, v.pointType)
       if (!oldPt) continue
 
       const newValue = (oldPt[v.coord] ?? 0) + dampingFactor * delta[v.index]
       const updated = setPoint(el, v.pointType, v.coord, newValue)
-      currentElements = currentElements.map((e) => (e.id === el.id ? updated : e))
+      updates.set(el.id, updated)
     }
+    currentElements = currentElements.map((element) => updates.get(element.id) ?? element)
   }
 
-  return currentElements
-}
-
-/**
- * Gaussian elimination with partial pivoting for solving Ax=b.
- * Modifies the augmented matrix in-place.
- */
-function gaussianElimination(matrix: number[][]): void {
-  const m = matrix.length
-  if (m === 0) return
-  const n = matrix[0].length - 1
-
-  for (let col = 0; col < Math.min(m, n); col++) {
-    // Find pivot
-    let pivotRow = col
-    for (let row = col + 1; row < m; row++) {
-      if (Math.abs(matrix[row][col]) > Math.abs(matrix[pivotRow][col])) {
-        pivotRow = row
-      }
-    }
-
-    // Swap rows
-    if (pivotRow !== col) {
-      [matrix[col], matrix[pivotRow]] = [matrix[pivotRow], matrix[col]]
-    }
-
-    if (Math.abs(matrix[col][col]) < 1e-12) continue
-
-    // Eliminate below
-    for (let row = col + 1; row < m; row++) {
-      const factor = matrix[row][col] / matrix[col][col]
-      for (let j = col; j <= n; j++) {
-        matrix[row][j] -= factor * matrix[col][j]
-      }
-    }
-  }
+  return { elements: currentElements, converged: maxResidual < tolerance, iterations: iteration, maxResidual }
 }

@@ -1,4 +1,5 @@
 import { useMemo, useEffect, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { Mesh, BufferGeometry, DoubleSide } from 'three'
 import { useModelStore } from '../../store/modelStore'
 import { buildRevolveGeometry } from '../../lib/revolveModel'
@@ -16,7 +17,7 @@ function RevolveMesh({ geo, color, opacity }: { geo: BufferGeometry; color: stri
 }
 
 export function RevolvedSolids() {
-  const { revolves, sketches } = useModelStore()
+  const { revolves, sketches } = useModelStore(useShallow((state) => ({ revolves: state.revolves, sketches: state.sketches })))
 
   const geos = useMemo(
     () =>

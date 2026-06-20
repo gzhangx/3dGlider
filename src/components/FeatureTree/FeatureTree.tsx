@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useModelStore, Sketch, PlaneId, SketchPlanePose, presetPlanePose, ExtrudeFeature, RevolveFeature, RevolveAxis } from '../../store/modelStore'
 import { planeIdFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { sketchElementsToShape } from '../../lib/sketchToShape'
@@ -18,7 +19,22 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
     addLoft, deleteLoft, addSweep, deleteSweep, addShell, deleteShell,
     setSketchAppearance, setSketchName, setExtrudeAppearance, setEditingExtrudeId, setPreviewExtrude,
     selectedElementId, selectElement, parameters,
-  } = useModelStore()
+  } = useModelStore(useShallow((state) => ({
+    sketches: state.sketches, extrudes: state.extrudes, revolves: state.revolves,
+    lofts: state.lofts, sweeps: state.sweeps, shells: state.shells,
+    addExtrude: state.addExtrude, updateExtrude: state.updateExtrude,
+    deleteExtrude: state.deleteExtrude, editSketch: state.editSketch,
+    addRevolve: state.addRevolve, updateRevolve: state.updateRevolve,
+    deleteRevolve: state.deleteRevolve, setRevolveAppearance: state.setRevolveAppearance,
+    addLoft: state.addLoft, deleteLoft: state.deleteLoft,
+    addSweep: state.addSweep, deleteSweep: state.deleteSweep,
+    addShell: state.addShell, deleteShell: state.deleteShell,
+    setSketchAppearance: state.setSketchAppearance, setSketchName: state.setSketchName,
+    setExtrudeAppearance: state.setExtrudeAppearance,
+    setEditingExtrudeId: state.setEditingExtrudeId, setPreviewExtrude: state.setPreviewExtrude,
+    selectedElementId: state.selectedElementId, selectElement: state.selectElement,
+    parameters: state.parameters,
+  })))
 
   // ── create-new-extrude form state ────────────────────────────────────────
   const [showExtrude, setShowExtrude] = useState(false)
@@ -861,7 +877,11 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
 }
 
 function NewSketchRow() {
-  const { mode, newSketchArmed, armNewSketch, cancelNewSketch, startNewSketch, setPreviewPlane } = useModelStore()
+  const { mode, newSketchArmed, armNewSketch, cancelNewSketch, startNewSketch, setPreviewPlane } = useModelStore(useShallow((state) => ({
+    mode: state.mode, newSketchArmed: state.newSketchArmed,
+    armNewSketch: state.armNewSketch, cancelNewSketch: state.cancelNewSketch,
+    startNewSketch: state.startNewSketch, setPreviewPlane: state.setPreviewPlane,
+  })))
   const [planeMode, setPlaneMode] = useState<'preset' | 'custom'>('preset')
   const [plane, setPlane] = useState<PlaneId>('XY')
   const [offsetMm, setOffsetMm] = useState('0')
@@ -1055,7 +1075,7 @@ function NewSketchRow() {
 }
 
 export function FeatureTree() {
-  const { sketches } = useModelStore()
+  const sketches = useModelStore((state) => state.sketches)
 
   return (
     <aside className={styles.panel}>

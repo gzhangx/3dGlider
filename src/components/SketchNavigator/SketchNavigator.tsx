@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   useModelStore,
   SketchConstraint,
@@ -65,7 +66,13 @@ export function SketchNavigator() {
   const {
     mode, sketchElements, sketchConstraints,
     setHighlightElementIds, deleteSketchElement, deleteSketchConstraint,
-  } = useModelStore()
+  } = useModelStore(useShallow((state) => ({
+    mode: state.mode, sketchElements: state.sketchElements,
+    sketchConstraints: state.sketchConstraints,
+    setHighlightElementIds: state.setHighlightElementIds,
+    deleteSketchElement: state.deleteSketchElement,
+    deleteSketchConstraint: state.deleteSketchConstraint,
+  })))
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
 

@@ -1,4 +1,5 @@
 import { useMemo, useEffect, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { Mesh, BufferGeometry, DoubleSide } from 'three'
 import { useModelStore } from '../../store/modelStore'
 import { buildLoftGeometry } from '../../lib/loftModel'
@@ -16,7 +17,7 @@ function LoftMesh({ geo, color, opacity }: { geo: BufferGeometry; color: string;
 }
 
 export function LoftedSolids() {
-  const { lofts, sketches } = useModelStore()
+  const { lofts, sketches } = useModelStore(useShallow((state) => ({ lofts: state.lofts, sketches: state.sketches })))
 
   const geos = useMemo(
     () =>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   useModelStore, SketchTool, SketchLine, SketchRect, SketchCircle, SketchPoint, SketchConstraint,
 } from '../../store/modelStore'
@@ -37,7 +38,20 @@ export function SketchSidebar() {
     selectedElementIds, selectElement2,
     updateSketchElement, addSketchConstraint, deleteSketchConstraint, applyConstraints,
     setHighlightElementIds, showElementNames, setShowElementNames,
-  } = useModelStore()
+  } = useModelStore(useShallow((state) => ({
+    mode: state.mode, activeTool: state.activeTool, constructionMode: state.constructionMode,
+    snapToGrid: state.snapToGrid, snapToOtherPlanes: state.snapToOtherPlanes,
+    snapToObjects: state.snapToObjects, showSketchNavigator: state.showSketchNavigator,
+    setActiveTool: state.setActiveTool, setConstructionMode: state.setConstructionMode,
+    setSnapToGrid: state.setSnapToGrid, setSnapToOtherPlanes: state.setSnapToOtherPlanes,
+    setSnapToObjects: state.setSnapToObjects, setShowSketchNavigator: state.setShowSketchNavigator,
+    sketchElements: state.sketchElements, sketchConstraints: state.sketchConstraints,
+    parameters: state.parameters, selectedElementIds: state.selectedElementIds,
+    selectElement2: state.selectElement2, updateSketchElement: state.updateSketchElement,
+    addSketchConstraint: state.addSketchConstraint, deleteSketchConstraint: state.deleteSketchConstraint,
+    applyConstraints: state.applyConstraints, setHighlightElementIds: state.setHighlightElementIds,
+    showElementNames: state.showElementNames, setShowElementNames: state.setShowElementNames,
+  })))
 
   const [input1, setInput1] = useState('')   // length / width / radius
   const [input2, setInput2] = useState('')   // height (rect)

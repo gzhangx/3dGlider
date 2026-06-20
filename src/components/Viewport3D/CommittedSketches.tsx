@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { Line } from '@react-three/drei'
 import { ThreeEvent } from '@react-three/fiber'
 import { useModelStore, Sketch, SketchElement, SketchPlanePose } from '../../store/modelStore'
@@ -15,7 +16,13 @@ function SketchEl({
   sketchColor: string
   sketchOpacity: number
 }) {
-  const { mode, activeTool, newSketchArmed, selectedElementId, selectElement } = useModelStore()
+  const { mode, activeTool, newSketchArmed, selectedElementId, selectElement } = useModelStore(useShallow((state) => ({
+    mode: state.mode,
+    activeTool: state.activeTool,
+    newSketchArmed: state.newSketchArmed,
+    selectedElementId: state.selectedElementId,
+    selectElement: state.selectElement,
+  })))
   const [hovered, setHovered] = useState(false)
   const lineRef = useRef<any>(null)
 
@@ -68,7 +75,7 @@ function SavedSketch({ sketch }: { sketch: Sketch }) {
 }
 
 export function CommittedSketches() {
-  const { sketches } = useModelStore()
+  const sketches = useModelStore((state) => state.sketches)
   return (
     <>
       {sketches.map((s) => (

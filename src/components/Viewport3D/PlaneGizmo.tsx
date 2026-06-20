@@ -1,4 +1,5 @@
 import { useRef, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { ThreeEvent } from '@react-three/fiber'
 import { Mesh, DoubleSide, PlaneGeometry, EdgesGeometry } from 'three'
 import { Text } from '@react-three/drei'
@@ -17,7 +18,13 @@ const SIZE = PLANE_SIZE
 
 export function PlaneGizmo({ id, rotation, color, label }: PlaneGizmoProps) {
   const ref = useRef<Mesh>(null)
-  const { hoveredPlane, mode, newSketchArmed, setHoveredPlane, startNewSketch } = useModelStore()
+  const { hoveredPlane, mode, newSketchArmed, setHoveredPlane, startNewSketch } = useModelStore(useShallow((state) => ({
+    hoveredPlane: state.hoveredPlane,
+    mode: state.mode,
+    newSketchArmed: state.newSketchArmed,
+    setHoveredPlane: state.setHoveredPlane,
+    startNewSketch: state.startNewSketch,
+  })))
   const edges = useMemo(() => new EdgesGeometry(new PlaneGeometry(SIZE, SIZE)), [])
 
   const isHovered = hoveredPlane === id

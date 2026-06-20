@@ -1,4 +1,5 @@
 import { useRef, useEffect, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { Grid, CameraControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { Box3, PlaneGeometry, EdgesGeometry, DoubleSide, Vector3 } from 'three'
@@ -42,7 +43,15 @@ function PreviewPlane({ plane }: { plane: SketchPlanePose }) {
 }
 
 export function Scene() {
-  const { activePlane, mode, activeTool, isDraggingPoint, sketchViewResetCounter, hideOtherSketches, previewPlane } = useModelStore()
+  const { activePlane, mode, activeTool, isDraggingPoint, sketchViewResetCounter, hideOtherSketches, previewPlane } = useModelStore(useShallow((state) => ({
+    activePlane: state.activePlane,
+    mode: state.mode,
+    activeTool: state.activeTool,
+    isDraggingPoint: state.isDraggingPoint,
+    sketchViewResetCounter: state.sketchViewResetCounter,
+    hideOtherSketches: state.hideOtherSketches,
+    previewPlane: state.previewPlane,
+  })))
   const { camera } = useThree()
   const controlsRef = useRef<CameraControls>(null)
   const initialViewSet = useRef(false)
