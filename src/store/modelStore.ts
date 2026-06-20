@@ -155,7 +155,15 @@ function isSketchElement(value: unknown): value is SketchElement {
 function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: ExtrudeFeature[]; revolves: RevolveFeature[]; lofts: LoftFeature[]; sweeps: SweepFeature[]; shells: ShellFeature[]; parameters: Parameter[] } | null {
   if (!value || typeof value !== 'object') return null
   const raw = value as Partial<ModelData>
-  if (!Array.isArray(raw.sketches) || !Array.isArray(raw.extrudes)) return null
+  // sketches is required; other arrays are optional and will default to empty arrays
+  if (!Array.isArray(raw.sketches)) return null
+
+  const rawExtrudes = Array.isArray(raw.extrudes) ? raw.extrudes : []
+  const rawRevolves = Array.isArray(raw.revolves) ? raw.revolves : []
+  const rawLofts = Array.isArray(raw.lofts) ? raw.lofts : []
+  const rawSweeps = Array.isArray(raw.sweeps) ? raw.sweeps : []
+  const rawShells = Array.isArray(raw.shells) ? raw.shells : []
+  const rawParameters = Array.isArray(raw.parameters) ? raw.parameters : []
 
   const sketches: Sketch[] = raw.sketches
     .filter((s): s is Sketch => !!s
@@ -189,7 +197,7 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
     })
 
   const validSketchIds = new Set(sketches.map((s) => s.id))
-  const extrudes: ExtrudeFeature[] = raw.extrudes
+  const extrudes: ExtrudeFeature[] = rawExtrudes
     .filter((e): e is ExtrudeFeature => !!e
       && typeof e.id === 'string'
       && typeof e.sketchId === 'string'
@@ -213,8 +221,8 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
       }
     })
 
-  const revolves: RevolveFeature[] = Array.isArray(raw.revolves)
-    ? raw.revolves
+  const revolves: RevolveFeature[] = Array.isArray(rawRevolves)
+    ? rawRevolves
         .filter((r): r is RevolveFeature => !!r
           && typeof r.id === 'string'
           && typeof r.sketchId === 'string'
@@ -233,8 +241,8 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
         })
     : []
 
-  const lofts: LoftFeature[] = Array.isArray(raw.lofts)
-    ? raw.lofts
+  const lofts: LoftFeature[] = Array.isArray(rawLofts)
+    ? rawLofts
         .filter((l): l is LoftFeature => !!l
           && typeof l.id === 'string'
           && typeof l.sketchId1 === 'string'
@@ -256,8 +264,8 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
         })
     : []
 
-  const sweeps: SweepFeature[] = Array.isArray(raw.sweeps)
-    ? raw.sweeps
+  const sweeps: SweepFeature[] = Array.isArray(rawSweeps)
+    ? rawSweeps
         .filter((sw): sw is SweepFeature => !!sw
           && typeof sw.id === 'string'
           && typeof sw.profileSketchId === 'string'
@@ -279,8 +287,8 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
         })
     : []
 
-  const shells: ShellFeature[] = Array.isArray(raw.shells)
-    ? raw.shells
+  const shells: ShellFeature[] = Array.isArray(rawShells)
+    ? rawShells
         .filter((sh): sh is ShellFeature => !!sh
           && typeof sh.id === 'string'
           && typeof sh.sketchId === 'string'
@@ -299,8 +307,8 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
         })
     : []
 
-  const parameters: Parameter[] = Array.isArray(raw.parameters)
-    ? (raw.parameters as unknown[]).filter((p): p is Parameter =>
+  const parameters: Parameter[] = Array.isArray(rawParameters)
+    ? (rawParameters as unknown[]).filter((p): p is Parameter =>
         !!p && typeof p === 'object'
         && typeof (p as Parameter).id === 'string'
         && typeof (p as Parameter).name === 'string'
