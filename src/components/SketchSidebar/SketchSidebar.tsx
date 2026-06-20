@@ -35,7 +35,7 @@ export function SketchSidebar() {
     setActiveTool, setConstructionMode, setSnapToGrid, setSnapToOtherPlanes, setSnapToObjects, setShowSketchNavigator,
     sketchElements, sketchConstraints, parameters,
     selectedElementIds, selectElement2,
-    updateSketchElement, addSketchConstraint, deleteSketchConstraint,
+    updateSketchElement, addSketchConstraint, deleteSketchConstraint, applyConstraints,
     setHighlightElementIds, showElementNames, setShowElementNames,
   } = useModelStore()
 
@@ -86,6 +86,8 @@ export function SketchSidebar() {
     const r = resolveInput(input1); if (!r) return
     upd(line1.id, { end: applyLength(line1, r.value).end })
     addC({ type: 'length', elementId: line1.id, value: r.value, ...(r.paramRef ? { paramRef: r.paramRef } : {}) })
+    // Re-apply constraints so connected endpoints stay coincident
+    applyConstraints()
     if (!r.paramRef) setInput1('')
   }
   const setHorizontal = () => {
