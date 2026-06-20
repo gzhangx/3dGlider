@@ -11,8 +11,8 @@ export default defineConfig(({ command }) => ({
           if (!id.includes('node_modules')) return undefined
           if (id.includes('@jscad')) return 'jscad'
           if (id.includes('three')) return 'three'
-          if (id.includes('react') || id.includes('zustand')) return 'react'
-          return 'vendor'
+          if (/node_modules[\\/](react|react-dom|scheduler|zustand|use-sync-external-store)[\\/]/.test(id)) return 'react'
+          return undefined
         },
       },
     },
