@@ -471,7 +471,29 @@ export const useModelStore = create<ModelState>((set) => ({
   setIsDraggingPoint: (isDraggingPoint) => set({ isDraggingPoint }),
   setHighlightElementIds: (highlightElementIds) => set({ highlightElementIds }),
   addSketchConstraintsBatch: (constraints, apply = true) => set((s) => {
-    const sketchConstraints = [...s.sketchConstraints, ...constraints]
+    // Filter out constraints that are equivalent to existing ones
+    const newConstraints = constraints.filter((c) => {
+      return !s.sketchConstraints.some((ex) => {
+        if (ex.type !== c.type) return false
+        if (c.type === 'coincident' && ex.type === 'coincident') {
+          return (
+            (ex.p1.elementId === (c as any).p1.elementId && ex.p1.which === (c as any).p1.which && ex.p2.elementId === (c as any).p2.elementId && ex.p2.which === (c as any).p2.which) ||
+            (ex.p2.elementId === (c as any).p1.elementId && ex.p2.which === (c as any).p1.which && ex.p1.elementId === (c as any).p2.elementId && ex.p1.which === (c as any).p2.which)
+          )
+        }
+        if (c.type === 'pointOnCircle' && ex.type === 'pointOnCircle') {
+          return (ex as any).p.elementId === (c as any).p.elementId && (ex as any).circleId === (c as any).circleId
+        }
+        if (c.type === 'tangent' && ex.type === 'tangent') {
+          return ((ex as any).elementId1 === (c as any).elementId1 && (ex as any).elementId2 === (c as any).elementId2) ||
+                 ((ex as any).elementId1 === (c as any).elementId2 && (ex as any).elementId2 === (c as any).elementId1)
+        }
+        // Fallback: do not treat as duplicate
+        return false
+      })
+    })
+
+    const sketchConstraints = [...s.sketchConstraints, ...newConstraints]
     if (!apply) return { sketchConstraints }
     const solved = solveConstraints(s.sketchElements, sketchConstraints, new Set())
     return { sketchConstraints, sketchElements: solved }
@@ -536,7 +558,27 @@ export const useModelStore = create<ModelState>((set) => ({
       sketchElements: [...s.sketchElements.filter((el) => el.id !== id), ...replacements],
     })),
 
-  addSketchConstraint: (c) => set((s) => ({ sketchConstraints: [...s.sketchConstraints, c] })),
+  addSketchConstraint: (c) => set((s) => {
+    const exists = s.sketchConstraints.some((ex) => {
+      if (ex.type !== c.type) return false
+      if (c.type === 'coincident' && ex.type === 'coincident') {
+        return (
+          (ex.p1.elementId === (c as any).p1.elementId && ex.p1.which === (c as any).p1.which && ex.p2.elementId === (c as any).p2.elementId && ex.p2.which === (c as any).p2.which) ||
+          (ex.p2.elementId === (c as any).p1.elementId && ex.p2.which === (c as any).p1.which && ex.p1.elementId === (c as any).p2.elementId && ex.p1.which === (c as any).p2.which)
+        )
+      }
+      if (c.type === 'pointOnCircle' && ex.type === 'pointOnCircle') {
+        return (ex as any).p.elementId === (c as any).p.elementId && (ex as any).circleId === (c as any).circleId
+      }
+      if (c.type === 'tangent' && ex.type === 'tangent') {
+        return ((ex as any).elementId1 === (c as any).elementId1 && (ex as any).elementId2 === (c as any).elementId2) ||
+               ((ex as any).elementId1 === (c as any).elementId2 && (ex as any).elementId2 === (c as any).elementId1)
+      }
+      return false
+    })
+    if (exists) return s
+    return { sketchConstraints: [...s.sketchConstraints, c] }
+  }),
 
   deleteSketchConstraint: (id) =>
     set((s) => ({ sketchConstraints: s.sketchConstraints.filter((c) => c.id !== id) })),
