@@ -204,8 +204,7 @@ export function createScriptingAPI(store: LiveModelStore) {
    * Add a named parameter to the model
    */
   async function addParameter(name: string, value: number): Promise<string> {
-    const id = crypto.randomUUID()
-    store.getState().addParameter(name, value)
+    const id = store.getState().addParameter(name, value)
     context.parameters.set(name, id)
     return id
   }
