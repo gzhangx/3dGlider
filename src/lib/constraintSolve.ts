@@ -560,7 +560,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
             [l, c] = [circle, line]
           }
 
-          if (l.type !== 'line' || c.type !== 'circle') return 0
+          if (l.type !== 'line' || (c.type !== 'circle' && c.type !== 'arc')) return 0
 
           // Distance from circle center to line
           const cx = c.center.x
@@ -594,7 +594,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
             [l, circleEl] = [circle, line]
           }
 
-          if (l.type !== 'line' || circleEl.type !== 'circle') return vars.map(() => 0)
+          if (l.type !== 'line' || (circleEl.type !== 'circle' && circleEl.type !== 'arc')) return vars.map(() => 0)
 
           // Numerical differentiation
           const eps = 1e-6
@@ -655,7 +655,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
         residual: (els) => {
           const pt = getPoint(els, pRef.elementId, pRef.which)
           const circ = els.find((e) => e.id === circleId)
-          if (!pt || !circ || circ.type !== 'circle') return 0
+          if (!pt || !circ || (circ.type !== 'circle' && circ.type !== 'arc')) return 0
           const dx = pt.x - circ.center.x
           const dy = pt.y - circ.center.y
           const dist = Math.hypot(dx, dy)
@@ -664,7 +664,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
         jacobian: (els, vars) => {
           const pt = getPoint(els, pRef.elementId, pRef.which)
           const circ = els.find((e) => e.id === circleId)
-          if (!pt || !circ || circ.type !== 'circle') return vars.map(() => 0)
+          if (!pt || !circ || (circ.type !== 'circle' && circ.type !== 'arc')) return vars.map(() => 0)
 
           const dx = pt.x - circ.center.x
           const dy = pt.y - circ.center.y

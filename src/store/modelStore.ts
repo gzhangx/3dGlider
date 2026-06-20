@@ -148,24 +148,8 @@ function isSketchPlanePose(value: unknown): value is SketchPlanePose {
 
 function isSketchElement(value: unknown): value is SketchElement {
   if (!value || typeof value !== 'object') return false
-  const el = value as any
-
-  function isPoint(v: unknown) {
-    return !!v && typeof v === 'object' && typeof (v as any).x === 'number' && Number.isFinite((v as any).x)
-      && typeof (v as any).y === 'number' && Number.isFinite((v as any).y)
-  }
-
-  if (el.type === 'line' || el.type === 'rect') {
-    return isPoint(el.start) && isPoint(el.end)
-  }
-  if (el.type === 'circle') {
-    return isPoint(el.center) && typeof el.radius === 'number' && Number.isFinite(el.radius)
-  }
-  if (el.type === 'arc') {
-    return isPoint(el.center) && typeof el.radius === 'number' && Number.isFinite(el.radius)
-      && typeof el.startAngle === 'number' && typeof el.endAngle === 'number'
-  }
-  return false
+  const el = value as { type?: unknown }
+  return el.type === 'line' || el.type === 'rect' || el.type === 'circle' || el.type === 'arc'
 }
 
 function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: ExtrudeFeature[]; revolves: RevolveFeature[]; lofts: LoftFeature[]; sweeps: SweepFeature[]; shells: ShellFeature[]; parameters: Parameter[] } | null {
@@ -571,6 +555,8 @@ export const useModelStore = create<ModelState>((set) => ({
           return c.p1.elementId !== id && c.p2.elementId !== id
         if (c.type === 'pointOnCircle')
           return (c as any).p.elementId !== id && (c as any).circleId !== id
+        if (c.type === 'tangent')
+          return (c as any).elementId1 !== id && (c as any).elementId2 !== id
         return true
       }),
       sketches: s.sketches

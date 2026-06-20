@@ -27,6 +27,14 @@ export function elementEndpoints(el: SketchElement): { pt: SketchPoint; ref: Poi
     { pt: el.start, ref: { elementId: el.id, which: 'start' } },
     { pt: el.end,   ref: { elementId: el.id, which: 'end' } },
   ]
+  if (el.type === 'arc') {
+    const s = { x: el.center.x + Math.cos(el.startAngle) * el.radius, y: el.center.y + Math.sin(el.startAngle) * el.radius }
+    const e = { x: el.center.x + Math.cos(el.endAngle) * el.radius, y: el.center.y + Math.sin(el.endAngle) * el.radius }
+    return [
+      { pt: s, ref: { elementId: el.id, which: 'start' } },
+      { pt: e, ref: { elementId: el.id, which: 'end' } },
+    ]
+  }
   return []
 }
 
@@ -163,6 +171,63 @@ export function findSnapTarget(
             pt: closest,
             ref: null,
             constraintHint: '⊙ Coincident on circle',
+            circleId: el.id,
+            dist: dPerimeter,
+          }
+        }
+      }
+
+      // Allow snapping to arcs (perimeter and endpoints)
+      if (el.type === 'arc') {
+        // center snap
+        const dCenter = Math.hypot(raw.x - el.center.x, raw.y - el.center.y)
+        if (dCenter < snapObjectThreshold && (!best || dCenter < best.dist)) {
+          best = { pt: el.center, ref: { elementId: el.id, which: 'center' }, constraintHint: '⊙ Coincident at center', dist: dCenter }
+        }
+
+        // perimeter snap (only if angle lies within arc)
+        const closest = closestPointOnCircle(raw, el.center, el.radius)
+        const a = Math.atan2(closest.y - el.center.y, closest.x - el.center.x)
+        const toNorm = (th: number) => {
+          const TAU = Math.PI * 2
+          let out = th % TAU
+          if (out < 0) out += TAU
+          return out
+        }
+        const angleInArc = (theta: number, start: number, end: number) => {
+          const t = toNorm(theta)
+          const s = toNorm(start)
+          const e = toNorm(end)
+          const EPS = 1e-6
+          if (Math.abs(e - s) < EPS) return true
+          if (s <= e) return t >= s - EPS && t <= e + EPS
+          return t >= s - EPS || t <= e + EPS
+        }
+        const dPerimeter = distToCirclePerimeter(raw, el.center, el.radius)
+        if (dPerimeter < snapTangentThreshold && angleInArc(a, el.startAngle, el.endAngle) && (!best || dPerimeter < best.dist)) {
+          if (lineStart && activeTool === 'line') {
+            const tangentPt = getTangentPointOnCircle(lineStart, el.center, el.radius, raw)
+            if (tangentPt) {
+              const ta = Math.atan2(tangentPt.y - el.center.y, tangentPt.x - el.center.x)
+              if (angleInArc(ta, el.startAngle, el.endAngle)) {
+                const dToTangent = Math.hypot(raw.x - tangentPt.x, raw.y - tangentPt.y)
+                if (dToTangent < snapTangentThreshold) {
+                  best = {
+                    pt: tangentPt,
+                    ref: null,
+                    constraintHint: '⌶ Tangent to arc',
+                    tangentCircleId: el.id,
+                    dist: dToTangent,
+                  }
+                  continue
+                }
+              }
+            }
+          }
+          best = {
+            pt: closest,
+            ref: null,
+            constraintHint: '⊙ Coincident on arc',
             circleId: el.id,
             dist: dPerimeter,
           }
