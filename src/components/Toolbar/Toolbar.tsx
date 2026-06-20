@@ -6,6 +6,7 @@ import { planeIdFromPose } from '../../lib/planePose'
 import { ParametersDialog } from '../ParametersDialog/ParametersDialog'
 import { ScriptEditor } from '../ScriptEditor/ScriptEditor'
 import styles from './Toolbar.module.css'
+import { SCENE_TO_MM } from '../../lib/units'
 
 export function Toolbar() {
   const {
@@ -17,6 +18,13 @@ export function Toolbar() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showParams, setShowParams] = useState(false)
   const [showScriptEditor, setShowScriptEditor] = useState(false)
+  const [showPlaneEditor, setShowPlaneEditor] = useState(false)
+  const [offsetMmInput, setOffsetMmInput] = useState('0')
+  const [rotXInput, setRotXInput] = useState('0')
+  const [rotYInput, setRotYInput] = useState('0')
+  const [rotZInput, setRotZInput] = useState('0')
+
+  const setActivePlane = useModelStore((s) => s.setActivePlane)
 
   const handleSaveJson = () => {
     // Include the active, in-progress sketch when in sketch mode so the
@@ -101,6 +109,47 @@ export function Toolbar() {
                 />
                 <span style={{ fontSize: '0.9rem' }}>Show Others</span>
               </label>
+
+              <button className={styles.exitBtn} onClick={() => {
+                // Open plane editor and initialize inputs from current activePlane
+                if (activePlane) {
+                  setOffsetMmInput(String((activePlane.offset * SCENE_TO_MM).toFixed(2)))
+                  setRotXInput(String((activePlane.rotation[0] * 180 / Math.PI).toFixed(2)))
+                  setRotYInput(String((activePlane.rotation[1] * 180 / Math.PI).toFixed(2)))
+                  setRotZInput(String((activePlane.rotation[2] * 180 / Math.PI).toFixed(2)))
+                }
+                setShowPlaneEditor(true)
+              }} title="Edit sketch plane">
+                Edit Plane
+              </button>
+              {showPlaneEditor && (
+                <div style={{ position: 'absolute', left: 200, top: 48, background: '#222', padding: 8, borderRadius: 6, zIndex: 200 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                    <label style={{ fontSize: '0.85rem' }}>Offset (mm)</label>
+                    <input type="number" value={offsetMmInput} onChange={(e) => setOffsetMmInput(e.target.value)} style={{ width: 80 }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                    <label style={{ fontSize: '0.85rem' }}>Rx</label>
+                    <input type="number" value={rotXInput} onChange={(e) => setRotXInput(e.target.value)} style={{ width: 64 }} />
+                    <label style={{ fontSize: '0.85rem' }}>Ry</label>
+                    <input type="number" value={rotYInput} onChange={(e) => setRotYInput(e.target.value)} style={{ width: 64 }} />
+                    <label style={{ fontSize: '0.85rem' }}>Rz</label>
+                    <input type="number" value={rotZInput} onChange={(e) => setRotZInput(e.target.value)} style={{ width: 64 }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button className={styles.exitBtn} onClick={() => setShowPlaneEditor(false)}>Close</button>
+                    <button className={styles.saveBtn} onClick={() => {
+                      const off = parseFloat(offsetMmInput)
+                      const rx = parseFloat(rotXInput)
+                      const ry = parseFloat(rotYInput)
+                      const rz = parseFloat(rotZInput)
+                      if (!Number.isFinite(off) || !Number.isFinite(rx) || !Number.isFinite(ry) || !Number.isFinite(rz)) return
+                      setActivePlane({ rotation: [rx * Math.PI / 180, ry * Math.PI / 180, rz * Math.PI / 180], offset: off / SCENE_TO_MM })
+                      setShowPlaneEditor(false)
+                    }}>Apply</button>
+                  </div>
+                </div>
+              )}
               <button className={styles.exitBtn} onClick={exitSketch}>
                 Exit Sketch
               </button>

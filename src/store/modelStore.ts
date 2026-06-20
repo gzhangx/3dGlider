@@ -148,8 +148,24 @@ function isSketchPlanePose(value: unknown): value is SketchPlanePose {
 
 function isSketchElement(value: unknown): value is SketchElement {
   if (!value || typeof value !== 'object') return false
-  const el = value as { type?: unknown }
-  return el.type === 'line' || el.type === 'rect' || el.type === 'circle' || el.type === 'arc'
+  const el = value as any
+
+  function isPoint(v: unknown) {
+    return !!v && typeof v === 'object' && typeof (v as any).x === 'number' && Number.isFinite((v as any).x)
+      && typeof (v as any).y === 'number' && Number.isFinite((v as any).y)
+  }
+
+  if (el.type === 'line' || el.type === 'rect') {
+    return isPoint(el.start) && isPoint(el.end)
+  }
+  if (el.type === 'circle') {
+    return isPoint(el.center) && typeof el.radius === 'number' && Number.isFinite(el.radius)
+  }
+  if (el.type === 'arc') {
+    return isPoint(el.center) && typeof el.radius === 'number' && Number.isFinite(el.radius)
+      && typeof el.startAngle === 'number' && typeof el.endAngle === 'number'
+  }
+  return false
 }
 
 function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: ExtrudeFeature[]; revolves: RevolveFeature[]; lofts: LoftFeature[]; sweeps: SweepFeature[]; shells: ShellFeature[]; parameters: Parameter[] } | null {
@@ -360,6 +376,7 @@ export interface ModelState {
   setHoveredPlane: (plane: PlaneId | null) => void
   setActiveTool: (tool: SketchTool) => void
   setPreviewPlane: (plane: SketchPlanePose | null) => void
+  setActivePlane: (plane: SketchPlanePose | null) => void
   setConstructionMode: (on: boolean) => void
   setSnapToGrid: (on: boolean) => void
   setSnapToOtherPlanes: (on: boolean) => void
@@ -623,6 +640,7 @@ export const useModelStore = create<ModelState>((set) => ({
 
   setPreviewExtrude: (previewExtrude) => set({ previewExtrude }),
   setPreviewPlane: (previewPlane) => set({ previewPlane }),
+  setActivePlane: (plane) => set({ activePlane: plane }),
 
   addRevolve: (sketchId, axisType, angle, axisElementId, id = crypto.randomUUID()) => {
     set((s) => ({
