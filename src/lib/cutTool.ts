@@ -1,4 +1,4 @@
-import { SketchArc, SketchElement, SketchLine, SketchRect, SketchPoint } from '../store/modelStore'
+import { SketchArc, SketchElement, SketchLine, SketchRect, SketchPoint, SketchConstraint } from '../store/modelStore'
 
 function rectCorners(r: SketchRect): SketchPoint[] {
   return [
@@ -185,6 +185,26 @@ function circleLineIntersectionAngles(circle: { center: SketchPoint; radius: num
     })
 }
 
+function circleInfiniteLineIntersectionAngles(circle: { center: SketchPoint; radius: number }, a: SketchPoint, b: SketchPoint): number[] {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const fx = a.x - circle.center.x
+  const fy = a.y - circle.center.y
+  const A = dx * dx + dy * dy
+  if (A < 1e-10) return []
+  const B = 2 * (fx * dx + fy * dy)
+  const C = fx * fx + fy * fy - circle.radius * circle.radius
+  const disc = B * B - 4 * A * C
+  if (disc < 0) return []
+  const sqrtDisc = Math.sqrt(Math.max(0, disc))
+  const us = [(-B - sqrtDisc) / (2 * A), (-B + sqrtDisc) / (2 * A)]
+  return us.map((u) => {
+    const x = a.x + u * dx
+    const y = a.y + u * dy
+    return normalizeAngle(Math.atan2(y - circle.center.y, x - circle.center.x))
+  })
+}
+
 function circleIntersectionAngles(circle: { id: string; center: SketchPoint; radius: number }, elements: SketchElement[]): number[] {
   const angles: number[] = []
   const push = (a: number) => angles.push(normalizeAngle(a))
@@ -242,9 +262,72 @@ export function computeCircleCut(
   circle: { id: string; center: SketchPoint; radius: number },
   cursorPt: SketchPoint,
   elements: SketchElement[],
+  constraints?: SketchConstraint[],
 ): CircleCutResult | null {
-  const angles = circleIntersectionAngles(circle, elements)
-  if (angles.length < 2) return null
+  let angles = circleIntersectionAngles(circle, elements)
+  console.debug('computeCircleCut: circle', circle.id, 'radius', circle.radius, 'found angles', angles.length, angles)
+
+  // If not enough geometric intersections, supplement using sketch constraints
+  // (e.g. tangent constraints) by computing intersection points from the
+  // associated elements' infinite geometry.
+  if (angles.length < 2 && constraints && constraints.length > 0) {
+    for (const c of constraints) {
+      if (c.type !== 'tangent') continue
+      if (c.elementId1 !== circle.id && c.elementId2 !== circle.id) continue
+      const lineId = c.elementId1 === circle.id ? c.elementId2 : c.elementId1
+      const other = elements.find((e) => e.id === lineId)
+      if (!other) continue
+      if (other.type === 'line') {
+        const inf = circleInfiniteLineIntersectionAngles(circle, other.start, other.end)
+        if (inf.length === 0) {
+          // Fallback: use the line direction to compute the theoretical tangent point
+          const dx = other.end.x - other.start.x
+          const dy = other.end.y - other.start.y
+          const dir = Math.atan2(dy, dx)
+          const candA = normalizeAngle(dir - Math.PI / 2)
+          const candB = normalizeAngle(dir + Math.PI / 2)
+          const pA = { x: circle.center.x + Math.cos(candA) * circle.radius, y: circle.center.y + Math.sin(candA) * circle.radius }
+          const pB = { x: circle.center.x + Math.cos(candB) * circle.radius, y: circle.center.y + Math.sin(candB) * circle.radius }
+          const len2 = dx * dx + dy * dy
+          const distLine = (pt) => {
+            if (len2 < 1e-12) return Infinity
+            return Math.abs((other.end.y - other.start.y) * pt.x - (other.end.x - other.start.x) * pt.y + other.end.x * other.start.y - other.end.y * other.start.x) / Math.sqrt(len2)
+          }
+          const dA = distLine(pA)
+          const dB = distLine(pB)
+          angles.push(dA <= dB ? candA : candB)
+        } else {
+          for (const a of inf) angles.push(a)
+        }
+      } else if (other.type === 'circle') {
+        const dx = other.center.x - circle.center.x
+        const dy = other.center.y - circle.center.y
+        const d = Math.hypot(dx, dy)
+        const r0 = circle.radius
+        const r1 = other.radius
+        if (!(d < 1e-8 || d > r0 + r1 + 1e-6 || d < Math.abs(r0 - r1) - 1e-6)) {
+          const a = (r0 * r0 - r1 * r1 + d * d) / (2 * d)
+          const h2 = r0 * r0 - a * a
+          if (!(h2 < -1e-6)) {
+            const h = Math.sqrt(Math.max(0, h2))
+            const xm = circle.center.x + (a * dx) / d
+            const ym = circle.center.y + (a * dy) / d
+            const rx = (-dy * h) / d
+            const ry = (dx * h) / d
+            angles.push(normalizeAngle(Math.atan2((ym + ry) - circle.center.y, (xm + rx) - circle.center.x)))
+            angles.push(normalizeAngle(Math.atan2((ym - ry) - circle.center.y, (xm - rx) - circle.center.x)))
+          }
+        }
+      }
+    }
+    angles = [...new Set(angles.map((x) => Math.round(x * 1e9) / 1e9))].sort((a, b) => a - b)
+    console.debug('computeCircleCut: augmented angles', angles.length, angles)
+  }
+
+  if (angles.length < 2) {
+    console.debug('computeCircleCut: not enough intersection angles, aborting')
+    return null
+  }
   const cAng = normalizeAngle(Math.atan2(cursorPt.y - circle.center.y, cursorPt.x - circle.center.x))
 
   const below = angles.filter((a) => a < cAng)

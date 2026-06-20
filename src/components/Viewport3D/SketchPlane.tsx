@@ -457,7 +457,8 @@ export function SketchPlane() {
           }
           setCutPreview(computeCut(probe, raw, sketchElements))
         } else if (nearest.kind === 'circle') {
-          setCutPreview(computeCircleCut(nearest.circle, raw, sketchElements))
+          // Pass current sketch constraints so tangency-based intersections are considered
+          setCutPreview(computeCircleCut(nearest.circle, raw, sketchElements, sketchConstraints))
         } else {
           setCutPreview(computeArcCut(nearest.arc, raw, sketchElements))
         }

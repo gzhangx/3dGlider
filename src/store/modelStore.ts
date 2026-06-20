@@ -793,6 +793,20 @@ export const useModelStore = create<ModelState>((set) => ({
         if (mArc) arcCounter = Math.max(arcCounter, parseInt(mArc[1], 10))
       }
     }
+    // Apply solver to loaded sketches so element coordinates reflect constraints
+    const solvedSketches = parsed.sketches.map((sk) => {
+      if (sk.constraints && sk.constraints.length > 0) {
+        try {
+          const solved = solveConstraints(sk.elements, sk.constraints, new Set())
+          return { ...sk, elements: solved }
+        } catch (err) {
+          console.warn('loadModel: failed to solve constraints for sketch', sk.id, err)
+          return sk
+        }
+      }
+      return sk
+    })
+
     set({
       mode: 'view',
       activePlane: null,
@@ -805,7 +819,7 @@ export const useModelStore = create<ModelState>((set) => ({
       selectedElementId: null,
       selectedElementId2: null,
       editingSketchId: null,
-      sketches: parsed.sketches,
+      sketches: solvedSketches,
       extrudes: parsed.extrudes,
       revolves: parsed.revolves,
       lofts: parsed.lofts,
