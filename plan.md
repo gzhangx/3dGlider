@@ -1,5 +1,7 @@
 # 3D Glider Project Plan & Status
 
+> Historical implementation plan. For current status and remaining work, see `tasks.md`.
+
 **Updated: April 26, 2026**
 
 ---

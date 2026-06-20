@@ -1,5 +1,7 @@
 # 3D Glider — Improvement Tasks
 
+> Status update (June 2026): loft, sweep, and shell generation are implemented. Geometry rendering is memoized, Zustand subscriptions use selectors, and solver updates are indexed and batched.
+
 ## Critical gaps (CAD fundamentals)
 
 ### ✅ Constraint solver (COMPLETED)

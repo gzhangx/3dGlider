@@ -4,14 +4,10 @@ This folder contains test files for the 3D Glider project.
 
 ## Test Files
 
-### `constraintSolve.test.ts`
-Unit tests for the constraint solver functionality.
-
-**Test Cases:**
-1. `should maintain length constraint during dragging` - Verifies length constraint is maintained
-2. `should maintain coincident constraint` - Verifies points merge correctly
-3. `should maintain horizontal constraint` - Verifies line stays horizontal
-4. `should maintain vertical constraint` - Verifies line stays vertical
+### Test suites
+- `constraintSolve.test.ts` covers constraint behavior.
+- `modelCore.test.ts` covers solver status, constraint identity, and scripting parameters.
+- `solidModel.test.ts` covers shell geometry.
 
 **Running Tests**
 ```bash
@@ -55,5 +51,5 @@ tests/
 ---
 
 **Last Updated**: May 1, 2026  
-**Test Status**: Ready  
-**Coverage**: Core solver behavior
+**Test Status**: Automated with Vitest  
+**Coverage**: Solver, scripting parameters, constraint identity, and shell generation
