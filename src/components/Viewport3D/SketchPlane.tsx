@@ -623,6 +623,46 @@ export function SketchPlane() {
         const allConstraints = [...sketchConstraints, c]
         const solved = solveConstraints(sketchElements, allConstraints, new Set())
         for (const sEl of solved) updateSketchElement(sEl.id, sEl as Parameters<typeof updateSketchElement>[1])
+      } else {
+        // Fallback: if we didn't snap to a ref, try to find a nearby endpoint and link coincident
+        const draggedEl = sketchElements.find((e) => e.id === dragTarget.elementId)
+        const draggedPt = draggedEl ? (dragTarget.pointType === 'start' ? (draggedEl as any).start : (draggedEl as any).end) : null
+        if (draggedPt) {
+          let bestRef: PointRef | null = null
+          let bestDist = Infinity
+          for (const el of sketchElements) {
+            if (el.id === dragTarget.elementId) continue
+            if (el.type === 'line' || el.type === 'rect') {
+              const endpoints = el.type === 'line'
+                ? [{ pt: (el as SketchLine).start, which: 'start' as const }, { pt: (el as SketchLine).end, which: 'end' as const }]
+                : [{ pt: (el as SketchRect).start, which: 'start' as const }, { pt: (el as SketchRect).end, which: 'end' as const }]
+              for (const ep of endpoints) {
+                const d = Math.hypot(draggedPt.x - ep.pt.x, draggedPt.y - ep.pt.y)
+                if (d < snapEndpointThreshold && d < bestDist) {
+                  bestDist = d
+                  bestRef = { elementId: el.id, which: ep.which }
+                }
+              }
+            }
+          }
+          if (bestRef) {
+            const p1: PointRef = { elementId: dragTarget.elementId, which: dragTarget.pointType }
+            const p2 = bestRef
+            const alreadyLinked = sketchConstraints.some(
+              (c) => c.type === 'coincident' && (
+                (c.p1.elementId === p1.elementId && c.p1.which === p1.which && c.p2.elementId === p2.elementId && c.p2.which === p2.which) ||
+                (c.p2.elementId === p1.elementId && c.p2.which === p1.which && c.p1.elementId === p2.elementId && c.p1.which === p2.which)
+              )
+            )
+            if (!alreadyLinked) {
+              const c = { id: crypto.randomUUID(), type: 'coincident' as const, p1, p2 }
+              addSketchConstraint(c)
+              const allConstraints = [...sketchConstraints, c]
+              const solved = solveConstraints(sketchElements, allConstraints, new Set())
+              for (const sEl of solved) updateSketchElement(sEl.id, sEl as Parameters<typeof updateSketchElement>[1])
+            }
+          }
+        }
       }
       setDragTarget(null)
       setDragSnapTarget(null)
