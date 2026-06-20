@@ -361,19 +361,30 @@ export function SketchPlane() {
 
     // ── drag mode ────────────────────────────────────────────────────────────
     if (dragTarget) {
+      // If dragging a line endpoint, provide the other endpoint as `lineStart`
+      // so tangent-to-circle snapping can be detected while dragging.
+      let lineStartForSnap: SketchPoint | null = null
+      let activeToolForSnap = activeTool
+      const draggedEl = sketchElements.find((e) => e.id === dragTarget.elementId)
+      if (draggedEl && draggedEl.type === 'line') {
+        const le = draggedEl as SketchLine
+        lineStartForSnap = dragTarget.pointType === 'start' ? le.end : le.start
+        activeToolForSnap = 'line'
+      }
+
       const snap = findSnapTarget(
         raw,
         sketchElements,
         sketches,
         editingSketchId,
         plane,
-        activeTool,
+        activeToolForSnap,
         snapToObjects,
         snapToOtherPlanes,
         snapEndpointThreshold,
         snapObjectThreshold,
         snapTangentThreshold,
-        null,
+        lineStartForSnap,
         dragTarget.elementId,
       )
       setDragSnapTarget(snap)
@@ -613,6 +624,18 @@ export function SketchPlane() {
           addSketchConstraint(c)
           // Immediately apply the new coincident constraint so elements stay snapped
           const allConstraints = [...sketchConstraints, c]
+          const solved = solveConstraints(sketchElements, allConstraints, new Set())
+          for (const sEl of solved) updateSketchElement(sEl.id, sEl as Parameters<typeof updateSketchElement>[1])
+        }
+      } else if (dragSnapTarget?.tangentCircleId) {
+        const tc: TangentConstraint = { id: crypto.randomUUID(), type: 'tangent', elementId1: dragTarget.elementId, elementId2: dragSnapTarget.tangentCircleId }
+        // Avoid adding duplicate tangent constraints
+        const alreadyTangent = sketchConstraints.some((c) => c.type === 'tangent' && (
+          (c as TangentConstraint).elementId1 === tc.elementId1 && (c as TangentConstraint).elementId2 === tc.elementId2
+        ))
+        if (!alreadyTangent) {
+          addSketchConstraint(tc)
+          const allConstraints = [...sketchConstraints, tc]
           const solved = solveConstraints(sketchElements, allConstraints, new Set())
           for (const sEl of solved) updateSketchElement(sEl.id, sEl as Parameters<typeof updateSketchElement>[1])
         }

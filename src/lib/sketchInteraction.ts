@@ -139,24 +139,32 @@ export function findSnapTarget(
         const closest = closestPointOnCircle(raw, el.center, el.radius)
         const dPerimeter = distToCirclePerimeter(raw, el.center, el.radius)
         if (dPerimeter < snapTangentThreshold && (!best || dPerimeter < best.dist)) {
-          if (lineStart && activeTool === 'line' && isLineTangentToCircle(lineStart, raw, el.center, el.radius)) {
+          if (lineStart && activeTool === 'line') {
+            // Compute the theoretical tangent point from the other line endpoint and
+            // choose it when the cursor is near that tangent point. This is more
+            // robust than testing tangency against the raw cursor location.
             const tangentPt = getTangentPointOnCircle(lineStart, el.center, el.radius, raw)
-            const snapPt = tangentPt || closest
-            best = {
-              pt: snapPt,
-              ref: null,
-              constraintHint: '⌶ Tangent to circle',
-              tangentCircleId: el.id,
-              dist: dPerimeter,
+            if (tangentPt) {
+              const dToTangent = Math.hypot(raw.x - tangentPt.x, raw.y - tangentPt.y)
+              if (dToTangent < snapTangentThreshold) {
+                best = {
+                  pt: tangentPt,
+                  ref: null,
+                  constraintHint: '⌶ Tangent to circle',
+                  tangentCircleId: el.id,
+                  dist: dToTangent,
+                }
+                continue
+              }
             }
-          } else {
-            best = {
-              pt: closest,
-              ref: null,
-              constraintHint: '⊙ Coincident on circle',
-              circleId: el.id,
-              dist: dPerimeter,
-            }
+          }
+          // Fallback: snap to the nearest point on the circle perimeter
+          best = {
+            pt: closest,
+            ref: null,
+            constraintHint: '⊙ Coincident on circle',
+            circleId: el.id,
+            dist: dPerimeter,
           }
         }
       }
