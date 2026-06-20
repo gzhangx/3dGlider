@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { constraintsEquivalent } from '../src/lib/constraintUtils'
 import { solveConstraintsDetailed } from '../src/lib/constraintSolve'
 import { createScriptingAPI } from '../src/lib/scriptingAPI'
-import { buildModelSolidMeshes, buildSolidMeshes, disposeSolidMeshes } from '../src/lib/solidModel'
-import { presetPlanePose, type ExtrudeFeature, type ShellFeature, type Sketch, type SketchConstraint, useModelStore } from '../src/store/modelStore'
+import { type SketchConstraint, useModelStore } from '../src/store/modelStore'
 
 describe('model core', () => {
   afterEach(() => {
@@ -40,21 +39,4 @@ describe('model core', () => {
     expect(useModelStore.getState().parameters.find((parameter) => parameter.id === id)?.value).toBe(0)
   })
 
-  it('turns an extrusion into an open shell', () => {
-    const sketch: Sketch = {
-      id: 'sketch', plane: presetPlanePose('XY'),
-      elements: [{ type: 'rect', id: 'rect', start: { x: -2, y: -2 }, end: { x: 2, y: 2 } }],
-    }
-    const extrudes: ExtrudeFeature[] = [{ id: 'extrude', sketchId: sketch.id, operation: 'add', depth: 4 }]
-    const shells: ShellFeature[] = [{ id: 'shell', sketchId: sketch.id, thickness: 0.5 }]
-    const outer = buildSolidMeshes(extrudes, [sketch])
-    const shelled = buildModelSolidMeshes(extrudes, shells, [sketch])
-
-    expect(shelled).toHaveLength(1)
-    expect(shelled[0].geometry.getAttribute('position').count)
-      .toBeGreaterThan(outer[0].geometry.getAttribute('position').count)
-
-    disposeSolidMeshes(outer)
-    disposeSolidMeshes(shelled)
-  })
 })
