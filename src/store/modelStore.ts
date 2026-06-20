@@ -56,10 +56,12 @@ export interface HorizontalConstraint   { id: string; type: 'horizontal';   elem
 export interface VerticalConstraint     { id: string; type: 'vertical';     elementId: string }
 export interface EqualConstraint        { id: string; type: 'equal';        elementId1: string; elementId2: string }
 export interface TangentConstraint      { id: string; type: 'tangent';      elementId1: string; elementId2: string }
+export interface PointOnCircleConstraint { id: string; type: 'pointOnCircle'; p: PointRef; circleId: string }
 export type SketchConstraint =
   | LengthConstraint | AngleConstraint | CoincidentConstraint
   | ParallelConstraint | PerpendicularConstraint
   | HorizontalConstraint | VerticalConstraint | EqualConstraint | TangentConstraint
+  | PointOnCircleConstraint
 
 export interface Sketch {
   id: string
@@ -168,6 +170,8 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
             if (!c || typeof c !== 'object') return false
             const cc = c as { type?: unknown }
             return cc.type === 'length' || cc.type === 'angle' || cc.type === 'coincident'
+              || cc.type === 'parallel' || cc.type === 'perpendicular' || cc.type === 'horizontal' || cc.type === 'vertical'
+              || cc.type === 'equal' || cc.type === 'tangent' || cc.type === 'pointOnCircle'
           })
         : []
       return {
@@ -518,6 +522,8 @@ export const useModelStore = create<ModelState>((set) => ({
           return c.elementId1 !== id && c.elementId2 !== id
         if (c.type === 'coincident')
           return c.p1.elementId !== id && c.p2.elementId !== id
+        if (c.type === 'pointOnCircle')
+          return (c as any).p.elementId !== id && (c as any).circleId !== id
         return true
       }),
       sketches: s.sketches

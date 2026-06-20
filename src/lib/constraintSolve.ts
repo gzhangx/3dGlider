@@ -646,6 +646,41 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
           })
         },
       })
+    } else if (c.type === 'pointOnCircle') {
+      const pRef = (c as any).p as { elementId: string; which: 'start' | 'end' | 'center' }
+      const circleId = (c as any).circleId as string
+
+      equations.push({
+        type: 'pointOnCircle',
+        residual: (els) => {
+          const pt = getPoint(els, pRef.elementId, pRef.which)
+          const circ = els.find((e) => e.id === circleId)
+          if (!pt || !circ || circ.type !== 'circle') return 0
+          const dx = pt.x - circ.center.x
+          const dy = pt.y - circ.center.y
+          const dist = Math.hypot(dx, dy)
+          return dist - circ.radius
+        },
+        jacobian: (els, vars) => {
+          const pt = getPoint(els, pRef.elementId, pRef.which)
+          const circ = els.find((e) => e.id === circleId)
+          if (!pt || !circ || circ.type !== 'circle') return vars.map(() => 0)
+
+          const dx = pt.x - circ.center.x
+          const dy = pt.y - circ.center.y
+          const dist = Math.hypot(dx, dy)
+          if (dist < 1e-12) return vars.map(() => 0)
+
+          return vars.map((v) => {
+            if (v.elementId === pRef.elementId && v.pointType === pRef.which && v.coord === 'x') return dx / dist
+            if (v.elementId === pRef.elementId && v.pointType === pRef.which && v.coord === 'y') return dy / dist
+            if (v.elementId === circleId && v.pointType === 'center' && v.coord === 'x') return -dx / dist
+            if (v.elementId === circleId && v.pointType === 'center' && v.coord === 'y') return -dy / dist
+            if (v.elementId === circleId && v.pointType === 'radius' && v.coord === 'x') return -1
+            return 0
+          })
+        },
+      })
     }
   }
 
@@ -678,7 +713,8 @@ export function solveConstraints(
   let varIndex = 0
 
   // Check if any tangent constraints exist
-  const hasTangentConstraints = constraints.some(c => c.type === 'tangent')
+  // Determine whether we need circle radius as a variable (tangent, point-on-circle, or explicit radius length)
+  const needsRadiusVariable = constraints.some(c => c.type === 'tangent' || c.type === 'pointOnCircle' || (c.type === 'length' && (c as any).dimension === 'radius'))
 
   for (const el of elements) {
     const fixKey = (pt: string) => `${el.id}:${pt}`
@@ -706,8 +742,8 @@ export function solveConstraints(
         variables.push({ elementId: el.id, pointType: 'center', coord: 'x', index: varIndex++ })
         variables.push({ elementId: el.id, pointType: 'center', coord: 'y', index: varIndex++ })
       }
-      // Add radius as a variable for circles if there are tangent constraints
-      if (el.type === 'circle' && hasTangentConstraints) {
+      // Add radius as a variable for circles if there are constraints that require it
+      if (el.type === 'circle' && needsRadiusVariable) {
         variables.push({ elementId: el.id, pointType: 'radius', coord: 'x', index: varIndex++ })
       }
     }

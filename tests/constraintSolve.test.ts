@@ -40,6 +40,38 @@ describe('Constraint Solver', () => {
     expect(Math.abs(length - 10) < 0.01).toBe(true)
   })
 
+  it('should maintain point-on-circle constraint', () => {
+    const circle = {
+      type: 'circle' as const,
+      id: 'c1',
+      center: { x: 0, y: 0 },
+      radius: 5,
+    }
+
+    const line: SketchLine = {
+      type: 'line',
+      id: 'l1',
+      start: { x: 0, y: 5 }, // on circle
+      end: { x: 2, y: 4 },
+    }
+
+    const constraints: any[] = [
+      { id: 'poc1', type: 'pointOnCircle', p: { elementId: 'l1', which: 'start' }, circleId: 'c1' },
+    ]
+
+    const solved = solveConstraints([circle as any, line as any], constraints as any[])
+
+    const solvedCircle = solved.find((e) => e.id === 'c1') as any
+    const solvedLine = solved.find((e) => e.id === 'l1') as any
+
+    if (solvedCircle && solvedLine) {
+      const dx = solvedLine.start.x - solvedCircle.center.x
+      const dy = solvedLine.start.y - solvedCircle.center.y
+      const dist = Math.hypot(dx, dy)
+      expect(Math.abs(dist - solvedCircle.radius) < 0.01).toBe(true)
+    }
+  })
+
   it('should maintain coincident constraint', () => {
     // Create two lines whose endpoints should be coincident
     const line1: SketchLine = {

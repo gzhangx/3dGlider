@@ -56,9 +56,11 @@ export function SketchSidebar() {
   const selectedConstraints = selectedElementIds[0]
     ? sketchConstraints.filter((c) => {
         const id = selectedElementIds[0]
-        if ('elementId' in c)  return c.elementId  === id
-        if ('elementId1' in c) return c.elementId1 === id || c.elementId2 === id
-        return c.p1.elementId === id || c.p2.elementId === id
+        if ('elementId' in c)  return (c as any).elementId  === id
+        if ('elementId1' in c) return (c as any).elementId1 === id || (c as any).elementId2 === id
+        if (c.type === 'coincident') return c.p1.elementId === id || c.p2.elementId === id
+        if (c.type === 'pointOnCircle') return c.p.elementId === id || c.circleId === id
+        return false
       })
     : []
 
@@ -165,6 +167,7 @@ export function SketchSidebar() {
     if ('elementId' in c) return [(c as { elementId: string }).elementId]
     if ('elementId1' in c) return [(c as { elementId1: string; elementId2: string }).elementId1, (c as { elementId1: string; elementId2: string }).elementId2]
     if (c.type === 'coincident') return [c.p1.elementId, c.p2.elementId]
+    if (c.type === 'pointOnCircle') return [(c as any).p.elementId, (c as any).circleId]
     return []
   }
 
@@ -185,6 +188,7 @@ export function SketchSidebar() {
     if (c.type === 'vertical')      return `| vertical`
     if (c.type === 'equal')         return `= equal`
     if (c.type === 'tangent')       return `⌶ tangent`
+    if (c.type === 'pointOnCircle') return `⊙ on circle`
     return (c as { type: string }).type
   }
 
@@ -462,6 +466,14 @@ export function SketchSidebar() {
                       <div className={styles.detailRow}><strong>Points:</strong></div>
                       <div className={styles.detailRow}>- p1: {detailConstraint.p1.which} of {sketchElements.find((s) => s.id === detailConstraint.p1.elementId)?.name ?? detailConstraint.p1.elementId}</div>
                       <div className={styles.detailRow}>- p2: {detailConstraint.p2.which} of {sketchElements.find((s) => s.id === detailConstraint.p2.elementId)?.name ?? detailConstraint.p2.elementId}</div>
+                    </>
+                  )}
+                  {detailConstraint.type === 'pointOnCircle' && (
+                    <>
+                      <div className={styles.detailRow}><strong>Point:</strong></div>
+                      <div className={styles.detailRow}>- p: {detailConstraint.p.which} of {sketchElements.find((s) => s.id === detailConstraint.p.elementId)?.name ?? detailConstraint.p.elementId}</div>
+                      <div className={styles.detailRow}><strong>Circle:</strong></div>
+                      <div className={styles.detailRow}>- {sketchElements.find((s) => s.id === detailConstraint.circleId)?.name ?? detailConstraint.circleId}</div>
                     </>
                   )}
                 </div>

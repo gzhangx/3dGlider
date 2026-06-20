@@ -6,6 +6,7 @@ export type SnapTarget = {
   ref: PointRef | null
   constraintHint?: string
   tangentCircleId?: string
+  circleId?: string
 }
 
 export function rectCorners(rect: SketchRect): SketchPoint[] {
@@ -153,6 +154,7 @@ export function findSnapTarget(
               pt: closest,
               ref: null,
               constraintHint: '⊙ Coincident on circle',
+              circleId: el.id,
               dist: dPerimeter,
             }
           }
