@@ -75,8 +75,8 @@ function Dot({ pos, color, screenSize, size = 0.06, ring = false }: { pos: [numb
 /** Let the invisible sketch plane receive hits in cut mode (Line2 otherwise wins the raycast). */
 const noopRaycast: () => void = () => {}
 
-function SketchEl({ el, plane, highlighted, onPointerMove }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean; onPointerMove?: (e: ThreeEvent<PointerEvent>) => void }) {
-  const { activeTool, selectedElementIds, highlightElementIds, selectElement, toggleElementSelection, showElementNames } = useModelStore()
+  function SketchEl({ el, plane, highlighted, onPointerMove }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean; onPointerMove?: (e: ThreeEvent<PointerEvent>) => void }) {
+  const { activeTool, selectedElementIds, highlightElementIds, selectElement, toggleElementSelection, showElementNames, addSketchConstraint, applyConstraints } = useModelStore()
   const [hovered, setHovered] = useState(false)
 
   const isConstruction = !!el.construction
@@ -90,11 +90,40 @@ function SketchEl({ el, plane, highlighted, onPointerMove }: { el: SketchElement
     ? {
         onClick: (e: ThreeEvent<MouseEvent>) => {
           e.stopPropagation()
+
+          // If shift-clicking to select a second element, and the pair is (line, circle),
+          // auto-add a tangent constraint and select the element.
           if (e.shiftKey) {
+            const currentlySelected = selectedElementIds ?? []
+            // If exactly one other element is selected and it's not this one
+            if (currentlySelected.length === 1 && currentlySelected[0] !== el.id) {
+              const otherId = currentlySelected[0]
+              // Find the other element from global sketch elements via the store
+              const otherEl = (useModelStore.getState().sketchElements as SketchElement[]).find((s) => s.id === otherId)
+              if (otherEl) {
+                const isLineCirclePair = (otherEl.type === 'line' && el.type === 'circle') || (otherEl.type === 'circle' && el.type === 'line')
+                if (isLineCirclePair) {
+                  // Select the second element
+                  toggleElementSelection(el.id)
+                  // Determine ids for tangent constraint
+                  const lineId = otherEl.type === 'line' ? otherEl.id : el.type === 'line' ? el.id : undefined
+                  const circleId = otherEl.type === 'circle' ? otherEl.id : el.type === 'circle' ? el.id : undefined
+                  if (lineId && circleId) {
+                    const tc = { id: crypto.randomUUID(), type: 'tangent' as const, elementId1: lineId, elementId2: circleId }
+                    addSketchConstraint(tc)
+                    // Apply solver so geometry updates immediately
+                    applyConstraints()
+                  }
+                  return
+                }
+              }
+            }
+            // Fallback: normal toggle selection
             toggleElementSelection(el.id)
-          } else {
-            selectElement(el.id)
+            return
           }
+
+          selectElement(el.id)
         },
         onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setHovered(true) },
         onPointerOut: () => setHovered(false),
