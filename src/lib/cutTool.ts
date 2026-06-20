@@ -289,7 +289,7 @@ export function computeCircleCut(
           const pA = { x: circle.center.x + Math.cos(candA) * circle.radius, y: circle.center.y + Math.sin(candA) * circle.radius }
           const pB = { x: circle.center.x + Math.cos(candB) * circle.radius, y: circle.center.y + Math.sin(candB) * circle.radius }
           const len2 = dx * dx + dy * dy
-          const distLine = (pt) => {
+          const distLine = (pt: SketchPoint) => {
             if (len2 < 1e-12) return Infinity
             return Math.abs((other.end.y - other.start.y) * pt.x - (other.end.x - other.start.x) * pt.y + other.end.x * other.start.y - other.end.y * other.start.x) / Math.sqrt(len2)
           }

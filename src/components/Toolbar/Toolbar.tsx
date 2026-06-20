@@ -93,9 +93,14 @@ export function Toolbar() {
               <button className={styles.exitBtn} onClick={resetSketchView} title="Reset view perpendicular to sketch plane">
                 Reset View
               </button>
-              <button className={styles.exitBtn} onClick={() => setHideOtherSketches(!hideOtherSketches)} title="Toggle visibility of other sketches/extrudes">
-                {hideOtherSketches ? 'Show Others' : 'Hide Others'}
-              </button>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginLeft: '8px' }} title="Show other sketches and solids while sketching">
+                <input
+                  type="checkbox"
+                  checked={!hideOtherSketches}
+                  onChange={(e) => setHideOtherSketches(!e.target.checked)}
+                />
+                <span style={{ fontSize: '0.9rem' }}>Show Others</span>
+              </label>
               <button className={styles.exitBtn} onClick={exitSketch}>
                 Exit Sketch
               </button>
