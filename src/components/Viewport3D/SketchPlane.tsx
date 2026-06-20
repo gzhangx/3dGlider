@@ -166,7 +166,7 @@ const noopRaycast: () => void = () => {}
       {shape}
       {showElementNames && labelPos && (
         <Text position={labelPos} fontSize={0.06} color="#ffffff" anchorX="center" anchorY="middle">
-          {(el as any).name ?? el.id}
+          {el.name ?? el.id}
         </Text>
       )}
     </>
@@ -670,7 +670,9 @@ export function SketchPlane() {
       } else {
         // Fallback: if we didn't snap to a ref, try to find a nearby endpoint and link coincident
         const draggedEl = sketchElements.find((e) => e.id === dragTarget.elementId)
-        const draggedPt = draggedEl ? (dragTarget.pointType === 'start' ? (draggedEl as any).start : (draggedEl as any).end) : null
+        const draggedPt = draggedEl && 'start' in draggedEl && 'end' in draggedEl
+          ? (dragTarget.pointType === 'start' ? draggedEl.start : draggedEl.end)
+          : null
         if (draggedPt) {
           let bestRef: PointRef | null = null
           let bestDist = Infinity

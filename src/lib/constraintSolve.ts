@@ -648,8 +648,8 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
         },
       })
     } else if (c.type === 'pointOnCircle') {
-      const pRef = (c as any).p as { elementId: string; which: 'start' | 'end' | 'center' }
-      const circleId = (c as any).circleId as string
+      const pRef = c.p
+      const circleId = c.circleId
 
       equations.push({
         type: 'pointOnCircle',
@@ -733,7 +733,7 @@ export function solveConstraintsDetailed(
 
   // Check if any tangent constraints exist
   // Determine whether we need circle radius as a variable (tangent, point-on-circle, or explicit radius length)
-  const needsRadiusVariable = constraints.some(c => c.type === 'tangent' || c.type === 'pointOnCircle' || (c.type === 'length' && (c as any).dimension === 'radius'))
+  const needsRadiusVariable = constraints.some(c => c.type === 'tangent' || c.type === 'pointOnCircle' || (c.type === 'length' && c.dimension === 'radius'))
 
   for (const el of elements) {
     const fixKey = (pt: string) => `${el.id}:${pt}`

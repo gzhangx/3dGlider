@@ -40,10 +40,10 @@ export function ScriptEditor({ onClose }: ScriptEditorProps) {
 
       // Create a custom console for capturing logs
       const customConsole = {
-        log: (...args: any[]) => logs.push(args.map((a) => String(a)).join(' ')),
-        error: (...args: any[]) => logs.push('ERROR: ' + args.map((a) => String(a)).join(' ')),
-        warn: (...args: any[]) => logs.push('WARN: ' + args.map((a) => String(a)).join(' ')),
-        info: (...args: any[]) => logs.push('INFO: ' + args.map((a) => String(a)).join(' ')),
+        log: (...args: unknown[]) => logs.push(args.map((a) => String(a)).join(' ')),
+        error: (...args: unknown[]) => logs.push('ERROR: ' + args.map((a) => String(a)).join(' ')),
+        warn: (...args: unknown[]) => logs.push('WARN: ' + args.map((a) => String(a)).join(' ')),
+        info: (...args: unknown[]) => logs.push('INFO: ' + args.map((a) => String(a)).join(' ')),
       }
 
       // Wrap user code in an async function so await works

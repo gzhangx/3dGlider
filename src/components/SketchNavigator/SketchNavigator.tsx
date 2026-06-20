@@ -6,6 +6,7 @@ import {
   SketchElement,
 } from '../../store/modelStore'
 import styles from './SketchNavigator.module.css'
+import { constraintElementIds } from '../../lib/constraintUtils'
 
 // ── element label ─────────────────────────────────────────────────────────────
 
@@ -32,7 +33,7 @@ function constraintLabel(c: SketchConstraint, elements: SketchElement[]): string
       return `L=${c.value} [${name(c.elementId)}]`
     case 'angle':       return `∠${c.value}° [${name(c.elementId1)}·${name(c.elementId2)}]`
     case 'coincident':  return `⊙ coincident [${name(c.p1.elementId)}.${c.p1.which[0]}·${name(c.p2.elementId)}.${c.p2.which[0]}]`
-    case 'pointOnCircle': return `⊙ on circle [${name((c as any).p.elementId)}.${(c as any).p.which[0]}·${name((c as any).circleId)}]`
+    case 'pointOnCircle': return `⊙ on circle [${name(c.p.elementId)}.${c.p.which[0]}·${name(c.circleId)}]`
     case 'parallel':    return `∥ parallel [${name(c.elementId1)}·${name(c.elementId2)}]`
     case 'perpendicular': return `⊥ perp [${name(c.elementId1)}·${name(c.elementId2)}]`
     case 'horizontal':  return `— horiz [${name(c.elementId)}]`
@@ -44,21 +45,6 @@ function constraintLabel(c: SketchConstraint, elements: SketchElement[]): string
 }
 
 // ── ids referenced by a constraint ───────────────────────────────────────────
-
-function constraintElementIds(c: SketchConstraint): string[] {
-  switch (c.type) {
-    case 'length': case 'horizontal': case 'vertical':
-      return [c.elementId]
-    case 'angle': case 'parallel': case 'perpendicular': case 'equal': case 'tangent':
-      return [c.elementId1, c.elementId2]
-    case 'coincident':
-      return [c.p1.elementId, c.p2.elementId]
-    case 'pointOnCircle':
-      return [(c as any).p.elementId, (c as any).circleId]
-    default:
-      return []
-  }
-}
 
 // ── main component ────────────────────────────────────────────────────────────
 

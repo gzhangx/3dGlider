@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { reapplyParametricConstraints, solveConstraints } from '../lib/constraintSolve'
+import { constraintElementIds, constraintsEquivalent } from '../lib/constraintUtils'
 
 export type PlaneId = 'XY' | 'XZ' | 'YZ'
 export type AppMode = 'view' | 'sketch'
@@ -482,24 +483,7 @@ export const useModelStore = create<ModelState>((set) => ({
   addSketchConstraintsBatch: (constraints, apply = true) => set((s) => {
     // Filter out constraints that are equivalent to existing ones
     const newConstraints = constraints.filter((c) => {
-      return !s.sketchConstraints.some((ex) => {
-        if (ex.type !== c.type) return false
-        if (c.type === 'coincident' && ex.type === 'coincident') {
-          return (
-            (ex.p1.elementId === (c as any).p1.elementId && ex.p1.which === (c as any).p1.which && ex.p2.elementId === (c as any).p2.elementId && ex.p2.which === (c as any).p2.which) ||
-            (ex.p2.elementId === (c as any).p1.elementId && ex.p2.which === (c as any).p1.which && ex.p1.elementId === (c as any).p2.elementId && ex.p1.which === (c as any).p2.which)
-          )
-        }
-        if (c.type === 'pointOnCircle' && ex.type === 'pointOnCircle') {
-          return (ex as any).p.elementId === (c as any).p.elementId && (ex as any).circleId === (c as any).circleId
-        }
-        if (c.type === 'tangent' && ex.type === 'tangent') {
-          return ((ex as any).elementId1 === (c as any).elementId1 && (ex as any).elementId2 === (c as any).elementId2) ||
-                 ((ex as any).elementId1 === (c as any).elementId2 && (ex as any).elementId2 === (c as any).elementId1)
-        }
-        // Fallback: do not treat as duplicate
-        return false
-      })
+      return !s.sketchConstraints.some((existing) => constraintsEquivalent(existing, c))
     })
 
     const sketchConstraints = [...s.sketchConstraints, ...newConstraints]
@@ -518,7 +502,7 @@ export const useModelStore = create<ModelState>((set) => ({
 
   addSketchElement: (el) => set((s) => {
     // assign a friendly name if not present
-    let name = (el as any).name as string | undefined
+    let name = el.name
     if (!name) {
       if (el.type === 'line') { name = `Line${s.lineCounter + 1}` }
       else if (el.type === 'rect') { name = `Rect${s.rectCounter + 1}` }
@@ -546,19 +530,7 @@ export const useModelStore = create<ModelState>((set) => ({
       selectedElementId2: null,
       selectedElementIds: [],
       sketchElements: s.sketchElements.filter((el) => el.id !== id),
-      sketchConstraints: s.sketchConstraints.filter((c) => {
-        if (c.type === 'length' || c.type === 'horizontal' || c.type === 'vertical')
-          return c.elementId !== id
-        if (c.type === 'angle' || c.type === 'parallel' || c.type === 'perpendicular' || c.type === 'equal')
-          return c.elementId1 !== id && c.elementId2 !== id
-        if (c.type === 'coincident')
-          return c.p1.elementId !== id && c.p2.elementId !== id
-        if (c.type === 'pointOnCircle')
-          return (c as any).p.elementId !== id && (c as any).circleId !== id
-        if (c.type === 'tangent')
-          return (c as any).elementId1 !== id && (c as any).elementId2 !== id
-        return true
-      }),
+      sketchConstraints: s.sketchConstraints.filter((constraint) => !constraintElementIds(constraint).includes(id)),
       sketches: s.sketches
         .map((sk) => ({ ...sk, elements: sk.elements.filter((el) => el.id !== id) }))
         .filter((sk) => sk.elements.length > 0),
@@ -570,23 +542,7 @@ export const useModelStore = create<ModelState>((set) => ({
     })),
 
   addSketchConstraint: (c) => set((s) => {
-    const exists = s.sketchConstraints.some((ex) => {
-      if (ex.type !== c.type) return false
-      if (c.type === 'coincident' && ex.type === 'coincident') {
-        return (
-          (ex.p1.elementId === (c as any).p1.elementId && ex.p1.which === (c as any).p1.which && ex.p2.elementId === (c as any).p2.elementId && ex.p2.which === (c as any).p2.which) ||
-          (ex.p2.elementId === (c as any).p1.elementId && ex.p2.which === (c as any).p1.which && ex.p1.elementId === (c as any).p2.elementId && ex.p1.which === (c as any).p2.which)
-        )
-      }
-      if (c.type === 'pointOnCircle' && ex.type === 'pointOnCircle') {
-        return (ex as any).p.elementId === (c as any).p.elementId && (ex as any).circleId === (c as any).circleId
-      }
-      if (c.type === 'tangent' && ex.type === 'tangent') {
-        return ((ex as any).elementId1 === (c as any).elementId1 && (ex as any).elementId2 === (c as any).elementId2) ||
-               ((ex as any).elementId1 === (c as any).elementId2 && (ex as any).elementId2 === (c as any).elementId1)
-      }
-      return false
-    })
+    const exists = s.sketchConstraints.some((existing) => constraintsEquivalent(existing, c))
     if (exists) return s
     return { sketchConstraints: [...s.sketchConstraints, c] }
   }),
@@ -785,7 +741,7 @@ export const useModelStore = create<ModelState>((set) => ({
     let lineCounter = 0, rectCounter = 0, circleCounter = 0, arcCounter = 0
     for (const sk of parsed.sketches) {
       for (const el of sk.elements) {
-        const name = (el as any).name as string | undefined
+        const name = el.name
         if (!name) continue
         const mLine = name.match(/^Line(\d+)$/i)
         if (mLine) lineCounter = Math.max(lineCounter, parseInt(mLine[1], 10))

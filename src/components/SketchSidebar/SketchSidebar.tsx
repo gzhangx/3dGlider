@@ -11,6 +11,7 @@ import {
   applyRadius,
 } from '../../lib/constraintSolve'
 import styles from './SketchSidebar.module.css'
+import { constraintElementIds } from '../../lib/constraintUtils'
 
 interface ToolBtn { id: SketchTool; label: string; key: string; icon: string }
 const TOOLS: ToolBtn[] = [
@@ -70,11 +71,7 @@ export function SketchSidebar() {
   const selectedConstraints = selectedElementIds[0]
     ? sketchConstraints.filter((c) => {
         const id = selectedElementIds[0]
-        if ('elementId' in c)  return (c as any).elementId  === id
-        if ('elementId1' in c) return (c as any).elementId1 === id || (c as any).elementId2 === id
-        if (c.type === 'coincident') return c.p1.elementId === id || c.p2.elementId === id
-        if (c.type === 'pointOnCircle') return c.p.elementId === id || c.circleId === id
-        return false
+        return constraintElementIds(c).includes(id)
       })
     : []
 
@@ -179,14 +176,6 @@ export function SketchSidebar() {
   }
 
   // ── constraint element ids ────────────────────────────────────────────────
-  const constraintElementIds = (c: SketchConstraint): string[] => {
-    if ('elementId' in c) return [(c as { elementId: string }).elementId]
-    if ('elementId1' in c) return [(c as { elementId1: string; elementId2: string }).elementId1, (c as { elementId1: string; elementId2: string }).elementId2]
-    if (c.type === 'coincident') return [c.p1.elementId, c.p2.elementId]
-    if (c.type === 'pointOnCircle') return [(c as any).p.elementId, (c as any).circleId]
-    return []
-  }
-
   // ── constraint label ──────────────────────────────────────────────────────
   const constraintLabel = (c: SketchConstraint): string => {
     if (c.type === 'length') {
@@ -473,7 +462,7 @@ export function SketchSidebar() {
                     const el = sketchElements.find((s) => s.id === id)
                     return (
                       <div key={id} className={styles.detailRow}>
-                        - {el ? `${(el as any).name ?? el.type} (${el.id})` : id}
+                        - {el ? `${el.name ?? el.type} (${el.id})` : id}
                       </div>
                     )
                   })}
