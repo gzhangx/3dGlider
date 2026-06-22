@@ -76,7 +76,30 @@ Some constraints are flagged with higher priority (e.g., coincident constraints 
 
 ## 8. Integration with the app and batching
 
-- The app exposes `solveConstraints(elements, constraints, fixedPoints?)` and callers can run the solver whenever they wish.
+- The app exposes `solveConstraints(elements, constraints, fixedPoints?)` and callers can run the solver whenever they wish. For programmatic use and debugging there is also `solveConstraintsDetailed(...)` which returns a `ConstraintSolveResult` object:
+
+```ts
+{
+   elements: SketchElement[],    // updated geometry after solve
+   converged: boolean,           // whether maxResidual < tolerance
+   iterations: number,           // iterations performed
+   maxResidual: number           // final max residual
+}
+```
+
+Example (TypeScript):
+
+```ts
+import { solveConstraintsDetailed } from 'src/lib/constraintSolve'
+
+const fixedPoints = new Set<string>(['l1:start'])
+const result = solveConstraintsDetailed(elements, constraints, fixedPoints)
+if (!result.converged) {
+   console.warn(`Solver did not converge (maxResidual=${result.maxResidual}) after ${result.iterations} iterations`)
+}
+const newElements = result.elements
+```
+
 - To avoid excessive work, the store implements `addSketchConstraintsBatch(constraints, apply = true)` which appends a batch of constraints and (optionally) invokes the solver once with all constraints applied. This prevents doing N solver runs when adding N constraints.
 - During interactive drag, the UI typically sets one or more `fixedPoints` (for example, keep the dragged point fixed or conversely keep the rest fixed depending on behavior), calls `solveConstraints` with those fixed points to preview the constrained motion, and then applies the final geometry on pointer up.
 
