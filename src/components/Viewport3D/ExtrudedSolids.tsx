@@ -62,7 +62,7 @@ function CutVolumeMesh({ geo, color, opacity }: { geo: BufferGeometry; color: st
     if (meshRef.current) meshRef.current.geometry = geo
   }, [geo])
   return (
-    <mesh ref={meshRef} raycast={noopRaycast}>
+    <mesh ref={meshRef} raycast={noopRaycast} renderOrder={1000}>
       <meshBasicMaterial color={color} transparent opacity={opacity} side={DoubleSide} depthWrite={false} />
     </mesh>
   )
@@ -76,7 +76,7 @@ function PreviewMesh({ geo, operation }: { geo: BufferGeometry; operation: 'add'
   const color = operation === 'cut' ? '#ff4422' : '#88aaff'
   const opacity = operation === 'cut' ? 0.28 : 0.38
   return (
-    <mesh ref={meshRef} raycast={noopRaycast}>
+    <mesh ref={meshRef} raycast={noopRaycast} renderOrder={1000}>
       <meshBasicMaterial color={color} transparent opacity={opacity} side={DoubleSide} depthWrite={false} />
     </mesh>
   )
@@ -151,7 +151,7 @@ export function ExtrudedSolids() {
         <PreviewMesh geo={previewGeo} operation={previewExtrude.operation} />
       )}
       {hoverPreview && (
-        <mesh position={hoverPreview.position} rotation={hoverPreview.rotation} raycast={noopRaycast}>
+        <mesh position={hoverPreview.position} rotation={hoverPreview.rotation} raycast={noopRaycast} renderOrder={1000}>
           <planeGeometry args={[2.5, 2.5]} />
           <meshBasicMaterial color="#ffe866" transparent opacity={0.22} side={DoubleSide} depthWrite={false} />
         </mesh>
