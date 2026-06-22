@@ -75,8 +75,8 @@ Capabilities:
 
 Notes:
 
-- Export buttons appear when there is at least one extrude, revolve, or loft.
-- Sweep and shell are not currently part of export geometry generation.
+- Export buttons appear when there is at least one extrude, revolve, loft, or sweep.
+- Sweeps are rendered and included in exports; shells are applied during model building and included in exports (FeatureTree still shows shells as "(pending mesh)").
 
 ### SketchSidebar
 
@@ -117,9 +117,9 @@ Per-sketch feature actions:
 
 - Create/Edit Extrude (add/cut, depth, symmetric, custom direction)
 - Create/Edit Revolve (x/y/z or pick line axis, partial/full angle)
-- Create Loft
-- Create Sweep (marked pending mesh)
-- Create Shell (marked pending mesh)
+  - Create Loft
+  - Create Sweep (rendered and included in exports)
+  - Create Shell (applied during model build; UI still shows "(pending mesh)")
 - Appearance controls for sketches/extrudes/revolves
 
 Also includes New Sketch flow:
@@ -251,9 +251,8 @@ Rendering:
 
 Current state:
 
-- Stored in model and visible in FeatureTree
-- Explicitly labeled pending mesh
-- Not yet rendered as solids and not exported
+- Sweeps: profile+path sweep geometry is built by `src/lib/sweepModel.ts`, rendered by `SweepedSolids`, and included in STL/STEP export.
+- Shells: applied during model building via `applyShellFeatures` (insetting a profile and subtracting); shells are included in exports, though the FeatureTree UI still displays shells as "(pending mesh)".
 
 ## 8. Plane and Coordinate System
 
@@ -293,7 +292,7 @@ Load path uses strict sanitization (type checks + cross-reference checks).
 
 File: src/lib/exportSTL.ts
 
-- Aggregates extrude + revolve + loft geometry
+- Aggregates extrude, revolve, loft, and sweep geometry; includes shell-applied solids via the model builder
 - Scales scene to mm before export
 - Uses STLExporter binary path
 - Disposes temporary geometry
@@ -302,7 +301,7 @@ File: src/lib/exportSTL.ts
 
 File: src/lib/exportSTEP.ts
 
-- Aggregates extrude + revolve + loft geometry
+- Aggregates extrude, revolve, loft, and sweep geometry; includes shell-applied solids via the model builder
 - Scales scene to mm
 - Emits a custom ASCII STEP-like structure from mesh triangles
 - Disposes temporary geometry
@@ -317,18 +316,18 @@ Implemented and wired:
 
 - Sketching tools (select/line/rect/circle/cut)
 - Real-time constraint solving during drag
-- Multi-feature stack: extrude, revolve, loft
+- Multi-feature stack: extrude, revolve, loft, sweep
+- Shell features are applied during model building and included in exports
 - Feature appearance controls
 - Parameters dialog and parameter-aware inputs
 - Save/Load JSON
-- STL/STEP export for extrude/revolve/loft
+- STL/STEP export for extrude/revolve/loft/sweep and shell-applied solids
 - Sketch-on-face plane creation in viewport
 
 Pending / partial:
 
-- Sweep solid generation and rendering
-- Shell solid generation and rendering
-- Export inclusion for sweep/shell
+- STEP export is mesh-derived (not full B-rep); accuracy/robustness improvements are possible
+- Performance and robustness improvements for large CSG operations and exports
 
 ## 12. Recommended Reading Order (for onboarding)
 
@@ -362,12 +361,12 @@ Library Calls (THREE, CSG, Three Fiber)
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
 | **React Framework** | React 18.3.1 | Component state & lifecycle management |
-| **State Management** | Zustand 5.0.12 | Global app state (centralized model data) |
+| **State Management** | Zustand 5.0.3 | Global app state (centralized model data) |
 | **3D Rendering** | Three.js 0.172.0 | WebGL abstraction, 3D primitives, geometry |
 | **React-to-Three Bridge** | @react-three/fiber 8.18.0 | React components → Three.js objects |
 | **3D Utilities** | @react-three/drei 9.120.3 | Pre-made components (Grid, CameraControls, Line) |
-| **Boolean Operations** | three-csg-ts | CSG (Constructive Solid Geometry) for pockets |
-| **Build Tool** | Vite 6.4.2 | Fast development & production builds |
+| **Boolean Operations** | three-csg-ts 3.2.0 | CSG (Constructive Solid Geometry) for pockets |
+| **Build Tool** | Vite 6.0.7 | Fast development & production builds |
 
 ---
 
