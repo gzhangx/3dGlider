@@ -278,12 +278,13 @@ export function SketchPlane() {
   const [dragSnapTarget, setDragSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef | null; constraintHint?: string; tangentCircleId?: string; circleId?: string } | null>(null)
   
   const [startSnapRef, setStartSnapRef] = useState<PointRef | null>(null)
+  const [startCircleId, setStartCircleId] = useState<string | null>(null)
   // Drag-box selection state (sketch-local coordinates)
   const [selectBoxStart, setSelectBoxStart] = useState<SketchPoint | null>(null)
   const [selectBoxEnd, setSelectBoxEnd] = useState<SketchPoint | null>(null)
 
   useEffect(() => {
-    setStartPt(null); setCursorPt(null); setCutPreview(null); setCutTarget(null); setSnapTarget(null); setStartSnapRef(null)
+    setStartPt(null); setCursorPt(null); setCutPreview(null); setCutTarget(null); setSnapTarget(null); setStartSnapRef(null); setStartCircleId(null)
   }, [activeTool])
 
   const handleKey = useCallback(
@@ -291,7 +292,11 @@ export function SketchPlane() {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       if (e.key === 'Escape') {
-        if (startPt) setStartPt(null)
+        if (startPt) {
+          setStartPt(null)
+          setStartSnapRef(null)
+          setStartCircleId(null)
+        }
         else if (selectedElementIds.length > 0) selectElement(null)
         else exitSketch()
         return
@@ -560,6 +565,7 @@ export function SketchPlane() {
     if (startPt === null) {
       setStartPt(pt)
       setStartSnapRef(snapTarget ? snapTarget.ref : null)
+      setStartCircleId(snapTarget?.circleId ?? null)
       return
     }
 
@@ -574,11 +580,16 @@ export function SketchPlane() {
       if (startSnapRef) {
         const c: CoincidentConstraint = { id: crypto.randomUUID(), type: 'coincident', p1: startSnapRef, p2: { elementId: id, which: 'start' } }
         addedConstraints.push(c)
+      } else if (startCircleId) {
+        addedConstraints.push({ id: crypto.randomUUID(), type: 'pointOnCircle', p: { elementId: id, which: 'start' }, circleId: startCircleId })
       }
       // Auto-coincident or tangent for end point if it snapped (same-plane only)
       if (snapTarget?.tangentCircleId) {
         const c: TangentConstraint = { id: crypto.randomUUID(), type: 'tangent', elementId1: id, elementId2: snapTarget.tangentCircleId }
         addedConstraints.push(c)
+        // Tangency constrains the infinite line. Keep the snapped endpoint at the
+        // actual contact point as a separate point-on-circle constraint.
+        addedConstraints.push({ id: crypto.randomUUID(), type: 'pointOnCircle', p: { elementId: id, which: 'end' }, circleId: snapTarget.tangentCircleId })
       } else if (snapTarget?.circleId) {
         const c = { id: crypto.randomUUID(), type: 'pointOnCircle' as const, p: { elementId: id, which: 'end' } as PointRef, circleId: snapTarget.circleId }
         addedConstraints.push(c as SketchConstraint)
@@ -626,6 +637,7 @@ export function SketchPlane() {
 
     setStartPt(null)
     setStartSnapRef(null)
+    setStartCircleId(null)
     setSnapTarget(null)
   }
 
@@ -650,23 +662,17 @@ export function SketchPlane() {
         }
       } else if (dragSnapTarget?.tangentCircleId) {
         const tc: TangentConstraint = { id: crypto.randomUUID(), type: 'tangent', elementId1: dragTarget.elementId, elementId2: dragSnapTarget.tangentCircleId }
-        // Avoid adding duplicate tangent constraints
-        const alreadyTangent = sketchConstraints.some((c) => c.type === 'tangent' && (
-          (c as TangentConstraint).elementId1 === tc.elementId1 && (c as TangentConstraint).elementId2 === tc.elementId2
-        ))
-        if (!alreadyTangent) {
-          addSketchConstraint(tc)
-          const allConstraints = [...sketchConstraints, tc]
-          const solved = solveConstraints(sketchElements, allConstraints, new Set())
-          for (const sEl of solved) updateSketchElement(sEl.id, sEl as Parameters<typeof updateSketchElement>[1])
+        const pointOnCircle: SketchConstraint = {
+          id: crypto.randomUUID(),
+          type: 'pointOnCircle',
+          p: { elementId: dragTarget.elementId, which: dragTarget.pointType },
+          circleId: dragSnapTarget.tangentCircleId,
         }
+        // The batch API de-duplicates either constraint and solves them together.
+        addSketchConstraintsBatch([tc, pointOnCircle], true)
       } else if (dragSnapTarget?.circleId) {
         const c = { id: crypto.randomUUID(), type: 'pointOnCircle' as const, p: { elementId: dragTarget.elementId, which: dragTarget.pointType } as PointRef, circleId: dragSnapTarget.circleId }
-        addSketchConstraint(c)
-        // Apply the new constraint immediately
-        const allConstraints = [...sketchConstraints, c]
-        const solved = solveConstraints(sketchElements, allConstraints, new Set())
-        for (const sEl of solved) updateSketchElement(sEl.id, sEl as Parameters<typeof updateSketchElement>[1])
+        addSketchConstraintsBatch([c], true)
       } else {
         // Fallback: if we didn't snap to a ref, try to find a nearby endpoint and link coincident
         const draggedEl = sketchElements.find((e) => e.id === dragTarget.elementId)
