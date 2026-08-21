@@ -156,7 +156,9 @@ function angleInArc(theta: number, start: number, end: number): boolean {
   const s = normalizeAngle(start)
   const e = normalizeAngle(end)
   const EPS = 1e-6
-  if (Math.abs(e - s) < EPS) return true
+  if (Math.abs(e - s) < EPS) {
+    return Math.abs(t - s) < EPS
+  }
   if (s <= e) return t >= s - EPS && t <= e + EPS
   return t >= s - EPS || t <= e + EPS
 }
