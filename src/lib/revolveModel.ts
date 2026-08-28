@@ -1,12 +1,10 @@
 import { BufferGeometry, Euler, LatheGeometry, Matrix4, Quaternion, Vector2, Vector3 } from 'three'
 import { RevolveFeature, RevolveAxis, Sketch, SketchLine } from '../store/modelStore'
 import { sketchElementsToShape } from './sketchToShape'
+import { planeOriginFromPose } from './planePose'
 
 function planeOriginWorld(rotation: [number, number, number], offset: number): Vector3 {
-  return new Vector3(0, 0, 1)
-    .applyEuler(new Euler(...rotation, 'XYZ'))
-    .normalize()
-    .multiplyScalar(offset)
+  return planeOriginFromPose({ rotation, offset })
 }
 
 function axisParams(

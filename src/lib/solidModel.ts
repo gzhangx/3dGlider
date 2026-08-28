@@ -2,9 +2,10 @@ import { Mesh, BufferGeometry, ExtrudeGeometry, Matrix4, Euler, Vector3, Quatern
 import { CSG } from 'three-csg-ts'
 import { ExtrudeFeature, ShellFeature, Sketch } from '../store/modelStore'
 import { sketchElementsToShape } from './sketchToShape'
+import { planeOriginFromPose } from './planePose'
 
 function planeOffsetPosition(rotation: [number, number, number], offset: number): [number, number, number] {
-  const n = new Vector3(0, 0, 1).applyEuler(new Euler(...rotation, 'XYZ')).normalize().multiplyScalar(offset)
+  const n = planeOriginFromPose({ rotation, offset })
   return [n.x, n.y, n.z]
 }
 

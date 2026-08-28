@@ -1,12 +1,10 @@
 import { BufferGeometry, CurvePath, Euler, ExtrudeGeometry, LineCurve3, Vector3 } from 'three'
 import { SweepFeature, Sketch, SketchLine, SketchArc } from '../store/modelStore'
 import { sketchElementsToShape } from './sketchToShape'
+import { planeOriginFromPose } from './planePose'
 
 function planeOriginWorld(rotation: [number, number, number], offset: number): Vector3 {
-  return new Vector3(0, 0, 1)
-    .applyEuler(new Euler(...rotation, 'XYZ'))
-    .normalize()
-    .multiplyScalar(offset)
+  return planeOriginFromPose({ rotation, offset })
 }
 
 function toWorldPoint(point: { x: number; y: number }, sketch: Sketch): Vector3 {

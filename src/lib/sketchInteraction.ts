@@ -1,5 +1,11 @@
-import { SketchTool, SketchPlanePose, SketchPoint, SketchElement, SketchRect, PointRef, Sketch } from '../store/modelStore'
-import { worldPt, toSketch } from './sketchGeometry'
+import { SketchTool, SketchPlanePose, SketchPoint, SketchElement, PointRef, Sketch } from '../store/modelStore'
+import {
+  worldPt, toSketch, rectCorners, angleInArc,
+  closestPointOnSegment, distToSegment as distancePointToLine,
+  closestPointOnCircle, distToCircle as distToCirclePerimeter,
+} from './sketchGeometry'
+
+export { rectCorners }
 
 export type SnapTarget = {
   pt: SketchPoint
@@ -7,15 +13,6 @@ export type SnapTarget = {
   constraintHint?: string
   tangentCircleId?: string
   circleId?: string
-}
-
-export function rectCorners(rect: SketchRect): SketchPoint[] {
-  return [
-    { x: rect.start.x, y: rect.start.y },
-    { x: rect.end.x,   y: rect.start.y },
-    { x: rect.end.x,   y: rect.end.y },
-    { x: rect.start.x, y: rect.end.y },
-  ]
 }
 
 export function elementEndpoints(el: SketchElement): { pt: SketchPoint; ref: PointRef }[] {
@@ -36,39 +33,6 @@ export function elementEndpoints(el: SketchElement): { pt: SketchPoint; ref: Poi
     ]
   }
   return []
-}
-
-export function closestPointOnSegment(p: SketchPoint, a: SketchPoint, b: SketchPoint): SketchPoint {
-  const dx = b.x - a.x
-  const dy = b.y - a.y
-  const lenSq = dx * dx + dy * dy
-  if (lenSq === 0) return a
-  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq))
-  return { x: a.x + t * dx, y: a.y + t * dy }
-}
-
-export function closestPointOnCircle(p: SketchPoint, center: SketchPoint, radius: number): SketchPoint {
-  const dx = p.x - center.x
-  const dy = p.y - center.y
-  const dist = Math.hypot(dx, dy)
-  if (dist === 0) return { x: center.x + radius, y: center.y }
-  return { x: center.x + (dx / dist) * radius, y: center.y + (dy / dist) * radius }
-}
-
-export function distToCirclePerimeter(p: SketchPoint, center: SketchPoint, radius: number): number {
-  return Math.abs(Math.hypot(p.x - center.x, p.y - center.y) - radius)
-}
-
-export function distancePointToLine(p: SketchPoint, a: SketchPoint, b: SketchPoint): number {
-  const dx = b.x - a.x
-  const dy = b.y - a.y
-  const lenSq = dx * dx + dy * dy
-  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y)
-  const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq
-  const clamped = Math.max(0, Math.min(1, t))
-  const closestX = a.x + clamped * dx
-  const closestY = a.y + clamped * dy
-  return Math.hypot(p.x - closestX, p.y - closestY)
 }
 
 export function isLineTangentToCircle(lineStart: SketchPoint, lineEnd: SketchPoint, center: SketchPoint, radius: number, tolerance = 0.05): boolean {
@@ -188,21 +152,6 @@ export function findSnapTarget(
         // perimeter snap (only if angle lies within arc)
         const closest = closestPointOnCircle(raw, el.center, el.radius)
         const a = Math.atan2(closest.y - el.center.y, closest.x - el.center.x)
-        const toNorm = (th: number) => {
-          const TAU = Math.PI * 2
-          let out = th % TAU
-          if (out < 0) out += TAU
-          return out
-        }
-        const angleInArc = (theta: number, start: number, end: number) => {
-          const t = toNorm(theta)
-          const s = toNorm(start)
-          const e = toNorm(end)
-          const EPS = 1e-6
-          if (Math.abs(e - s) < EPS) return true
-          if (s <= e) return t >= s - EPS && t <= e + EPS
-          return t >= s - EPS || t <= e + EPS
-        }
         const dPerimeter = distToCirclePerimeter(raw, el.center, el.radius)
         if (dPerimeter < snapTangentThreshold && angleInArc(a, el.startAngle, el.endAngle) && (!best || dPerimeter < best.dist)) {
           if (lineStart && activeTool === 'line') {

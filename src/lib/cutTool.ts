@@ -1,13 +1,7 @@
-import { SketchArc, SketchElement, SketchLine, SketchRect, SketchPoint, SketchConstraint } from '../store/modelStore'
+import { SketchArc, SketchElement, SketchLine, SketchPoint, SketchConstraint } from '../store/modelStore'
+import { rectCorners, normalizeAngle, angleInArc, distToSegment as distToSeg, distToCircle } from './sketchGeometry'
 
-function rectCorners(r: SketchRect): SketchPoint[] {
-  return [
-    { x: r.start.x, y: r.start.y },
-    { x: r.end.x,   y: r.start.y },
-    { x: r.end.x,   y: r.end.y   },
-    { x: r.start.x, y: r.end.y   },
-  ]
-}
+export { distToSeg, distToCircle }
 
 // t ∈ (0,1) on segment p1→p2 where it crosses segment p3→p4, or null
 function segSegT(
@@ -62,18 +56,6 @@ function segCircleTs(
     .map(s => (-b + s * Math.sqrt(disc)) / (2 * a))
     .filter(t => t >= -EPS && t <= 1 + EPS)
     .map(t => Math.max(0, Math.min(1, t)))
-}
-
-export function distToSeg(p: SketchPoint, a: SketchPoint, b: SketchPoint): number {
-  const dx = b.x - a.x, dy = b.y - a.y
-  const len2 = dx * dx + dy * dy
-  if (len2 < 1e-10) return Math.hypot(p.x - a.x, p.y - a.y)
-  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2))
-  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy)
-}
-
-export function distToCircle(p: SketchPoint, center: SketchPoint, radius: number): number {
-  return Math.abs(Math.hypot(p.x - center.x, p.y - center.y) - radius)
 }
 
 export function distToArc(p: SketchPoint, arc: SketchArc): number {
@@ -142,25 +124,6 @@ export interface ArcCutResult {
   cutEnd: SketchPoint
   cutArc: SketchArc
   keeps: SketchArc[]
-}
-
-function normalizeAngle(a: number): number {
-  const TAU = Math.PI * 2
-  let out = a % TAU
-  if (out < 0) out += TAU
-  return out
-}
-
-function angleInArc(theta: number, start: number, end: number): boolean {
-  const t = normalizeAngle(theta)
-  const s = normalizeAngle(start)
-  const e = normalizeAngle(end)
-  const EPS = 1e-6
-  if (Math.abs(e - s) < EPS) {
-    return Math.abs(t - s) < EPS
-  }
-  if (s <= e) return t >= s - EPS && t <= e + EPS
-  return t >= s - EPS || t <= e + EPS
 }
 
 function circleLineIntersectionAngles(circle: { center: SketchPoint; radius: number }, a: SketchPoint, b: SketchPoint): number[] {

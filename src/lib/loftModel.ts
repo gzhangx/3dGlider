@@ -1,9 +1,10 @@
 import { BufferGeometry, Euler, Float32BufferAttribute, Matrix4, Vector3 } from 'three'
 import { LoftFeature, Sketch } from '../store/modelStore'
 import { sketchElementsToShape } from './sketchToShape'
+import { planeOriginFromPose } from './planePose'
 
 function planeOffsetPosition(rotation: [number, number, number], offset: number): [number, number, number] {
-  const n = new Vector3(0, 0, 1).applyEuler(new Euler(...rotation, 'XYZ')).normalize().multiplyScalar(offset)
+  const n = planeOriginFromPose({ rotation, offset })
   return [n.x, n.y, n.z]
 }
 
