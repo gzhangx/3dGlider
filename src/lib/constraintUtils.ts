@@ -40,11 +40,19 @@ function findMatchingPointRef(point: SketchPoint, candidates: SketchElement[]): 
 
 /**
  * Re-point constraints that referenced `removedId` at whichever replacement
- * element preserves the same point, instead of just dropping them. Only point
- * constraints (coincident, pointOnCircle) are remapped — a whole-element
- * constraint like `length` or `equal` can't be remapped safely, since the
- * replacement piece (e.g. a shorter kept segment after a line cut) may no
- * longer satisfy what the constraint originally meant; those are dropped.
+ * element preserves the same point, instead of just dropping them.
+ *
+ * Point constraints (coincident, pointOnCircle) remap to whichever replacement
+ * preserves that exact coordinate. `tangent` remaps to any surviving piece —
+ * its residual only depends on the circle/arc's center+radius (never its
+ * angular span) and the line's *infinite* extension (never clamped to the
+ * segment), both of which are identical across every kept piece.
+ *
+ * Other whole-element constraints (`length`, `equal`, `parallel`,
+ * `perpendicular`, `horizontal`, `vertical`, `angle`) are dropped instead —
+ * e.g. remapping `length` onto a shorter kept segment would silently start
+ * forcing it back to the *original* length, which is a bigger surprise than
+ * just losing the constraint.
  */
 export function remapConstraintsAfterRemoval(
   constraints: SketchConstraint[],
@@ -82,6 +90,13 @@ export function remapConstraintsAfterRemoval(
         circleId = mapped.elementId
       }
       return [{ ...c, p, circleId }]
+    }
+
+    if (c.type === 'tangent') {
+      if (replacements.length === 0) return []
+      const elementId1 = c.elementId1 === removedId ? replacements[0].id : c.elementId1
+      const elementId2 = c.elementId2 === removedId ? replacements[0].id : c.elementId2
+      return [{ ...c, elementId1, elementId2 }]
     }
 
     return []

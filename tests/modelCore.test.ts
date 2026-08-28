@@ -64,6 +64,37 @@ describe('model core', () => {
     expect(Math.hypot(solvedLine!.start.x - 4, solvedLine!.start.y - 4) < 0.01).toBe(true)
   })
 
+  it('re-points a tangent constraint at the cut replacement instead of dropping it', () => {
+    const circle: SketchCircle = { type: 'circle', id: 'c1', center: { x: 0, y: 0 }, radius: 2 }
+    const line: SketchLine = { type: 'line', id: 'l1', start: { x: -3, y: 2 }, end: { x: 3, y: 2 } }
+    const tangent: SketchConstraint = { id: 't1', type: 'tangent', elementId1: 'l1', elementId2: 'c1' }
+    const keptArc: SketchArc = { type: 'arc', id: 'arc1', center: { x: 0, y: 0 }, radius: 2, startAngle: 0, endAngle: 5 }
+
+    useModelStore.setState({ sketchElements: [circle, line], sketchConstraints: [tangent] })
+    useModelStore.getState().cutSketchElement('c1', [keptArc])
+
+    const constraints = useModelStore.getState().sketchConstraints
+    expect(constraints).toHaveLength(1)
+    const remapped = constraints[0]
+    expect(remapped.type).toBe('tangent')
+    if (remapped.type === 'tangent') {
+      expect(remapped.elementId2).toBe('arc1')
+    }
+
+    // Drag the line away from tangency; solving against the remapped constraint
+    // should pull it back to tangent with the *arc's* center/radius.
+    const elements = useModelStore.getState().sketchElements
+    const dragged = elements.map((el) => el.id === 'l1' ? { ...el, start: { x: -3, y: 5 }, end: { x: 3, y: 6 } } : el)
+    const solved = solveConstraints(dragged, constraints, new Set(['arc1:center']))
+    const solvedLine = solved.find((e): e is SketchLine => e.id === 'l1' && e.type === 'line')
+    expect(solvedLine).toBeDefined()
+
+    const { start, end } = solvedLine!
+    const dx = end.x - start.x, dy = end.y - start.y
+    const dist = Math.abs(dy * 0 - dx * 0 + end.x * start.y - end.y * start.x) / Math.hypot(dx, dy)
+    expect(Math.abs(dist - 2) < 0.01).toBe(true)
+  })
+
   it('allows scripts to update a parameter to zero', async () => {
     const api = createScriptingAPI(useModelStore)
     const id = await api.addParameter('offset', 5)
