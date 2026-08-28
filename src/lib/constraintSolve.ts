@@ -341,22 +341,24 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
 
           return vars.map((v) => {
             let jac = 0
-            // Derivative of atan2 w.r.t. end point
+            
             if (v.elementId === el1Id && v.pointType === 'end') {
-              if (v.coord === 'x') jac -= dy1 / r1sq
-              if (v.coord === 'y') jac += dx1 / r1sq
+              if (v.coord === 'x') jac += dy1 / r1sq   // Corrected: -(-dy1) = +dy1
+              if (v.coord === 'y') jac -= dx1 / r1sq   // Corrected: -(+dx1) = -dx1
             } else if (v.elementId === el1Id && v.pointType === 'start') {
-              if (v.coord === 'x') jac += dy1 / r1sq
-              if (v.coord === 'y') jac -= dx1 / r1sq
+              if (v.coord === 'x') jac -= dy1 / r1sq   // Corrected: -(+dy1) = -dy1
+              if (v.coord === 'y') jac += dx1 / r1sq   // Corrected: -(-dx1) = +dx1
             } else if (v.elementId === el2Id && v.pointType === 'end') {
-              if (v.coord === 'x') jac += dy2 / r2sq
-              if (v.coord === 'y') jac -= dx2 / r2sq
+              if (v.coord === 'x') jac -= dy2 / r2sq   // Corrected to standard atan2 d/dx
+              if (v.coord === 'y') jac += dx2 / r2sq   // Corrected to standard atan2 d/dy
             } else if (v.elementId === el2Id && v.pointType === 'start') {
-              if (v.coord === 'x') jac -= dy2 / r2sq
-              if (v.coord === 'y') jac += dx2 / r2sq
+              if (v.coord === 'x') jac += dy2 / r2sq   // Corrected to inverted start d/dx
+              if (v.coord === 'y') jac -= dx2 / r2sq   // Corrected to inverted start d/dy
             }
+            
             return jac
           })
+
         },
       })
     } else if (c.type === 'horizontal') {
