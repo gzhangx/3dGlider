@@ -94,6 +94,13 @@ const noopRaycast: () => void = () => {}
 
   const selectProps = activeTool === 'select'
     ? {
+        // Stop pointerdown/up here too, not just click — otherwise, since this
+        // element registers no pointerdown/up handlers of its own, both events
+        // fall through to the background plane behind it, which treats the
+        // gesture as a click on empty space and clears selectedElementIds
+        // *before* the click handler below runs, breaking shift-click multi-select.
+        onPointerDown: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation() },
+        onPointerUp: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation() },
         onClick: (e: ThreeEvent<MouseEvent>) => {
           e.stopPropagation()
 

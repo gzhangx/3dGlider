@@ -223,8 +223,11 @@ export function createScriptingAPI(store: LiveModelStore) {
   /**
    * Add an extrusion to the last sketch (or specified sketch)
    */
+  // `depth` is required and has no default, so a default on the parameter
+  // before it can never actually apply — callers must always pass
+  // sketchIdOrName explicitly (as every documented example already does).
   async function addExtrude(
-    sketchIdOrName: string = 'last',
+    sketchIdOrName: string,
     depth: number,
     operation: 'add' | 'cut' = 'add',
     direction?: [number, number, number],

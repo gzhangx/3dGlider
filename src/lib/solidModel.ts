@@ -120,6 +120,10 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
         next.geometry.computeVertexNormals()
         next.geometry.computeBoundingBox()
         next.geometry.computeBoundingSphere()
+        // CSG.subtract returns a brand-new Mesh — carry the originating
+        // feature id forward so callers can key off it instead of array
+        // index (which shifts whenever an earlier extrude is skipped).
+        next.userData = solids[i].userData
         solids[i].geometry.dispose()
         solids[i] = next
       }
@@ -127,6 +131,7 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
       continue
     }
 
+    featMesh.userData.featureId = ext.id
     solids.push(featMesh)
   }
 
@@ -158,6 +163,7 @@ export function applyShellFeatures(
       next.geometry.computeVertexNormals()
       next.geometry.computeBoundingBox()
       next.geometry.computeBoundingSphere()
+      next.userData = solids[i].userData
       solids[i].geometry.dispose()
       solids[i] = next
     }
@@ -187,7 +193,11 @@ export function buildCutGeometries(extrudes: ExtrudeFeature[], sketches: Sketch[
       const sketch = sketches.find((s) => s.id === e.sketchId)
       if (!sketch) return []
       const geo = featureGeometry(e, sketch)
-      return geo ? [geo] : []
+      if (!geo) return []
+      // Skipped cut extrudes (missing/empty sketch) shift array indices —
+      // tag with the originating feature id so callers don't have to zip by index.
+      geo.userData.featureId = e.id
+      return [geo]
     })
 }
 

@@ -92,8 +92,7 @@ export function ExtrudedSolids() {
   })))
   const [hoverPreview, setHoverPreview] = useState<HoverPreview | null>(null)
 
-  const addExtrudes = useMemo(() => extrudes.filter((e) => e.operation === 'add'), [extrudes])
-  const cutExtrudes = useMemo(() => extrudes.filter((e) => e.operation === 'cut'), [extrudes])
+  const extrudesById = useMemo(() => new Map(extrudes.map((e) => [e.id, e])), [extrudes])
   const solids = useMemo(() => buildModelSolidMeshes(extrudes, shells, sketches), [extrudes, shells, sketches])
   const cutGeos = useMemo(() => buildCutGeometries(extrudes, sketches), [extrudes, sketches])
   const previewGeo = useMemo(
@@ -126,24 +125,28 @@ export function ExtrudedSolids() {
 
   return (
     <>
-      {solids.map((mesh, i) => (
-        <SolidMesh
-          key={mesh.uuid}
-          solidMesh={mesh}
-          color={addExtrudes[i]?.color ?? '#4477bb'}
-          opacity={addExtrudes[i]?.opacity ?? 0.82}
-          onHover={handleHover}
-          onHoverOut={clearHover}
-        />
-      ))}
-      {cutGeos.map((geo, i) => {
-        if (cutExtrudes[i]?.id !== editingExtrudeId) return null
+      {solids.map((mesh) => {
+        const ext = extrudesById.get(mesh.userData.featureId)
+        return (
+          <SolidMesh
+            key={mesh.uuid}
+            solidMesh={mesh}
+            color={ext?.color ?? '#4477bb'}
+            opacity={ext?.opacity ?? 0.82}
+            onHover={handleHover}
+            onHoverOut={clearHover}
+          />
+        )
+      })}
+      {cutGeos.map((geo) => {
+        const ext = extrudesById.get(geo.userData.featureId)
+        if (ext?.id !== editingExtrudeId) return null
         return (
           <CutVolumeMesh
             key={geo.uuid}
             geo={geo}
-            color={cutExtrudes[i]?.color ?? '#ff4422'}
-            opacity={cutExtrudes[i]?.opacity ?? 0.22}
+            color={ext?.color ?? '#ff4422'}
+            opacity={ext?.opacity ?? 0.22}
           />
         )
       })}

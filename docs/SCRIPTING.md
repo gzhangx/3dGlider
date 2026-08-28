@@ -160,11 +160,11 @@ await api.addConstraint({
 
 ### 3D Features
 
-#### `addExtrude(sketchName?, depth, operation?, direction?, symmetric?)`
+#### `addExtrude(sketchName, depth, operation?, direction?, symmetric?)`
 Create an extrusion from a sketch.
 
 **Parameters:**
-- `sketchName?`: `string` - Sketch name/ID (default: 'last')
+- `sketchName`: `string` - Sketch name/ID (pass `'last'` for the most recently created sketch)
 - `depth`: `number` - Extrusion depth
 - `operation?`: `'add' | 'cut'` - Add or cut (default: 'add')
 - `direction?`: `[x, y, z]` - World-space direction vector

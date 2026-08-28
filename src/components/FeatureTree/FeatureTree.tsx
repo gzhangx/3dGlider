@@ -133,7 +133,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
       direction = [dx / len, dy / len, dz / len]
     }
     updateExtrude(editingId, d, eOperation, direction, eSymmetric)
-  }, [editingId, eDepth, eOperation, eSymmetric, eUseDir, eDirX, eDirY, eDirZ]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [editingId, eDepth, eOperation, eSymmetric, eUseDir, eDirX, eDirY, eDirZ, parameters]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Create-form preview
   useEffect(() => {
@@ -150,7 +150,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
       direction = [dx / len, dy / len, dz / len]
     }
     setPreviewExtrude({ id: 'preview', sketchId: sketch.id, operation, depth: d, direction, ...(symmetric ? { symmetric: true } : {}) })
-  }, [showExtrude, depth, operation, symmetric, useCustomDir, dirX, dirY, dirZ]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showExtrude, depth, operation, symmetric, useCustomDir, dirX, dirY, dirZ, parameters]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Clear preview on unmount
   useEffect(() => () => { setPreviewExtrude(null) }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -180,7 +180,7 @@ function SketchRow({ sketch }: { sketch: Sketch }) {
 
   const cancelEdit = () => {
     const orig = originalRef.current
-    if (orig) updateExtrude(orig.id, orig.depth, orig.operation, orig.direction)
+    if (orig) updateExtrude(orig.id, orig.depth, orig.operation, orig.direction, orig.symmetric)
     setEditingId(null)
     setEditingExtrudeId(null)
   }

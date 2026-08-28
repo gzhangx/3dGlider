@@ -141,6 +141,38 @@ describe('Constraint Solver', () => {
     }
   })
 
+  it('should maintain radius length constraint when a tangent line is dragged', () => {
+    const circle: SketchCircle = {
+      type: 'circle',
+      id: 'c1',
+      center: { x: 0, y: 0 },
+      radius: 5,
+    }
+
+    // Horizontal line tangent to the circle's top (y = 5)
+    const line: SketchLine = {
+      type: 'line',
+      id: 'l1',
+      start: { x: -5, y: 5 },
+      end: { x: 5, y: 5 },
+    }
+
+    const constraints: SketchConstraint[] = [
+      { id: 'radius1', type: 'length', elementId: 'c1', value: 5, dimension: 'radius' },
+      { id: 'tangent1', type: 'tangent', elementId1: 'c1', elementId2: 'l1' },
+    ]
+
+    // Drag the tangent line further away — without the radius constraint pulling back,
+    // the solver would grow the circle to stay tangent instead.
+    const draggedLine = { ...line, start: { x: -5, y: 8 }, end: { x: 5, y: 8 } }
+
+    const solved = solveConstraints([circle, draggedLine], constraints, new Set(['l1:start', 'l1:end']))
+
+    const solvedCircle = solved.find((e): e is SketchCircle => e.id === 'c1' && e.type === 'circle')
+    expect(solvedCircle).toBeDefined()
+    expect(Math.abs(solvedCircle!.radius - 5) < 0.01).toBe(true)
+  })
+
   it('should maintain vertical constraint', () => {
     const line: SketchLine = {
       type: 'line',

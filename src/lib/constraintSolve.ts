@@ -283,7 +283,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
             })
           } else if (el.type === 'circle') {
             return vars.map((v) => {
-              if (v.elementId === elementId && v.pointType === 'center' && (v.coord === 'x' || v.coord === 'y')) return 0
+              if (v.elementId === elementId && v.pointType === 'radius' && v.coord === 'x') return 1
               return 0
             })
           } else if (el.type === 'rect' && c.dimension === 'width') {

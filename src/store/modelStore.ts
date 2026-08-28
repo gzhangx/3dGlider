@@ -524,6 +524,13 @@ export const useModelStore = create<ModelState>((set) => ({
       sketchElements: s.sketchElements.map((el) => el.id === id ? { ...el, ...updates } as SketchElement : el),
     })),
 
+  // Only touches the live `sketchElements` scratch state (like addSketchElement/
+  // updateSketchElement/cutSketchElement) — `sketches[]` is just a snapshot,
+  // synced from `sketchElements` on exitSketch. Mutating `sketches[]` here too
+  // (as this used to) would race with that snapshot: if this was the sketch's
+  // last element, the sketch got dropped from `sketches[]` immediately, even
+  // mid-edit — so exitSketch's lookup by id later found nothing to update and
+  // silently discarded the sketch, along with anything drawn afterward.
   deleteSketchElement: (id) =>
     set((s) => ({
       selectedElementId: null,
@@ -531,14 +538,12 @@ export const useModelStore = create<ModelState>((set) => ({
       selectedElementIds: [],
       sketchElements: s.sketchElements.filter((el) => el.id !== id),
       sketchConstraints: s.sketchConstraints.filter((constraint) => !constraintElementIds(constraint).includes(id)),
-      sketches: s.sketches
-        .map((sk) => ({ ...sk, elements: sk.elements.filter((el) => el.id !== id) }))
-        .filter((sk) => sk.elements.length > 0),
     })),
 
   cutSketchElement: (id, replacements) =>
     set((s) => ({
       sketchElements: [...s.sketchElements.filter((el) => el.id !== id), ...replacements],
+      sketchConstraints: s.sketchConstraints.filter((constraint) => !constraintElementIds(constraint).includes(id)),
     })),
 
   addSketchConstraint: (c) => set((s) => {
@@ -567,7 +572,11 @@ export const useModelStore = create<ModelState>((set) => ({
     })),
 
   deleteExtrude: (id) =>
-    set((s) => ({ extrudes: s.extrudes.filter((e) => e.id !== id) })),
+    set((s) => ({
+      extrudes: s.extrudes.filter((e) => e.id !== id),
+      editingExtrudeId: s.editingExtrudeId === id ? null : s.editingExtrudeId,
+      previewExtrude: s.previewExtrude?.id === id ? null : s.previewExtrude,
+    })),
 
   setSketchAppearance: (id, color, opacity) =>
     set((s) => ({ sketches: s.sketches.map((sk) => sk.id === id ? { ...sk, color, opacity } : sk) })),
@@ -675,6 +684,8 @@ export const useModelStore = create<ModelState>((set) => ({
       sketchConstraints: [],
       selectedElementId: null,
       selectedElementId2: null,
+      selectedElementIds: [],
+      highlightElementIds: [],
       editingSketchId: null,
     }),
 
@@ -692,6 +703,8 @@ export const useModelStore = create<ModelState>((set) => ({
         sketchConstraints: target.constraints ?? [],
         selectedElementId: null,
         selectedElementId2: null,
+        selectedElementIds: [],
+        highlightElementIds: [],
         editingSketchId: target.id,
       }
     }),
@@ -700,6 +713,7 @@ export const useModelStore = create<ModelState>((set) => ({
     let newSketchId: string | null = null
     set((s) => {
       let sketches = s.sketches
+      let droppedSketchId: string | null = null
       if (s.activePlane && s.sketchElements.length > 0) {
         const constraints = s.sketchConstraints.length > 0 ? s.sketchConstraints : undefined
         if (s.editingSketchId) {
@@ -715,7 +729,17 @@ export const useModelStore = create<ModelState>((set) => ({
         }
       } else if (s.editingSketchId) {
         sketches = sketches.filter((sk) => sk.id !== s.editingSketchId)
+        droppedSketchId = s.editingSketchId
       }
+
+      // If the sketch itself just disappeared (emptied out above), drop any
+      // feature that referenced it too — otherwise it lingers forever as a
+      // dead entry silently skipped by solidModel.ts (and still exported).
+      const extrudes = droppedSketchId ? s.extrudes.filter((e) => e.sketchId !== droppedSketchId) : s.extrudes
+      const revolves = droppedSketchId ? s.revolves.filter((r) => r.sketchId !== droppedSketchId) : s.revolves
+      const lofts = droppedSketchId ? s.lofts.filter((l) => l.sketchId1 !== droppedSketchId && l.sketchId2 !== droppedSketchId) : s.lofts
+      const sweeps = droppedSketchId ? s.sweeps.filter((sw) => sw.profileSketchId !== droppedSketchId && sw.pathSketchId !== droppedSketchId) : s.sweeps
+      const shells = droppedSketchId ? s.shells.filter((sh) => sh.sketchId !== droppedSketchId) : s.shells
 
       return {
         mode: 'view',
@@ -727,8 +751,15 @@ export const useModelStore = create<ModelState>((set) => ({
         sketchConstraints: [],
         selectedElementId: null,
         selectedElementId2: null,
+        selectedElementIds: [],
+        highlightElementIds: [],
         editingSketchId: null,
         sketches,
+        extrudes,
+        revolves,
+        lofts,
+        sweeps,
+        shells,
       }
     })
     return newSketchId

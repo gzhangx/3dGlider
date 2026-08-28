@@ -20,4 +20,22 @@ describe('solid model', () => {
     disposeSolidMeshes(outer)
     disposeSolidMeshes(shelled)
   }, 10_000)
+
+  it('tags each solid with its originating extrude id, even when an earlier extrude is skipped', () => {
+    const emptySketch: Sketch = { id: 'empty', plane: presetPlanePose('XY'), elements: [] }
+    const sketch: Sketch = {
+      id: 'sketch', plane: presetPlanePose('XY'),
+      elements: [{ type: 'rect', id: 'rect', start: { x: -2, y: -2 }, end: { x: 2, y: 2 } }],
+    }
+    const extrudes: ExtrudeFeature[] = [
+      { id: 'skipped-extrude', sketchId: emptySketch.id, operation: 'add', depth: 4 },
+      { id: 'real-extrude', sketchId: sketch.id, operation: 'add', depth: 4 },
+    ]
+    const solids = buildSolidMeshes(extrudes, [emptySketch, sketch])
+
+    expect(solids).toHaveLength(1)
+    expect(solids[0].userData.featureId).toBe('real-extrude')
+
+    disposeSolidMeshes(solids)
+  })
 })
