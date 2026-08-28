@@ -732,7 +732,7 @@ export function SketchPlane() {
   // In cut mode, prefer pointer-down over click (down+up) which can be flaky if
   // the hovered hit target changes during the gesture.
   const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
-    if (activeTool !== 'cut') return
+    if (activeTool !== 'cut' || e.button !== 0) return
     e.stopPropagation()
     performCut()
   }
