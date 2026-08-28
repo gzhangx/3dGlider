@@ -110,6 +110,35 @@ describe('Constraint Solver', () => {
     }
   })
 
+  it('should not pull a point toward the origin when its coincident partner element is gone', () => {
+    // Simulates dragging a line after the element its endpoint was made
+    // coincident with (e.g. a circle's center) has been cut/deleted, leaving
+    // a dangling constraint that references a nonexistent element id.
+    const line: SketchLine = {
+      type: 'line',
+      id: 'line1',
+      start: { x: 4, y: 4 },
+      end: { x: 8, y: 8 },
+    }
+
+    const constraints: SketchConstraint[] = [
+      {
+        id: 'coin1',
+        type: 'coincident',
+        p1: { elementId: 'line1', which: 'start' },
+        p2: { elementId: 'deleted-circle', which: 'center' },
+      },
+    ]
+
+    // Drag the line's end; its start should stay put, not jump toward (0, 0).
+    const dragged = { ...line, end: { x: 50, y: 50 } }
+    const solved = solveConstraints([dragged], constraints, new Set(['line1:end']))
+
+    const solvedLine = solved.find((e): e is SketchLine => e.id === 'line1' && e.type === 'line')
+    expect(solvedLine).toBeDefined()
+    expect(Math.hypot(solvedLine!.start.x - 4, solvedLine!.start.y - 4) < 0.01).toBe(true)
+  })
+
   it('should maintain horizontal constraint', () => {
     const line: SketchLine = {
       type: 'line',

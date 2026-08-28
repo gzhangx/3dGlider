@@ -214,9 +214,16 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
         residual: (els) => {
           const pt1 = getPoint(els, p1.elementId, p1.which)
           const pt2 = getPoint(els, p2.elementId, p2.which)
-          return (pt1?.x ?? 0) - (pt2?.x ?? 0)
+          // A dangling reference (e.g. the other element was cut/deleted) must
+          // not pull this point toward 0 — treat it as satisfied, like every
+          // other constraint type already does when a referenced element is gone.
+          if (!pt1 || !pt2) return 0
+          return pt1.x - pt2.x
         },
-        jacobian: (_els, vars) => {
+        jacobian: (els, vars) => {
+          const pt1 = getPoint(els, p1.elementId, p1.which)
+          const pt2 = getPoint(els, p2.elementId, p2.which)
+          if (!pt1 || !pt2) return vars.map(() => 0)
           return vars.map((v) => {
             if (v.elementId === p1.elementId && v.pointType === p1.which && v.coord === 'x') return 1
             if (v.elementId === p2.elementId && v.pointType === p2.which && v.coord === 'x') return -1
@@ -232,9 +239,13 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
         residual: (els) => {
           const pt1 = getPoint(els, p1.elementId, p1.which)
           const pt2 = getPoint(els, p2.elementId, p2.which)
-          return (pt1?.y ?? 0) - (pt2?.y ?? 0)
+          if (!pt1 || !pt2) return 0
+          return pt1.y - pt2.y
         },
-        jacobian: (_els, vars) => {
+        jacobian: (els, vars) => {
+          const pt1 = getPoint(els, p1.elementId, p1.which)
+          const pt2 = getPoint(els, p2.elementId, p2.which)
+          if (!pt1 || !pt2) return vars.map(() => 0)
           return vars.map((v) => {
             if (v.elementId === p1.elementId && v.pointType === p1.which && v.coord === 'y') return 1
             if (v.elementId === p2.elementId && v.pointType === p2.which && v.coord === 'y') return -1
