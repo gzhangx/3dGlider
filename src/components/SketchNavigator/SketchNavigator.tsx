@@ -7,6 +7,7 @@ import {
 } from '../../store/modelStore'
 import styles from './SketchNavigator.module.css'
 import { constraintElementIds } from '../../lib/constraintUtils'
+import { SCENE_TO_MM } from '../../lib/units'
 
 // ── element label ─────────────────────────────────────────────────────────────
 
@@ -27,10 +28,10 @@ function constraintLabel(c: SketchConstraint, elements: SketchElement[]): string
   }
   switch (c.type) {
     case 'length':
-      if (c.dimension === 'width')  return `W=${c.value} [${name(c.elementId)}]`
-      if (c.dimension === 'height') return `H=${c.value} [${name(c.elementId)}]`
-      if (c.dimension === 'radius') return `R=${c.value} [${name(c.elementId)}]`
-      return `L=${c.value} [${name(c.elementId)}]`
+      if (c.dimension === 'width')  return `W=${+(c.value * SCENE_TO_MM).toFixed(2)} [${name(c.elementId)}]`
+      if (c.dimension === 'height') return `H=${+(c.value * SCENE_TO_MM).toFixed(2)} [${name(c.elementId)}]`
+      if (c.dimension === 'radius') return `R=${+(c.value * SCENE_TO_MM).toFixed(2)} [${name(c.elementId)}]`
+      return `L=${+(c.value * SCENE_TO_MM).toFixed(2)} [${name(c.elementId)}]`
     case 'angle':       return `∠${c.value}° [${name(c.elementId1)}·${name(c.elementId2)}]`
     case 'coincident':  return `⊙ coincident [${name(c.p1.elementId)}.${c.p1.which[0]}·${name(c.p2.elementId)}.${c.p2.which[0]}]`
     case 'pointOnCircle': return `⊙ on circle [${name(c.p.elementId)}.${c.p.which[0]}·${name(c.circleId)}]`

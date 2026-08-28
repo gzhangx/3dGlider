@@ -12,6 +12,7 @@ import {
 } from '../../lib/constraintSolve'
 import styles from './SketchSidebar.module.css'
 import { constraintElementIds } from '../../lib/constraintUtils'
+import { SCENE_TO_MM } from '../../lib/units'
 
 interface ToolBtn { id: SketchTool; label: string; key: string; icon: string }
 const TOOLS: ToolBtn[] = [
@@ -85,10 +86,10 @@ export function SketchSidebar() {
   const resolveInput = (raw: string): { value: number; paramRef?: string } | null => {
     const trimmed = raw.trim()
     const param = parameters.find((p) => p.name === trimmed)
-    if (param) return { value: param.value, paramRef: param.name }
+    if (param) return { value: param.value / SCENE_TO_MM, paramRef: param.name }
     const v = parseFloat(trimmed)
     if (isNaN(v) || v <= 0) return null
-    return { value: v }
+    return { value: v / SCENE_TO_MM }
   }
 
   // ── line (single) ─────────────────────────────────────────────────────────
@@ -179,7 +180,8 @@ export function SketchSidebar() {
   // ── constraint label ──────────────────────────────────────────────────────
   const constraintLabel = (c: SketchConstraint): string => {
     if (c.type === 'length') {
-      const v = c.paramRef ? `${c.paramRef} (${c.value})` : String(c.value)
+      const mm = +(c.value * SCENE_TO_MM).toFixed(2)
+      const v = c.paramRef ? `${c.paramRef} (${mm})` : String(mm)
       if (c.dimension === 'width')  return `W = ${v}`
       if (c.dimension === 'height') return `H = ${v}`
       if (c.dimension === 'radius') return `R = ${v}`
@@ -305,7 +307,7 @@ export function SketchSidebar() {
                   className={styles.constraintInput}
                   type="text"
                   list="sketch-params"
-                  placeholder={lineLength(line1).toFixed(3)}
+                  placeholder={(lineLength(line1) * SCENE_TO_MM).toFixed(1)}
                   value={input1}
                   onChange={(e) => setInput1(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && setLineLength()}
@@ -328,7 +330,7 @@ export function SketchSidebar() {
                 <input
                   className={styles.constraintInput} type="text"
                   list="sketch-params"
-                  placeholder={rectWidth(rect1).toFixed(3)}
+                  placeholder={(rectWidth(rect1) * SCENE_TO_MM).toFixed(1)}
                   value={input1} onChange={(e) => setInput1(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && setRectW()}
                 />
@@ -339,7 +341,7 @@ export function SketchSidebar() {
                 <input
                   className={styles.constraintInput} type="text"
                   list="sketch-params"
-                  placeholder={rectHeight(rect1).toFixed(3)}
+                  placeholder={(rectHeight(rect1) * SCENE_TO_MM).toFixed(1)}
                   value={input2} onChange={(e) => setInput2(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && setRectH()}
                 />
@@ -355,7 +357,7 @@ export function SketchSidebar() {
               <input
                 className={styles.constraintInput} type="text"
                 list="sketch-params"
-                placeholder={circle1.radius.toFixed(3)}
+                placeholder={(circle1.radius * SCENE_TO_MM).toFixed(1)}
                 value={input1} onChange={(e) => setInput1(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && setCircleRadius()}
               />
