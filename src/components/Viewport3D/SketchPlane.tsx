@@ -517,46 +517,53 @@ export function SketchPlane() {
     }
   }
 
+  // Cut is applied from onPointerDown only (see onPointerDown below) — onClick
+  // fires as a *second*, separate event for the same gesture, so handling the
+  // cut there too would apply the same cut twice (duplicate kept segments,
+  // since cutPreview/cutTarget state hasn't re-rendered between the two calls).
+  const performCut = () => {
+    if (!cutPreview || !cutTarget) return
+    let targetId = cutPreview.lineId
+    let replacements: SketchElement[] = cutPreview.keeps.map((seg) => {
+      if ('start' in seg && 'end' in seg) {
+        return {
+          type: 'line' as const,
+          id: crypto.randomUUID(),
+          start: seg.start,
+          end: seg.end,
+        } satisfies SketchLine
+      }
+      return { ...seg, id: crypto.randomUUID() } satisfies SketchArc
+    })
+
+    if (cutTarget.kind === 'rect-edge') {
+      targetId = cutTarget.rect.id
+      const c = rectCorners(cutTarget.rect)
+      const untouchedSides = [0, 1, 2, 3]
+        .filter(i => i !== cutTarget.edgeIndex)
+        .map(i => ({
+          type: 'line' as const,
+          id: crypto.randomUUID(),
+          start: c[i],
+          end: c[(i + 1) % 4],
+        }))
+      replacements = [...untouchedSides, ...replacements]
+    } else if (cutTarget.kind === 'circle') {
+      targetId = cutTarget.circle.id
+    } else if (cutTarget.kind === 'arc') {
+      targetId = cutTarget.arc.id
+    }
+
+    cutSketchElement(targetId, replacements)
+    setCutPreview(null)
+    setCutTarget(null)
+  }
+
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
 
     if (activeTool === 'cut') {
-      if (cutPreview && cutTarget) {
-        let targetId = cutPreview.lineId
-        let replacements: SketchElement[] = cutPreview.keeps.map((seg) => {
-          if ('start' in seg && 'end' in seg) {
-            return {
-              type: 'line' as const,
-              id: crypto.randomUUID(),
-              start: seg.start,
-              end: seg.end,
-            } satisfies SketchLine
-          }
-          return { ...seg, id: crypto.randomUUID() } satisfies SketchArc
-        })
-
-        if (cutTarget.kind === 'rect-edge') {
-          targetId = cutTarget.rect.id
-          const c = rectCorners(cutTarget.rect)
-          const untouchedSides = [0, 1, 2, 3]
-            .filter(i => i !== cutTarget.edgeIndex)
-            .map(i => ({
-              type: 'line' as const,
-              id: crypto.randomUUID(),
-              start: c[i],
-              end: c[(i + 1) % 4],
-            }))
-          replacements = [...untouchedSides, ...replacements]
-        } else if (cutTarget.kind === 'circle') {
-          targetId = cutTarget.circle.id
-        } else if (cutTarget.kind === 'arc') {
-          targetId = cutTarget.arc.id
-        }
-
-        cutSketchElement(targetId, replacements)
-        setCutPreview(null)
-        setCutTarget(null)
-      }
+      // Handled by onPointerDown to avoid double-application; nothing to do here.
       return
     }
 
@@ -726,7 +733,8 @@ export function SketchPlane() {
   // the hovered hit target changes during the gesture.
   const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
     if (activeTool !== 'cut') return
-    onClick(e as unknown as ThreeEvent<MouseEvent>)
+    e.stopPropagation()
+    performCut()
   }
 
   const preview = startPt !== null && cursorPt !== null
