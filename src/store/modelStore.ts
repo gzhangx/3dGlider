@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { reapplyParametricConstraints, solveConstraints } from '../lib/constraintSolve'
-import { constraintElementIds, constraintsEquivalent } from '../lib/constraintUtils'
+import { constraintElementIds, constraintsEquivalent, remapConstraintsAfterRemoval } from '../lib/constraintUtils'
 
 export type PlaneId = 'XY' | 'XZ' | 'YZ'
 export type AppMode = 'view' | 'sketch'
@@ -541,10 +541,18 @@ export const useModelStore = create<ModelState>((set) => ({
     })),
 
   cutSketchElement: (id, replacements) =>
-    set((s) => ({
-      sketchElements: [...s.sketchElements.filter((el) => el.id !== id), ...replacements],
-      sketchConstraints: s.sketchConstraints.filter((constraint) => !constraintElementIds(constraint).includes(id)),
-    })),
+    set((s) => {
+      const original = s.sketchElements.find((el) => el.id === id)
+      return {
+        sketchElements: [...s.sketchElements.filter((el) => el.id !== id), ...replacements],
+        // Re-point constraints at whichever replacement piece preserves the
+        // same point (e.g. a circle's center survives unchanged on every kept
+        // arc) instead of just dropping them — see remapConstraintsAfterRemoval.
+        sketchConstraints: original
+          ? remapConstraintsAfterRemoval(s.sketchConstraints, id, original, replacements)
+          : s.sketchConstraints.filter((constraint) => !constraintElementIds(constraint).includes(id)),
+      }
+    }),
 
   addSketchConstraint: (c) => set((s) => {
     const exists = s.sketchConstraints.some((existing) => constraintsEquivalent(existing, c))
