@@ -105,7 +105,7 @@ export function Toolbar() {
   return (
     <>
       <header className={styles.toolbar}>
-        <span className={styles.logo}>3D Glider</span>
+        <span className={styles.logo}>3D Glider v.01</span>
 
         <div className={styles.status}>
           {mode === 'view' && (
