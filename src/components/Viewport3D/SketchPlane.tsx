@@ -153,18 +153,34 @@ const noopRaycast: () => void = () => {}
   let shape: JSX.Element | null = null
   let labelPos: [number, number, number] | null = null
   if (el.type === 'line') {
-    shape = <Line points={linePts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+    const points = linePts(el.start, el.end, plane)
+    shape = <>
+      {activeTool === 'select' && <Line points={points} color="#ffffff" lineWidth={16} transparent opacity={0} depthWrite={false} {...selectProps} />}
+      <Line points={points} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+    </>
     const mid = { x: (el.start.x + el.end.x) / 2, y: (el.start.y + el.end.y) / 2 }
     labelPos = worldPt(mid, plane)
   } else if (el.type === 'rect') {
-    shape = <Line points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+    const points = rectPts(el.start, el.end, plane)
+    shape = <>
+      {activeTool === 'select' && <Line points={points} color="#ffffff" lineWidth={16} transparent opacity={0} depthWrite={false} {...selectProps} />}
+      <Line points={points} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+    </>
     const mid = { x: (el.start.x + el.end.x) / 2, y: (el.start.y + el.end.y) / 2 }
     labelPos = worldPt(mid, plane)
   } else if (el.type === 'circle') {
-    shape = <Line points={circlePts(el.center, el.radius, plane, 64)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+    const points = circlePts(el.center, el.radius, plane, 64)
+    shape = <>
+      {activeTool === 'select' && <Line points={points} color="#ffffff" lineWidth={16} transparent opacity={0} depthWrite={false} {...selectProps} />}
+      <Line points={points} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+    </>
     labelPos = worldPt(el.center, plane)
   } else if (el.type === 'arc') {
-    shape = <Line points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64)} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+    const points = arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64)
+    shape = <>
+      {activeTool === 'select' && <Line points={points} color="#ffffff" lineWidth={16} transparent opacity={0} depthWrite={false} {...selectProps} />}
+      <Line points={points} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+    </>
     labelPos = worldPt(el.center, plane)
   }
 
