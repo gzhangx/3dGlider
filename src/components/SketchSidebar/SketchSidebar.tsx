@@ -175,6 +175,9 @@ export function SketchSidebar() {
     const r = resolveInput(input1); if (!r) return
     upd(radial1.id, { radius: applyRadius(radial1, r.value).radius })
     addC({ type: 'length', elementId: radial1.id, value: r.value, dimension: 'radius', ...(r.paramRef ? { paramRef: r.paramRef } : {}) })
+    // Changing an arc radius moves its derived endpoints. Re-solve now so
+    // coincident lines and other connected geometry follow those endpoints.
+    applyConstraints()
     if (!r.paramRef) setInput1('')
   }
 

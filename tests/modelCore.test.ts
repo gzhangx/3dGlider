@@ -64,6 +64,30 @@ describe('model core', () => {
     expect(solved.radius).toBeCloseTo(5, 4)
   })
 
+  it('moves a coincident line endpoint when an arc radius is dimensioned', () => {
+    const arc: SketchArc = {
+      type: 'arc', id: 'arc', center: { x: 0, y: 0 }, radius: 2,
+      startAngle: 0, endAngle: Math.PI / 2,
+    }
+    const line: SketchLine = {
+      type: 'line', id: 'line', start: { x: -2, y: 0 }, end: { x: 2, y: 0 },
+    }
+    const constraints: SketchConstraint[] = [
+      { id: 'radius', type: 'length', elementId: 'arc', value: 5, dimension: 'radius' },
+      { id: 'join', type: 'coincident', p1: { elementId: 'arc', which: 'start' }, p2: { elementId: 'line', which: 'end' } },
+    ]
+
+    const result = solveConstraintsDetailed(
+      [arc, line], constraints,
+      new Set(['arc:center', 'arc:end', 'line:start']),
+    )
+    const solvedLine = result.elements.find((element): element is SketchLine => element.id === 'line')!
+
+    expect(result.converged).toBe(true)
+    expect(solvedLine.end.x).toBeCloseTo(5, 3)
+    expect(solvedLine.end.y).toBeCloseTo(0, 3)
+  })
+
   it('recognizes symmetric constraint duplicates without casts', () => {
     const left: SketchConstraint = {
       id: 'a', type: 'coincident',
