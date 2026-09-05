@@ -41,6 +41,12 @@ const SNAP_DOT_SCREEN = 10
 const SNAP_MIN_WORLD = 0.08
 const DOT_MIN_WORLD = 0.04
 
+type CoincidenceTarget =
+  | { kind: 'point'; pt: SketchPoint; ref: PointRef }
+  | { kind: 'line'; pt: SketchPoint; lineId: string }
+  | { kind: 'axis'; pt: SketchPoint; axis: 'x' | 'y' }
+  | { kind: 'origin'; pt: SketchPoint }
+
 // ─── dot marker ──────────────────────────────────────────────────────────────
 
 function Dot({ pos, color, screenSize, size = 0.06, ring = false }: { pos: [number, number, number]; color: string; screenSize?: number; size?: number; ring?: boolean }) {
@@ -302,12 +308,13 @@ export function SketchPlane() {
   
   const [startSnapRef, setStartSnapRef] = useState<PointRef | null>(null)
   const [startCircleId, setStartCircleId] = useState<string | null>(null)
+  const [coincidenceSource, setCoincidenceSource] = useState<{ pt: SketchPoint; ref: PointRef } | null>(null)
   // Drag-box selection state (sketch-local coordinates)
   const [selectBoxStart, setSelectBoxStart] = useState<SketchPoint | null>(null)
   const [selectBoxEnd, setSelectBoxEnd] = useState<SketchPoint | null>(null)
 
   useEffect(() => {
-    setStartPt(null); setCursorPt(null); setCutPreview(null); setCutTarget(null); setSnapTarget(null); setStartSnapRef(null); setStartCircleId(null)
+    setStartPt(null); setCursorPt(null); setCutPreview(null); setCutTarget(null); setSnapTarget(null); setStartSnapRef(null); setStartCircleId(null); setCoincidenceSource(null)
   }, [activeTool])
 
   const handleKey = useCallback(
@@ -375,6 +382,62 @@ export function SketchPlane() {
       : toSketch(e.point, plane)
   }
   const doSnap = (p: SketchPoint) => snapToGrid ? snapPt(p) : p
+
+  const coincidenceTargetAt = (raw: SketchPoint, source: PointRef | null): CoincidenceTarget | null => {
+    const candidates: Array<CoincidenceTarget & { distance: number }> = []
+    const addPoint = (pt: SketchPoint, ref: PointRef) => {
+      if (source && ref.elementId === source.elementId && ref.which === source.which) return
+      const distance = Math.hypot(raw.x - pt.x, raw.y - pt.y)
+      if (distance < snapObjectThreshold) candidates.push({ kind: 'point', pt, ref, distance })
+    }
+
+    for (const el of sketchElements) {
+      if (el.type === 'line' || el.type === 'rect') {
+        addPoint(el.start, { elementId: el.id, which: 'start' })
+        addPoint(el.end, { elementId: el.id, which: 'end' })
+      } else if (el.type === 'circle') {
+        addPoint(el.center, { elementId: el.id, which: 'center' })
+      } else if (el.type === 'arc') {
+        addPoint(el.center, { elementId: el.id, which: 'center' })
+        addPoint({ x: el.center.x + Math.cos(el.startAngle) * el.radius, y: el.center.y + Math.sin(el.startAngle) * el.radius }, { elementId: el.id, which: 'start' })
+        addPoint({ x: el.center.x + Math.cos(el.endAngle) * el.radius, y: el.center.y + Math.sin(el.endAngle) * el.radius }, { elementId: el.id, which: 'end' })
+      }
+
+      if (source && el.type === 'line' && el.id !== source.elementId) {
+        const dx = el.end.x - el.start.x
+        const dy = el.end.y - el.start.y
+        const denom = dx * dx + dy * dy
+        if (denom > 1e-9) {
+          const t = Math.max(0, Math.min(1, ((raw.x - el.start.x) * dx + (raw.y - el.start.y) * dy) / denom))
+          const pt = { x: el.start.x + t * dx, y: el.start.y + t * dy }
+          const distance = Math.hypot(raw.x - pt.x, raw.y - pt.y)
+          if (distance < snapObjectThreshold) candidates.push({ kind: 'line', pt, lineId: el.id, distance })
+        }
+      }
+    }
+
+    if (source) {
+      const originDistance = Math.hypot(raw.x, raw.y)
+      if (originDistance < snapObjectThreshold) candidates.push({ kind: 'origin', pt: { x: 0, y: 0 }, distance: originDistance })
+      if (Math.abs(raw.y) < snapObjectThreshold) candidates.push({ kind: 'axis', axis: 'x', pt: { x: raw.x, y: 0 }, distance: Math.abs(raw.y) })
+      if (Math.abs(raw.x) < snapObjectThreshold) candidates.push({ kind: 'axis', axis: 'y', pt: { x: 0, y: raw.y }, distance: Math.abs(raw.x) })
+    }
+
+    candidates.sort((a, b) => a.distance - b.distance)
+    return candidates[0] ?? null
+  }
+
+  const placeCoincidencePoint = (ref: PointRef, pt: SketchPoint) => {
+    const el = sketchElements.find((candidate) => candidate.id === ref.elementId)
+    if (!el) return
+    if ((el.type === 'line' || el.type === 'rect') && (ref.which === 'start' || ref.which === 'end')) {
+      updateSketchElement(el.id, { [ref.which]: pt } as Parameters<typeof updateSketchElement>[1])
+    } else if ((el.type === 'circle' || el.type === 'arc') && ref.which === 'center') {
+      updateSketchElement(el.id, { center: pt })
+    } else if (el.type === 'arc' && (ref.which === 'start' || ref.which === 'end')) {
+      updateSketchElement(el.id, { [ref.which === 'start' ? 'startAngle' : 'endAngle']: Math.atan2(pt.y - el.center.y, pt.x - el.center.x) })
+    }
+  }
 
   const onMove = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
@@ -449,6 +512,22 @@ export function SketchPlane() {
 
       for (const newEl of updated) {
         updateSketchElement(newEl.id, newEl as Parameters<typeof updateSketchElement>[1])
+      }
+      return
+    }
+
+    if (activeTool === 'coincidence') {
+      const target = coincidenceTargetAt(raw, coincidenceSource?.ref ?? null)
+      if (target) {
+        const hint = target.kind === 'point' ? 'Coincident point'
+          : target.kind === 'line' ? 'Coincident on line'
+          : target.kind === 'origin' ? 'Coincident at origin'
+          : `Coincident on ${target.axis.toUpperCase()} axis`
+        setSnapTarget({ pt: target.pt, ref: target.kind === 'point' ? target.ref : null, constraintHint: hint })
+        setCursorPt(target.pt)
+      } else {
+        setSnapTarget(null)
+        setCursorPt(raw)
       }
       return
     }
@@ -587,6 +666,34 @@ export function SketchPlane() {
 
     if (activeTool === 'cut') {
       // Handled by onPointerDown to avoid double-application; nothing to do here.
+      return
+    }
+
+    if (activeTool === 'coincidence') {
+      const raw = getRaw(e)
+      const target = coincidenceTargetAt(raw, coincidenceSource?.ref ?? null)
+      if (!coincidenceSource) {
+        if (target?.kind === 'point') {
+          setCoincidenceSource(target)
+          setStartPt(target.pt)
+        }
+        return
+      }
+      if (!target) return
+
+      placeCoincidencePoint(coincidenceSource.ref, target.pt)
+      const constraint: SketchConstraint = target.kind === 'point'
+        ? { id: crypto.randomUUID(), type: 'coincident', p1: coincidenceSource.ref, p2: target.ref }
+        : target.kind === 'line'
+          ? { id: crypto.randomUUID(), type: 'pointOnLine', p: coincidenceSource.ref, lineId: target.lineId }
+          : target.kind === 'axis'
+            ? { id: crypto.randomUUID(), type: 'pointOnAxis', p: coincidenceSource.ref, axis: target.axis }
+            : { id: crypto.randomUUID(), type: 'pointAtOrigin', p: coincidenceSource.ref }
+      addSketchConstraintsBatch([constraint], true)
+      selectElement(coincidenceSource.ref.elementId)
+      setCoincidenceSource(null)
+      setStartPt(null)
+      setSnapTarget(null)
       return
     }
 

@@ -14,6 +14,11 @@ export function constraintElementIds(constraint: SketchConstraint): string[] {
       return [constraint.elementId1, constraint.elementId2]
     case 'coincident':
       return [constraint.p1.elementId, constraint.p2.elementId]
+    case 'pointOnLine':
+      return [constraint.p.elementId, constraint.lineId]
+    case 'pointOnAxis':
+    case 'pointAtOrigin':
+      return [constraint.p.elementId]
     case 'pointOnCircle':
       return [constraint.p.elementId, constraint.circleId]
   }
@@ -92,6 +97,21 @@ export function remapConstraintsAfterRemoval(
       return [{ ...c, p, circleId }]
     }
 
+    if (c.type === 'pointOnLine') {
+      if (c.lineId === removedId) return []
+      if (c.p.elementId !== removedId) return [c]
+      const pt = pointRefValue(removedElement, c.p.which)
+      const mapped = pt && findMatchingPointRef(pt, replacements)
+      return mapped ? [{ ...c, p: mapped }] : []
+    }
+
+    if (c.type === 'pointOnAxis' || c.type === 'pointAtOrigin') {
+      if (c.p.elementId !== removedId) return [c]
+      const pt = pointRefValue(removedElement, c.p.which)
+      const mapped = pt && findMatchingPointRef(pt, replacements)
+      return mapped ? [{ ...c, p: mapped }] : []
+    }
+
     if (c.type === 'tangent') {
       if (replacements.length === 0) return []
       const elementId1 = c.elementId1 === removedId ? replacements[0].id : c.elementId1
@@ -114,6 +134,15 @@ export function constraintsEquivalent(left: SketchConstraint, right: SketchConst
   }
   if (left.type === 'pointOnCircle' && right.type === 'pointOnCircle') {
     return left.p.elementId === right.p.elementId && left.p.which === right.p.which && left.circleId === right.circleId
+  }
+  if (left.type === 'pointOnLine' && right.type === 'pointOnLine') {
+    return left.p.elementId === right.p.elementId && left.p.which === right.p.which && left.lineId === right.lineId
+  }
+  if (left.type === 'pointOnAxis' && right.type === 'pointOnAxis') {
+    return left.p.elementId === right.p.elementId && left.p.which === right.p.which && left.axis === right.axis
+  }
+  if (left.type === 'pointAtOrigin' && right.type === 'pointAtOrigin') {
+    return left.p.elementId === right.p.elementId && left.p.which === right.p.which
   }
   if (left.type === 'tangent' && right.type === 'tangent') {
     return (left.elementId1 === right.elementId1 && left.elementId2 === right.elementId2)

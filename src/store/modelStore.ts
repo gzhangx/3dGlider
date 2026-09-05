@@ -4,7 +4,7 @@ import { constraintElementIds, constraintsEquivalent, remapConstraintsAfterRemov
 
 export type PlaneId = 'XY' | 'XZ' | 'YZ'
 export type AppMode = 'view' | 'sketch'
-export type SketchTool = 'select' | 'line' | 'rect' | 'circle' | 'cut'
+export type SketchTool = 'select' | 'line' | 'rect' | 'circle' | 'cut' | 'coincidence'
 
 export interface SketchPlanePose {
   rotation: [number, number, number]
@@ -51,6 +51,9 @@ export type PointRef = { elementId: string; which: 'start' | 'end' | 'center' }
 export interface LengthConstraint       { id: string; type: 'length';       elementId: string; value: number; dimension?: 'width' | 'height' | 'radius'; paramRef?: string }
 export interface AngleConstraint        { id: string; type: 'angle';        elementId1: string; elementId2: string; value: number; paramRef?: string }
 export interface CoincidentConstraint   { id: string; type: 'coincident';   p1: PointRef; p2: PointRef }
+export interface PointOnLineConstraint  { id: string; type: 'pointOnLine';  p: PointRef; lineId: string }
+export interface PointOnAxisConstraint  { id: string; type: 'pointOnAxis';  p: PointRef; axis: 'x' | 'y' }
+export interface PointAtOriginConstraint { id: string; type: 'pointAtOrigin'; p: PointRef }
 export interface ParallelConstraint     { id: string; type: 'parallel';     elementId1: string; elementId2: string }
 export interface PerpendicularConstraint{ id: string; type: 'perpendicular'; elementId1: string; elementId2: string }
 export interface HorizontalConstraint   { id: string; type: 'horizontal';   elementId: string }
@@ -59,7 +62,7 @@ export interface EqualConstraint        { id: string; type: 'equal';        elem
 export interface TangentConstraint      { id: string; type: 'tangent';      elementId1: string; elementId2: string }
 export interface PointOnCircleConstraint { id: string; type: 'pointOnCircle'; p: PointRef; circleId: string }
 export type SketchConstraint =
-  | LengthConstraint | AngleConstraint | CoincidentConstraint
+  | LengthConstraint | AngleConstraint | CoincidentConstraint | PointOnLineConstraint | PointOnAxisConstraint | PointAtOriginConstraint
   | ParallelConstraint | PerpendicularConstraint
   | HorizontalConstraint | VerticalConstraint | EqualConstraint | TangentConstraint
   | PointOnCircleConstraint
@@ -181,6 +184,7 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
             return cc.type === 'length' || cc.type === 'angle' || cc.type === 'coincident'
               || cc.type === 'parallel' || cc.type === 'perpendicular' || cc.type === 'horizontal' || cc.type === 'vertical'
               || cc.type === 'equal' || cc.type === 'tangent' || cc.type === 'pointOnCircle'
+              || cc.type === 'pointOnLine' || cc.type === 'pointOnAxis' || cc.type === 'pointAtOrigin'
           })
         : []
       return {

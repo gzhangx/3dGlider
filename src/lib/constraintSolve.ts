@@ -267,6 +267,26 @@ function setPoint(el: SketchElement, pointType: 'start' | 'end' | 'center' | 'ra
   return el
 }
 
+/** Finite-difference row for constraints whose target geometry may also move. */
+function numericJacobian(
+  residual: (elements: SketchElement[]) => number,
+  elements: SketchElement[],
+  variables: SolverVariable[],
+): number[] {
+  const epsilon = 1e-6
+  const base = residual(elements)
+  return variables.map((variable) => {
+    const el = elements.find((candidate) => candidate.id === variable.elementId)
+    if (!el) return 0
+    const value = getVariableValue(el, variable)
+    if (value === null) return 0
+    const perturbed = elements.map((candidate) => candidate.id === el.id
+      ? setPoint(candidate, variable.pointType, variable.coord, value + epsilon)
+      : candidate)
+    return (residual(perturbed) - base) / epsilon
+  })
+}
+
 /**
  * Build constraint equations from sketch constraints.
  */
@@ -324,6 +344,45 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
         },
         priority: 10,
       })
+    } else if (c.type === 'pointOnLine') {
+      const pointOnLineResidual = (els: SketchElement[]) => {
+        const p = getPoint(els, c.p.elementId, c.p.which)
+        const line = els.find((el) => el.id === c.lineId)
+        if (!p || !line || line.type !== 'line') return 0
+        const dx = line.end.x - line.start.x
+        const dy = line.end.y - line.start.y
+        const length = Math.hypot(dx, dy)
+        return length < 1e-9 ? 0 : ((p.x - line.start.x) * dy - (p.y - line.start.y) * dx) / length
+      }
+      equations.push({
+        type: 'pointOnLine',
+        residual: pointOnLineResidual,
+        jacobian: (els, vars) => numericJacobian(pointOnLineResidual, els, vars),
+        priority: 10,
+      })
+    } else if (c.type === 'pointOnAxis') {
+      equations.push({
+        type: 'pointOnAxis',
+        residual: (els) => {
+          const p = getPoint(els, c.p.elementId, c.p.which)
+          return p ? (c.axis === 'x' ? p.y : p.x) : 0
+        },
+        jacobian: (_els, vars) => vars.map((v) =>
+          v.elementId === c.p.elementId && v.pointType === c.p.which && v.coord === (c.axis === 'x' ? 'y' : 'x') ? 1 : 0,
+        ),
+        priority: 10,
+      })
+    } else if (c.type === 'pointAtOrigin') {
+      for (const coord of ['x', 'y'] as const) {
+        equations.push({
+          type: 'pointAtOrigin',
+          residual: (els) => getPoint(els, c.p.elementId, c.p.which)?.[coord] ?? 0,
+          jacobian: (_els, vars) => vars.map((v) =>
+            v.elementId === c.p.elementId && v.pointType === c.p.which && v.coord === coord ? 1 : 0,
+          ),
+          priority: 10,
+        })
+      }
     } else if (c.type === 'length') {
       const elementId = c.elementId
       const targetLength = c.value

@@ -21,6 +21,7 @@ const TOOLS: ToolBtn[] = [
   { id: 'rect',    label: 'Rectangle', key: 'R', icon: '▭' },
   { id: 'circle',  label: 'Circle',    key: 'C', icon: '◯' },
   { id: 'cut',     label: 'Cut',       key: 'X', icon: '✂' },
+  { id: 'coincidence', label: 'Coincidence', key: 'O', icon: '⊙' },
 ]
 
 // ── coincident endpoint pair labels ──────────────────────────────────────────
