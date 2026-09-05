@@ -213,8 +213,17 @@ function getPoint(elements: SketchElement[], elementId: string, pointType: 'star
   if (pointType === 'end' && ('end' in el)) return el.end
   if (pointType === 'center' && el.type === 'circle') return el.center
   if (pointType === 'center' && el.type === 'arc') return el.center
-  if (pointType === 'radius' && (el.type === 'circle' || el.type === 'arc')) return { x: el.radius, y: 0 }
   return null
+}
+
+/** Read a solver variable without pretending scalar properties are points. */
+function getVariableValue(el: SketchElement, variable: SolverVariable): number | null {
+  if (variable.pointType === 'radius') {
+    return (el.type === 'circle' || el.type === 'arc') ? el.radius : null
+  }
+
+  const point = getPoint([el], variable.elementId, variable.pointType)
+  return point ? point[variable.coord] : null
 }
 
 /**
@@ -690,7 +699,9 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
 
           return vars.map((v) => {
             // Perturb the variable and compute new residual
-            const saveVal = getPoint(els, v.elementId, v.pointType)?.[v.coord] ?? 0
+            const variableElement = els.find((element) => element.id === v.elementId)
+            const saveVal = variableElement ? getVariableValue(variableElement, v) : null
+            if (saveVal === null) return 0
             const perturbed = els.map((e) => {
               if (e.id === v.elementId) {
                 return setPoint(e, v.pointType, v.coord, saveVal + eps)
@@ -890,10 +901,10 @@ export function solveConstraintsDetailed(
       const el = updates.get(v.elementId) ?? elementById.get(v.elementId)
       if (!el) continue
 
-      const oldPt = getPoint([el], v.elementId, v.pointType)
-      if (!oldPt) continue
+      const oldValue = getVariableValue(el, v)
+      if (oldValue === null) continue
 
-      const newValue = (oldPt[v.coord] ?? 0) + dampingFactor * delta[v.index]
+      const newValue = oldValue + dampingFactor * delta[v.index]
       const updated = setPoint(el, v.pointType, v.coord, newValue)
       updates.set(el.id, updated)
     }
