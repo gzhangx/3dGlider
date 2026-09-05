@@ -157,16 +157,63 @@ interface ConstraintEquation {
 }
 
 /**
+ * Arc endpoints are derived from an angle and radius instead of independent
+ * x/y fields. Preserve analytic Jacobians for regular geometry, while using
+ * the true local derivative for arc-endpoint columns.
+ */
+function withArcEndpointJacobian(equation: ConstraintEquation): ConstraintEquation {
+  const analyticJacobian = equation.jacobian
+  return {
+    ...equation,
+    jacobian: (elements, variables) => {
+      const jacobian = analyticJacobian(elements, variables)
+      const epsilon = 1e-6
+
+      return variables.map((variable, index) => {
+        const element = elements.find((candidate) => candidate.id === variable.elementId)
+        if (!element || element.type !== 'arc' || (variable.pointType !== 'start' && variable.pointType !== 'end')) {
+          return jacobian[index]
+        }
+
+        const point = getPoint(elements, variable.elementId, variable.pointType)
+        if (!point) return jacobian[index]
+        const perturbed = elements.map((candidate) =>
+          candidate.id === variable.elementId
+            ? setPoint(candidate, variable.pointType, variable.coord, point[variable.coord] + epsilon)
+            : candidate,
+        )
+        return (equation.residual(perturbed) - equation.residual(elements)) / epsilon
+      })
+    },
+  }
+}
+
+/**
  * Extract a point from an element by id and type.
  */
 function getPoint(elements: SketchElement[], elementId: string, pointType: 'start' | 'end' | 'center' | 'radius'): SketchPoint | null {
   const el = elements.find((e) => e.id === elementId)
   if (!el) return null
+  // Arc endpoints are stored parametrically as angles, but are still first-class
+  // sketch points for constraints. Expose their current Cartesian positions to
+  // the solver just as we do for line and rectangle endpoints.
+  if (el.type === 'arc' && pointType === 'start') {
+    return {
+      x: el.center.x + Math.cos(el.startAngle) * el.radius,
+      y: el.center.y + Math.sin(el.startAngle) * el.radius,
+    }
+  }
+  if (el.type === 'arc' && pointType === 'end') {
+    return {
+      x: el.center.x + Math.cos(el.endAngle) * el.radius,
+      y: el.center.y + Math.sin(el.endAngle) * el.radius,
+    }
+  }
   if (pointType === 'start' && ('start' in el)) return el.start
   if (pointType === 'end' && ('end' in el)) return el.end
   if (pointType === 'center' && el.type === 'circle') return el.center
   if (pointType === 'center' && el.type === 'arc') return el.center
-  if (pointType === 'radius' && el.type === 'circle') return { x: el.radius, y: 0 }
+  if (pointType === 'radius' && (el.type === 'circle' || el.type === 'arc')) return { x: el.radius, y: 0 }
   return null
 }
 
@@ -174,6 +221,20 @@ function getPoint(elements: SketchElement[], elementId: string, pointType: 'star
  * Set a coordinate of a point in an element.
  */
 function setPoint(el: SketchElement, pointType: 'start' | 'end' | 'center' | 'radius', coord: 'x' | 'y', value: number): SketchElement {
+  if (el.type === 'arc' && (pointType === 'start' || pointType === 'end')) {
+    const angle = pointType === 'start' ? el.startAngle : el.endAngle
+    const endpoint = {
+      x: el.center.x + Math.cos(angle) * el.radius,
+      y: el.center.y + Math.sin(angle) * el.radius,
+    }
+    endpoint[coord] = value
+    // An arc endpoint must stay on its circle. Updating its Cartesian solver
+    // coordinate therefore updates the corresponding angular parameter.
+    const nextAngle = Math.atan2(endpoint.y - el.center.y, endpoint.x - el.center.x)
+    return pointType === 'start'
+      ? { ...el, startAngle: nextAngle }
+      : { ...el, endAngle: nextAngle }
+  }
   if (pointType === 'start' && 'start' in el) {
     return { ...el, start: { ...el.start, [coord]: value } }
   }
@@ -183,7 +244,7 @@ function setPoint(el: SketchElement, pointType: 'start' | 'end' | 'center' | 'ra
   if (pointType === 'center' && (el.type === 'circle' || el.type === 'arc')) {
     return { ...el, center: { ...el.center, [coord]: value } }
   }
-  if (pointType === 'radius' && el.type === 'circle' && coord === 'x') {
+  if (pointType === 'radius' && (el.type === 'circle' || el.type === 'arc') && coord === 'x') {
     return { ...el, radius: Math.max(0.01, value) }
   }
   if (pointType === 'center' && el.type === 'rect') {
@@ -698,7 +759,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
     }
   }
 
-  return equations
+  return equations.map(withArcEndpointJacobian)
 }
 
 /**
@@ -774,8 +835,21 @@ export function solveConstraintsDetailed(
         variables.push({ elementId: el.id, pointType: 'center', coord: 'x', index: varIndex++ })
         variables.push({ elementId: el.id, pointType: 'center', coord: 'y', index: varIndex++ })
       }
-      // Add radius as a variable for circles if there are constraints that require it
-      if (el.type === 'circle' && needsRadiusVariable) {
+      if (el.type === 'arc') {
+        // Arc endpoints are constraint-addressable points. Their Cartesian
+        // variables are translated to start/end angles by setPoint, keeping
+        // them on the arc while allowing coincident connections to move them.
+        if (!fixedPoints?.has(fixKey('start'))) {
+          variables.push({ elementId: el.id, pointType: 'start', coord: 'x', index: varIndex++ })
+          variables.push({ elementId: el.id, pointType: 'start', coord: 'y', index: varIndex++ })
+        }
+        if (!fixedPoints?.has(fixKey('end'))) {
+          variables.push({ elementId: el.id, pointType: 'end', coord: 'x', index: varIndex++ })
+          variables.push({ elementId: el.id, pointType: 'end', coord: 'y', index: varIndex++ })
+        }
+      }
+      // A tangent or point-on-circle constraint can also change an arc radius.
+      if ((el.type === 'circle' || el.type === 'arc') && needsRadiusVariable) {
         variables.push({ elementId: el.id, pointType: 'radius', coord: 'x', index: varIndex++ })
       }
     }

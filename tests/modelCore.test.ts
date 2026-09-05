@@ -19,6 +19,35 @@ describe('model core', () => {
     expect(result.maxResidual).toBeLessThan(1e-6)
   })
 
+  it('moves an arc endpoint when it is coincident with a fixed line endpoint', () => {
+    const arc: SketchArc = {
+      type: 'arc', id: 'arc', center: { x: 0, y: 0 }, radius: 5,
+      startAngle: 0, endAngle: Math.PI,
+    }
+    const line: SketchLine = {
+      type: 'line', id: 'line', start: { x: -2, y: 1 }, end: { x: 3, y: 4 },
+    }
+    const constraints: SketchConstraint[] = [{
+      id: 'join', type: 'coincident',
+      p1: { elementId: 'arc', which: 'start' },
+      p2: { elementId: 'line', which: 'end' },
+    }]
+
+    const result = solveConstraintsDetailed(
+      [arc, line], constraints,
+      new Set(['arc:center', 'arc:end', 'line:start', 'line:end']),
+    )
+    const solved = result.elements.find((element): element is SketchArc => element.id === 'arc')!
+    const start = {
+      x: solved.center.x + Math.cos(solved.startAngle) * solved.radius,
+      y: solved.center.y + Math.sin(solved.startAngle) * solved.radius,
+    }
+
+    expect(result.converged).toBe(true)
+    expect(start.x).toBeCloseTo(3, 4)
+    expect(start.y).toBeCloseTo(4, 4)
+  })
+
   it('recognizes symmetric constraint duplicates without casts', () => {
     const left: SketchConstraint = {
       id: 'a', type: 'coincident',
