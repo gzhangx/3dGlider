@@ -67,8 +67,8 @@ export function applyRectHeight(el: SketchRect, value: number): SketchRect {
 
 // ── Circle helpers ────────────────────────────────────────────────────────────
 
-/** Set circle radius. */
-export function applyRadius(el: SketchCircle, value: number): SketchCircle {
+/** Set the radius of a circle or arc. */
+export function applyRadius<T extends { radius: number }>(el: T, value: number): T {
   return { ...el, radius: Math.abs(value) }
 }
 
@@ -118,8 +118,8 @@ export function reapplyParametricConstraints(
       let updated: SketchElement | null = null
       if (el.type === 'line' && !c.dimension)
         updated = applyLength(el as SketchLine, param.value)
-      else if (el.type === 'circle' && c.dimension === 'radius')
-        updated = applyRadius(el as SketchCircle, param.value)
+      else if ((el.type === 'circle' || el.type === 'arc') && c.dimension === 'radius')
+        updated = applyRadius(el, param.value)
       else if (el.type === 'rect' && c.dimension === 'width')
         updated = applyRectWidth(el as SketchRect, param.value)
       else if (el.type === 'rect' && c.dimension === 'height')
@@ -336,7 +336,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
 
           if (el.type === 'line') {
             return lineLength(el) - targetLength
-          } else if (el.type === 'circle') {
+          } else if (el.type === 'circle' || (el.type === 'arc' && c.dimension === 'radius')) {
             return el.radius - targetLength
           } else if (el.type === 'rect' && c.dimension === 'width') {
             return rectWidth(el) - targetLength
@@ -362,7 +362,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
               if (v.elementId === elementId && v.pointType === 'start' && v.coord === 'y') return -dy / len
               return 0
             })
-          } else if (el.type === 'circle') {
+          } else if (el.type === 'circle' || (el.type === 'arc' && c.dimension === 'radius')) {
             return vars.map((v) => {
               if (v.elementId === elementId && v.pointType === 'radius' && v.coord === 'x') return 1
               return 0
@@ -816,9 +816,13 @@ export function solveConstraintsDetailed(
   const variables: SolverVariable[] = []
   let varIndex = 0
 
-  // Check if any tangent constraints exist
-  // Determine whether we need circle radius as a variable (tangent, point-on-circle, or explicit radius length)
-  const needsRadiusVariable = constraints.some(c => c.type === 'tangent' || c.type === 'pointOnCircle' || (c.type === 'length' && c.dimension === 'radius'))
+  // Circles may resize for tangent and point-on-circle constraints. Arcs only
+  // expose radius when explicitly dimensioned, preserving their size for other
+  // constraints such as tangency.
+  const needsCircleRadiusVariable = constraints.some(c =>
+    c.type === 'tangent' || c.type === 'pointOnCircle' || (c.type === 'length' && c.dimension === 'radius'),
+  )
+  const needsArcRadiusVariable = constraints.some(c => c.type === 'length' && c.dimension === 'radius')
 
   for (const el of elements) {
     const fixKey = (pt: string) => `${el.id}:${pt}`
@@ -859,8 +863,7 @@ export function solveConstraintsDetailed(
           variables.push({ elementId: el.id, pointType: 'end', coord: 'y', index: varIndex++ })
         }
       }
-      // A tangent or point-on-circle constraint can also change an arc radius.
-      if ((el.type === 'circle' || el.type === 'arc') && needsRadiusVariable) {
+      if ((el.type === 'circle' && needsCircleRadiusVariable) || (el.type === 'arc' && needsArcRadiusVariable)) {
         variables.push({ elementId: el.id, pointType: 'radius', coord: 'x', index: varIndex++ })
       }
     }

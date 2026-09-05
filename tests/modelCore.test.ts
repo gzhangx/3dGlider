@@ -48,6 +48,22 @@ describe('model core', () => {
     expect(start.y).toBeCloseTo(4, 4)
   })
 
+  it('solves an explicit radius dimension on an arc', () => {
+    const arc: SketchArc = {
+      type: 'arc', id: 'arc', center: { x: 0, y: 0 }, radius: 2,
+      startAngle: 0, endAngle: Math.PI / 2,
+    }
+    const constraints: SketchConstraint[] = [{
+      id: 'radius', type: 'length', elementId: 'arc', value: 5, dimension: 'radius',
+    }]
+
+    const result = solveConstraintsDetailed([arc], constraints)
+    const solved = result.elements[0] as SketchArc
+
+    expect(result.converged).toBe(true)
+    expect(solved.radius).toBeCloseTo(5, 4)
+  })
+
   it('recognizes symmetric constraint duplicates without casts', () => {
     const left: SketchConstraint = {
       id: 'a', type: 'coincident',

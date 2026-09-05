@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
-  useModelStore, SketchTool, SketchLine, SketchRect, SketchCircle, SketchPoint, SketchConstraint,
+  useModelStore, SketchTool, SketchLine, SketchRect, SketchCircle, SketchArc, SketchPoint, SketchConstraint,
 } from '../../store/modelStore'
 import {
   lineLength, angleBetween,
@@ -67,6 +67,8 @@ export function SketchSidebar() {
   const line1   = sel1?.type === 'line'   ? (sel1 as SketchLine)   : null
   const rect1   = sel1?.type === 'rect'   ? (sel1 as SketchRect)   : null
   const circle1 = sel1?.type === 'circle' ? (sel1 as SketchCircle) : null
+  const arc1    = sel1?.type === 'arc'    ? (sel1 as SketchArc)    : null
+  const radial1 = circle1 ?? arc1
   const line2   = sel2?.type === 'line'   ? (sel2 as SketchLine)   : null
 
   const selectedConstraints = selectedElementIds[0]
@@ -167,12 +169,12 @@ export function SketchSidebar() {
     if (!r.paramRef) setInput2('')
   }
 
-  // ── circle ────────────────────────────────────────────────────────────────
-  const setCircleRadius = () => {
-    if (!circle1) return
+  // ── circle / arc ──────────────────────────────────────────────────────────
+  const setRadius = () => {
+    if (!radial1) return
     const r = resolveInput(input1); if (!r) return
-    upd(circle1.id, { radius: applyRadius(circle1, r.value).radius })
-    addC({ type: 'length', elementId: circle1.id, value: r.value, dimension: 'radius', ...(r.paramRef ? { paramRef: r.paramRef } : {}) })
+    upd(radial1.id, { radius: applyRadius(radial1, r.value).radius })
+    addC({ type: 'length', elementId: radial1.id, value: r.value, dimension: 'radius', ...(r.paramRef ? { paramRef: r.paramRef } : {}) })
     if (!r.paramRef) setInput1('')
   }
 
@@ -350,18 +352,18 @@ export function SketchSidebar() {
             </>
           )}
 
-          {/* ── Single circle ── */}
-          {circle1 && (
+          {/* ── Single circle / arc ── */}
+          {radial1 && (
             <div className={styles.constraintRow}>
               <span className={styles.constraintIcon}>R</span>
               <input
                 className={styles.constraintInput} type="text"
                 list="sketch-params"
-                placeholder={(circle1.radius * SCENE_TO_MM).toFixed(1)}
+                placeholder={(radial1.radius * SCENE_TO_MM).toFixed(1)}
                 value={input1} onChange={(e) => setInput1(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && setCircleRadius()}
+                onKeyDown={(e) => e.key === 'Enter' && setRadius()}
               />
-              <button className={styles.constraintBtn} onClick={setCircleRadius}>Set</button>
+              <button className={styles.constraintBtn} onClick={setRadius}>Set</button>
             </div>
           )}
 
