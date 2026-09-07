@@ -1,4 +1,4 @@
-import { SketchLine, SketchRect, SketchCircle, SketchPoint, SketchElement, SketchConstraint, Parameter } from '../store/modelStore'
+import { SketchLine, SketchRect, SketchPoint, SketchElement, SketchConstraint, Parameter } from '../store/modelStore'
 import { solveDampedLeastSquares } from './solverMath'
 
 // ── Line helpers ──────────────────────────────────────────────────────────────
@@ -143,7 +143,7 @@ export function reapplyParametricConstraints(
 /** Represents a variable in the solver (x/y coordinate of a point). */
 interface SolverVariable {
   elementId: string
-  pointType: 'start' | 'end' | 'center' | 'radius'
+  pointType: 'start' | 'end' | 'center' | 'radius' | 'startAngle' | 'endAngle'
   coord: 'x' | 'y'
   index: number
 }
@@ -153,38 +153,19 @@ interface ConstraintEquation {
   type: SketchConstraint['type']
   residual(elements: SketchElement[]): number
   jacobian(elements: SketchElement[], variables: SolverVariable[]): number[]
-  priority?: number // Lower = solved first (default 0)
+  /** Larger weights are preferred in the least-squares solve (e.g. coincident). */
+  weight?: number
 }
 
 /**
- * Arc endpoints are derived from an angle and radius instead of independent
- * x/y fields. Preserve analytic Jacobians for regular geometry, while using
- * the true local derivative for arc-endpoint columns.
+ * Always differentiate through the real geometry map. Arc endpoints live on a
+ * circle (center + angle + radius), so analytic x/y columns miss center/radius
+ * coupling and sequential x-then-y updates do not match the residual.
  */
-function withArcEndpointJacobian(equation: ConstraintEquation): ConstraintEquation {
-  const analyticJacobian = equation.jacobian
+function withNumericJacobian(equation: ConstraintEquation): ConstraintEquation {
   return {
     ...equation,
-    jacobian: (elements, variables) => {
-      const jacobian = analyticJacobian(elements, variables)
-      const epsilon = 1e-6
-
-      return variables.map((variable, index) => {
-        const element = elements.find((candidate) => candidate.id === variable.elementId)
-        if (!element || element.type !== 'arc' || (variable.pointType !== 'start' && variable.pointType !== 'end')) {
-          return jacobian[index]
-        }
-
-        const point = getPoint(elements, variable.elementId, variable.pointType)
-        if (!point) return jacobian[index]
-        const perturbed = elements.map((candidate) =>
-          candidate.id === variable.elementId
-            ? setPoint(candidate, variable.pointType, variable.coord, point[variable.coord] + epsilon)
-            : candidate,
-        )
-        return (equation.residual(perturbed) - equation.residual(elements)) / epsilon
-      })
-    },
+    jacobian: (elements, variables) => numericJacobian(equation.residual, elements, variables),
   }
 }
 
@@ -221,6 +202,11 @@ function getVariableValue(el: SketchElement, variable: SolverVariable): number |
   if (variable.pointType === 'radius') {
     return (el.type === 'circle' || el.type === 'arc') ? el.radius : null
   }
+  if (el.type === 'arc' && variable.pointType === 'startAngle') return el.startAngle
+  if (el.type === 'arc' && variable.pointType === 'endAngle') return el.endAngle
+  if (variable.pointType === 'startAngle' || variable.pointType === 'endAngle') {
+    return null
+  }
 
   const point = getPoint([el], variable.elementId, variable.pointType)
   return point ? point[variable.coord] : null
@@ -229,20 +215,12 @@ function getVariableValue(el: SketchElement, variable: SolverVariable): number |
 /**
  * Set a coordinate of a point in an element.
  */
-function setPoint(el: SketchElement, pointType: 'start' | 'end' | 'center' | 'radius', coord: 'x' | 'y', value: number): SketchElement {
-  if (el.type === 'arc' && (pointType === 'start' || pointType === 'end')) {
-    const angle = pointType === 'start' ? el.startAngle : el.endAngle
-    const endpoint = {
-      x: el.center.x + Math.cos(angle) * el.radius,
-      y: el.center.y + Math.sin(angle) * el.radius,
-    }
-    endpoint[coord] = value
-    // An arc endpoint must stay on its circle. Updating its Cartesian solver
-    // coordinate therefore updates the corresponding angular parameter.
-    const nextAngle = Math.atan2(endpoint.y - el.center.y, endpoint.x - el.center.x)
-    return pointType === 'start'
-      ? { ...el, startAngle: nextAngle }
-      : { ...el, endAngle: nextAngle }
+function setPoint(el: SketchElement, pointType: SolverVariable['pointType'], coord: 'x' | 'y', value: number): SketchElement {
+  if (el.type === 'arc' && pointType === 'startAngle') {
+    return { ...el, startAngle: value }
+  }
+  if (el.type === 'arc' && pointType === 'endAngle') {
+    return { ...el, endAngle: value }
   }
   if (pointType === 'start' && 'start' in el) {
     return { ...el, start: { ...el.start, [coord]: value } }
@@ -265,6 +243,22 @@ function setPoint(el: SketchElement, pointType: 'start' | 'end' | 'center' | 'ra
     return el
   }
   return el
+}
+
+function tangentResidual(elements: SketchElement[], id1: string, id2: string): number {
+  const a = elements.find((e) => e.id === id1)
+  const b = elements.find((e) => e.id === id2)
+  if (!a || !b) return 0
+  const line = a.type === 'line' ? a : b.type === 'line' ? b : null
+  const curve = a.type === 'circle' || a.type === 'arc' ? a : b.type === 'circle' || b.type === 'arc' ? b : null
+  if (!line || !curve) return 0
+
+  const dx = line.end.x - line.start.x
+  const dy = line.end.y - line.start.y
+  const lineLen = Math.hypot(dx, dy)
+  if (lineLen < 1e-9) return curve.radius
+  const signed = (dy * curve.center.x - dx * curve.center.y + line.end.x * line.start.y - line.end.y * line.start.x) / lineLen
+  return Math.abs(signed) - curve.radius
 }
 
 /** Finite-difference row for constraints whose target geometry may also move. */
@@ -320,7 +314,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
             return 0
           })
         },
-        priority: 10, // High priority
+        weight: 10,
       })
 
       // Y-coordinate coincident
@@ -342,7 +336,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
             return 0
           })
         },
-        priority: 10,
+        weight: 10,
       })
     } else if (c.type === 'pointOnLine') {
       const pointOnLineResidual = (els: SketchElement[]) => {
@@ -358,7 +352,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
         type: 'pointOnLine',
         residual: pointOnLineResidual,
         jacobian: (els, vars) => numericJacobian(pointOnLineResidual, els, vars),
-        priority: 10,
+        weight: 10,
       })
     } else if (c.type === 'pointOnAxis') {
       equations.push({
@@ -370,7 +364,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
         jacobian: (_els, vars) => vars.map((v) =>
           v.elementId === c.p.elementId && v.pointType === c.p.which && v.coord === (c.axis === 'x' ? 'y' : 'x') ? 1 : 0,
         ),
-        priority: 10,
+        weight: 10,
       })
     } else if (c.type === 'pointAtOrigin') {
       for (const coord of ['x', 'y'] as const) {
@@ -380,7 +374,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
           jacobian: (_els, vars) => vars.map((v) =>
             v.elementId === c.p.elementId && v.pointType === c.p.which && v.coord === coord ? 1 : 0,
           ),
-          priority: 10,
+          weight: 10,
         })
       }
     } else if (c.type === 'length') {
@@ -684,112 +678,10 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
         },
       })
     } else if (c.type === 'tangent') {
-      const lineId = c.elementId1
-      const circleId = c.elementId2
-      // Support both (line, circle) and (circle, line)
-      const actualLineId = lineId
-      const actualCircleId = circleId
-
       equations.push({
         type: 'tangent',
-        residual: (els) => {
-          const line = els.find((e) => e.id === actualLineId)
-          const circle = els.find((e) => e.id === actualCircleId)
-          if (!line || !circle) return 0
-
-          // If line and circle are swapped, adjust
-          let l = line, c = circle
-          if (line.type === 'circle' && circle.type === 'line') {
-            [l, c] = [circle, line]
-          }
-
-          if (l.type !== 'line' || (c.type !== 'circle' && c.type !== 'arc')) return 0
-
-          // Distance from circle center to line
-          const cx = c.center.x
-          const cy = c.center.y
-          const x1 = l.start.x
-          const y1 = l.start.y
-          const x2 = l.end.x
-          const y2 = l.end.y
-
-          const dx = x2 - x1
-          const dy = y2 - y1
-          const lineLenSq = dx * dx + dy * dy
-
-          if (lineLenSq < 1e-12) return c.radius // Degenerate line, distance is undefined
-
-          // Distance = |ax + by + c| / sqrt(a^2 + b^2) where line is ax + by + c = 0
-          // Line through (x1, y1) and (x2, y2): (y2-y1)x - (x2-x1)y + x2*y1 - y2*x1 = 0
-          const num = Math.abs((y2 - y1) * cx - (x2 - x1) * cy + x2 * y1 - y2 * x1)
-          const dist = num / Math.sqrt(lineLenSq)
-
-          // Residual: distance - radius (tangent when zero)
-          return dist - c.radius
-        },
-        jacobian: (els, vars) => {
-          const line = els.find((e) => e.id === actualLineId)
-          const circle = els.find((e) => e.id === actualCircleId)
-          if (!line || !circle) return vars.map(() => 0)
-
-          let l = line, circleEl = circle
-          if (line.type === 'circle' && circle.type === 'line') {
-            [l, circleEl] = [circle, line]
-          }
-
-          if (l.type !== 'line' || (circleEl.type !== 'circle' && circleEl.type !== 'arc')) return vars.map(() => 0)
-
-          // Numerical differentiation
-          const eps = 1e-6
-          const residual0 = (() => {
-            const cx = circleEl.center.x
-            const cy = circleEl.center.y
-            const x1 = l.start.x
-            const y1 = l.start.y
-            const x2 = l.end.x
-            const y2 = l.end.y
-            const dx = x2 - x1
-            const dy = y2 - y1
-            const lineLenSq = dx * dx + dy * dy
-            if (lineLenSq < 1e-12) return circleEl.radius
-            const num = Math.abs((y2 - y1) * cx - (x2 - x1) * cy + x2 * y1 - y2 * x1)
-            return num / Math.sqrt(lineLenSq) - circleEl.radius
-          })()
-
-          return vars.map((v) => {
-            // Perturb the variable and compute new residual
-            const variableElement = els.find((element) => element.id === v.elementId)
-            const saveVal = variableElement ? getVariableValue(variableElement, v) : null
-            if (saveVal === null) return 0
-            const perturbed = els.map((e) => {
-              if (e.id === v.elementId) {
-                return setPoint(e, v.pointType, v.coord, saveVal + eps)
-              }
-              return e
-            })
-
-            const l_pert = perturbed.find(e => e.id === l.id) as SketchLine
-            const circ_pert = perturbed.find(e => e.id === circleEl.id) as SketchCircle
-            
-            if (!l_pert || !circ_pert) return 0
-
-            const cx = circ_pert.center.x
-            const cy = circ_pert.center.y
-            const x1 = l_pert.start.x
-            const y1 = l_pert.start.y
-            const x2 = l_pert.end.x
-            const y2 = l_pert.end.y
-            const dx = x2 - x1
-            const dy = y2 - y1
-            const lineLenSq = dx * dx + dy * dy
-            if (lineLenSq < 1e-12) return 0
-
-            const num = Math.abs((y2 - y1) * cx - (x2 - x1) * cy + x2 * y1 - y2 * x1)
-            const residual1 = num / Math.sqrt(lineLenSq) - circ_pert.radius
-
-            return (residual1 - residual0) / eps
-          })
-        },
+        residual: (els) => tangentResidual(els, c.elementId1, c.elementId2),
+        jacobian: (els, vars) => numericJacobian((candidates) => tangentResidual(candidates, c.elementId1, c.elementId2), els, vars),
       })
     } else if (c.type === 'pointOnCircle') {
       const pRef = c.p
@@ -825,11 +717,12 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
             return 0
           })
         },
+        weight: 10,
       })
     }
   }
 
-  return equations.map(withArcEndpointJacobian)
+  return equations.map(withNumericJacobian)
 }
 
 /**
@@ -860,6 +753,24 @@ export interface ConstraintSolveResult {
   maxResidual: number
 }
 
+function elementNeedsRadiusVariable(
+  el: SketchElement,
+  elements: SketchElement[],
+  constraints: SketchConstraint[],
+): boolean {
+  if (el.type !== 'circle' && el.type !== 'arc') return false
+  const byId = new Map(elements.map((candidate) => [candidate.id, candidate]))
+  return constraints.some((c) => {
+    if (c.type === 'length' && c.dimension === 'radius' && c.elementId === el.id) return true
+    if (c.type === 'equal' && (c.elementId1 === el.id || c.elementId2 === el.id)) {
+      const otherId = c.elementId1 === el.id ? c.elementId2 : c.elementId1
+      const other = byId.get(otherId)
+      return !!other && (other.type === 'circle' || other.type === 'arc' || other.type === 'line')
+    }
+    return false
+  })
+}
+
 export function solveConstraintsDetailed(
   elements: SketchElement[],
   constraints: SketchConstraint[],
@@ -875,14 +786,9 @@ export function solveConstraintsDetailed(
   const variables: SolverVariable[] = []
   let varIndex = 0
 
-  // Circles may resize for tangent and point-on-circle constraints. Arcs only
-  // expose radius when explicitly dimensioned, preserving their size for other
-  // constraints such as tangency.
-  const needsCircleRadiusVariable = constraints.some(c =>
-    c.type === 'tangent' || c.type === 'pointOnCircle' || (c.type === 'length' && c.dimension === 'radius'),
-  )
-  const needsArcRadiusVariable = constraints.some(c => c.type === 'length' && c.dimension === 'radius')
-
+  // Radius is a DOF only when a dimension (or equal-length) actually pins or
+  // drives it. Tangent / point-on-circle must not resize arcs or circles —
+  // those constraints are satisfied by moving centers or the other geometry.
   for (const el of elements) {
     const fixKey = (pt: string) => `${el.id}:${pt}`
 
@@ -910,19 +816,17 @@ export function solveConstraintsDetailed(
         variables.push({ elementId: el.id, pointType: 'center', coord: 'y', index: varIndex++ })
       }
       if (el.type === 'arc') {
-        // Arc endpoints are constraint-addressable points. Their Cartesian
-        // variables are translated to start/end angles by setPoint, keeping
-        // them on the arc while allowing coincident connections to move them.
+        // One angular DOF per endpoint. Cartesian x/y pairs over-parameterize
+        // the circle and make coincident constraints rank-deficient, which
+        // showed up as disconnected endpoints and oversized motion.
         if (!fixedPoints?.has(fixKey('start'))) {
-          variables.push({ elementId: el.id, pointType: 'start', coord: 'x', index: varIndex++ })
-          variables.push({ elementId: el.id, pointType: 'start', coord: 'y', index: varIndex++ })
+          variables.push({ elementId: el.id, pointType: 'startAngle', coord: 'x', index: varIndex++ })
         }
         if (!fixedPoints?.has(fixKey('end'))) {
-          variables.push({ elementId: el.id, pointType: 'end', coord: 'x', index: varIndex++ })
-          variables.push({ elementId: el.id, pointType: 'end', coord: 'y', index: varIndex++ })
+          variables.push({ elementId: el.id, pointType: 'endAngle', coord: 'x', index: varIndex++ })
         }
       }
-      if ((el.type === 'circle' && needsCircleRadiusVariable) || (el.type === 'arc' && needsArcRadiusVariable)) {
+      if (elementNeedsRadiusVariable(el, elements, constraints)) {
         variables.push({ elementId: el.id, pointType: 'radius', coord: 'x', index: varIndex++ })
       }
     }
@@ -934,41 +838,46 @@ export function solveConstraintsDetailed(
   const equations = buildConstraintEquations(constraints)
   if (equations.length === 0) return { elements, converged: true, iterations: 0, maxResidual: 0 }
 
-  // Sort by priority (lower first)
-  equations.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
-
   let currentElements = [...elements]
   let iteration = 0
   let maxResidual = Infinity
 
   for (iteration; iteration < maxIterations; iteration++) {
-    // Compute residuals
-    const residuals = equations.map((eq) => eq.residual(currentElements))
-    maxResidual = Math.max(...residuals.map(Math.abs))
+    const rawResiduals = equations.map((eq) => eq.residual(currentElements))
+    maxResidual = Math.max(...rawResiduals.map(Math.abs))
 
     if (maxResidual < tolerance) break
 
-    // Build Jacobian matrix (equations × variables)
-    const jacobian: number[][] = equations.map((eq) => eq.jacobian(currentElements, variables))
+    const weights = equations.map((eq) => eq.weight ?? 1)
+    const residuals = rawResiduals.map((value, index) => value * weights[index])
+    const columnScale = variables.map((variable) => {
+      if (variable.pointType !== 'startAngle' && variable.pointType !== 'endAngle') return 1
+      const el = currentElements.find((candidate) => candidate.id === variable.elementId)
+      return el && el.type === 'arc' ? Math.max(el.radius, 1e-3) : 1
+    })
+    const jacobian: number[][] = equations.map((eq, index) =>
+      eq.jacobian(currentElements, variables).map((value, column) => value * weights[index] / columnScale[column]),
+    )
 
     // Solve using damped least-squares: (J^T J + λI) δ = -J^T r
-    // This is robust for underdetermined and overdetermined systems.
+    // Angle columns are scaled to arc-length so the solver does not prefer
+    // huge angular steps over translating the center.
     const delta = solveDampedLeastSquares(jacobian, residuals, 1e-6)
 
-    // Update variables with damping (0.5 for stability)
     const dampingFactor = 0.5
-    const elementById = new Map(currentElements.map((element) => [element.id, element]))
     const updates = new Map<string, SketchElement>()
+    for (const element of currentElements) {
+      updates.set(element.id, element)
+    }
     for (const v of variables) {
-      const el = updates.get(v.elementId) ?? elementById.get(v.elementId)
+      const el = updates.get(v.elementId)
       if (!el) continue
 
       const oldValue = getVariableValue(el, v)
       if (oldValue === null) continue
 
-      const newValue = oldValue + dampingFactor * delta[v.index]
-      const updated = setPoint(el, v.pointType, v.coord, newValue)
-      updates.set(el.id, updated)
+      const newValue = oldValue + dampingFactor * delta[v.index] / columnScale[v.index]
+      updates.set(el.id, setPoint(el, v.pointType, v.coord, newValue))
     }
     currentElements = currentElements.map((element) => updates.get(element.id) ?? element)
   }

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { solveConstraints } from '../src/lib/constraintSolve'
-import type { SketchCircle, SketchConstraint, SketchLine } from '../src/store/modelStore'
+import type { SketchArc, SketchCircle, SketchConstraint, SketchLine } from '../src/store/modelStore'
+
+function arcEndpoint(arc: SketchArc, which: 'start' | 'end') {
+  const angle = which === 'start' ? arc.startAngle : arc.endAngle
+  return {
+    x: arc.center.x + Math.cos(angle) * arc.radius,
+    y: arc.center.y + Math.sin(angle) * arc.radius,
+  }
+}
 
 describe('Constraint Solver', () => {
   it('should maintain length constraint during dragging', () => {
@@ -228,8 +236,89 @@ describe('Constraint Solver', () => {
 
     if (solved[0].type === 'line') {
       const dx = solved[0].end.x - solved[0].start.x
-      console.log(`X difference after solving: ${dx}`)
-      expect(Math.abs(dx) < 0.01).toBe(true)
+    expect(Math.abs(dx) < 0.01).toBe(true)
     }
+  })
+
+  it('keeps a line coincident with an arc endpoint when the line is dragged off the circle', () => {
+    const arc: SketchArc = {
+      type: 'arc',
+      id: 'arc1',
+      center: { x: 0, y: 0 },
+      radius: 5,
+      startAngle: 0,
+      endAngle: Math.PI / 2,
+    }
+    const line: SketchLine = {
+      type: 'line',
+      id: 'l1',
+      start: { x: 10, y: 0 },
+      end: { x: 5, y: 0 },
+    }
+    const stray: SketchLine = {
+      type: 'line',
+      id: 'l2',
+      start: { x: 20, y: 20 },
+      end: { x: 24, y: 20 },
+    }
+    const constraints: SketchConstraint[] = [
+      { id: 'join', type: 'coincident', p1: { elementId: 'l1', which: 'end' }, p2: { elementId: 'arc1', which: 'start' } },
+    ]
+
+    const draggedLine = { ...line, end: { x: 8, y: 3 } }
+    const solved = solveConstraints(
+      [arc, draggedLine, stray],
+      constraints,
+      new Set(['l1:end']),
+    )
+
+    const solvedArc = solved.find((e): e is SketchArc => e.id === 'arc1' && e.type === 'arc')!
+    const solvedLine = solved.find((e): e is SketchLine => e.id === 'l1' && e.type === 'line')!
+    const solvedStray = solved.find((e): e is SketchLine => e.id === 'l2' && e.type === 'line')!
+    const start = arcEndpoint(solvedArc, 'start')
+
+    expect(Math.abs(solvedArc.radius - 5)).toBeLessThan(0.01)
+    expect(Math.hypot(solvedLine.end.x - start.x, solvedLine.end.y - start.y)).toBeLessThan(0.02)
+    expect(solvedStray.start).toEqual(stray.start)
+    expect(solvedStray.end).toEqual(stray.end)
+  })
+
+  it('keeps arc radius and tangency when a tangent line is dragged', () => {
+    const arc: SketchArc = {
+      type: 'arc',
+      id: 'arc1',
+      center: { x: 0, y: 0 },
+      radius: 5,
+      startAngle: 0,
+      endAngle: Math.PI / 2,
+    }
+    const line: SketchLine = {
+      type: 'line',
+      id: 'l1',
+      start: { x: -5, y: 5 },
+      end: { x: 5, y: 5 },
+    }
+    const constraints: SketchConstraint[] = [
+      { id: 't1', type: 'tangent', elementId1: 'l1', elementId2: 'arc1' },
+      { id: 'join', type: 'coincident', p1: { elementId: 'l1', which: 'end' }, p2: { elementId: 'arc1', which: 'end' } },
+    ]
+
+    const draggedLine = { ...line, start: { x: -5, y: 8 }, end: { x: 5, y: 8 } }
+    const solved = solveConstraints(
+      [arc, draggedLine],
+      constraints,
+      new Set(['l1:start', 'l1:end']),
+    )
+
+    const solvedArc = solved.find((e): e is SketchArc => e.id === 'arc1' && e.type === 'arc')!
+    const solvedLine = solved.find((e): e is SketchLine => e.id === 'l1' && e.type === 'line')!
+    const end = arcEndpoint(solvedArc, 'end')
+    const dx = solvedLine.end.x - solvedLine.start.x
+    const dy = solvedLine.end.y - solvedLine.start.y
+    const dist = Math.abs(dy * solvedArc.center.x - dx * solvedArc.center.y + solvedLine.end.x * solvedLine.start.y - solvedLine.end.y * solvedLine.start.x) / Math.hypot(dx, dy)
+
+    expect(Math.abs(solvedArc.radius - 5)).toBeLessThan(0.01)
+    expect(Math.abs(dist - solvedArc.radius)).toBeLessThan(0.05)
+    expect(Math.hypot(solvedLine.end.x - end.x, solvedLine.end.y - end.y)).toBeLessThan(0.05)
   })
 })
