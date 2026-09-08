@@ -28,7 +28,7 @@ import {
   closestPointOnCircle,
   angleInArc,
 } from '../../lib/sketchGeometry'
-import { findSnapTarget, rectCorners, elementEndpoints } from '../../lib/sketchInteraction'
+import { findSnapTarget, rectCorners, elementEndpoints, nearestSelectablePoint } from '../../lib/sketchInteraction'
 import { planeOriginFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { PLANE_SIZE } from '../../lib/units'
 import { distToSeg, distToCircle, distToArc, computeCut, computeCircleCut, computeArcCut, CutResult, CircleCutResult, ArcCutResult } from '../../lib/cutTool'
@@ -85,18 +85,20 @@ function Dot({ pos, color, screenSize, size = 0.06, ring = false }: { pos: [numb
 /** Let the invisible sketch plane receive hits in cut mode (Line2 otherwise wins the raycast). */
 const noopRaycast: () => void = () => {}
 
-  function SketchEl({ el, plane, highlighted, onPointerMove }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean; onPointerMove?: (e: ThreeEvent<PointerEvent>) => void }) {
-  const { activeTool, selectedElementIds, selectedPointRefs, highlightElementIds, selectElement, toggleElementSelection, showElementNames, addSketchConstraint, applyConstraints } = useModelStore(useShallow((state) => ({
+  function SketchEl({ el, plane, highlighted, onPointerMove, pointPickRadius, suppressElementClick }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean; onPointerMove?: (e: ThreeEvent<PointerEvent>) => void; pointPickRadius?: number; suppressElementClick?: () => boolean }) {
+  const { activeTool, selectedElementIds, selectedPointRefs, highlightElementIds, selectElement, selectPoint, togglePointSelection, toggleElementSelection, showElementNames, addSketchConstraint, applyConstraints } = useModelStore(useShallow((state) => ({
     activeTool: state.activeTool, selectedElementIds: state.selectedElementIds,
     selectedPointRefs: state.selectedPointRefs,
     highlightElementIds: state.highlightElementIds, selectElement: state.selectElement,
+    selectPoint: state.selectPoint, togglePointSelection: state.togglePointSelection,
     toggleElementSelection: state.toggleElementSelection, showElementNames: state.showElementNames,
     addSketchConstraint: state.addSketchConstraint, applyConstraints: state.applyConstraints,
   })))
   const [hovered, setHovered] = useState(false)
 
   const isConstruction = !!el.construction
-  const isSelected = selectedElementIds.includes(el.id)
+  const isPointPicked = selectedPointRefs.some((p) => p.elementId === el.id)
+  const isSelected = selectedElementIds.includes(el.id) && !isPointPicked
   const isNavHighlighted = highlightElementIds.includes(el.id)
   const baseColor = isConstruction ? '#4488aa' : '#ffdd44'
   const color = highlighted ? '#ff8844' : isNavHighlighted ? '#ff44ff' : isSelected ? '#ff8844' : hovered ? '#ffe888' : baseColor
@@ -113,6 +115,14 @@ const noopRaycast: () => void = () => {}
         onPointerUp: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation() },
         onClick: (e: ThreeEvent<MouseEvent>) => {
           e.stopPropagation()
+          if (suppressElementClick?.()) return
+          const raw = toSketch(e.point, plane)
+          const nearPoint = pointPickRadius != null ? nearestSelectablePoint(raw, el, pointPickRadius) : null
+          if (nearPoint) {
+            if (e.shiftKey) togglePointSelection(nearPoint.ref)
+            else selectPoint(nearPoint.ref)
+            return
+          }
 
           // If shift-clicking to select a second element, and the pair is (line, circle),
           // auto-add a tangent constraint and select the element.
@@ -215,6 +225,7 @@ function PointHandle({
   onDragMove,
   onDragEnd,
   onClick,
+  onPress,
   highlighted,
   selected,
 }: {
@@ -223,6 +234,7 @@ function PointHandle({
   onDragMove?: (e: ThreeEvent<PointerEvent>) => void
   onDragEnd?: (e: ThreeEvent<PointerEvent>) => void
   onClick?: (e: ThreeEvent<PointerEvent>) => void
+  onPress?: (e: ThreeEvent<PointerEvent>) => void
   highlighted?: boolean
   selected?: boolean
 }) {
@@ -230,7 +242,7 @@ function PointHandle({
   const dragging = useRef(false)
   const downPos = useRef<{ x: number; y: number } | null>(null)
   const { camera, size: viewSize } = useThree()
-  const HANDLE_SCREEN = 18
+  const HANDLE_SCREEN = 22
   const DRAG_PX = 5
   const p = new Vector3(pos[0], pos[1], pos[2])
   const distance = camera.position.distanceTo(p) || 1
@@ -242,11 +254,13 @@ function PointHandle({
     <mesh
       position={pos}
       scale={[worldSize, worldSize, worldSize]}
+      renderOrder={50}
       onPointerDown={(e) => {
         if (e.button !== 0) return
         e.stopPropagation()
         dragging.current = false
         downPos.current = { x: e.clientX, y: e.clientY }
+        onPress?.(e)
         ;(e.currentTarget as unknown as { setPointerCapture: (id: number) => void }).setPointerCapture(e.pointerId)
       }}
       onPointerMove={(e) => {
@@ -338,6 +352,7 @@ export function SketchPlane() {
   // Drag-box selection state (sketch-local coordinates)
   const [selectBoxStart, setSelectBoxStart] = useState<SketchPoint | null>(null)
   const [selectBoxEnd, setSelectBoxEnd] = useState<SketchPoint | null>(null)
+  const handleConsumedClick = useRef(false)
 
   useEffect(() => {
     setStartPt(null); setCursorPt(null); setCutPreview(null); setCutTarget(null); setSnapTarget(null); setStartSnapRef(null); setStartCircleId(null); setCoincidenceSource(null)
@@ -990,19 +1005,24 @@ export function SketchPlane() {
 
       {/* Elements — clickable in select mode, highlighted when targeted by cut */}
       {sketchElements.map((el) => (
-        <SketchEl key={el.id} el={el} plane={plane} highlighted={cutPreview?.lineId === el.id} onPointerMove={onMove} />
+        <SketchEl key={el.id} el={el} plane={plane} highlighted={cutPreview?.lineId === el.id} onPointerMove={onMove} pointPickRadius={snapObjectThreshold} suppressElementClick={() => {
+          if (!handleConsumedClick.current) return false
+          handleConsumedClick.current = false
+          return true
+        }} />
       ))}
 
       {/* Point handles — click to select, drag to move */}
       {activeTool === 'select' && sketchElements.map((el) => {
         const startDrag = (pointType: 'start' | 'end' | 'center') => (e: ThreeEvent<PointerEvent>) => {
           e.stopPropagation()
-          selectElement(el.id)
           setDragTarget({ elementId: el.id, pointType })
           setIsDraggingPoint(true)
         }
         const clickPoint = (pointType: 'start' | 'end' | 'center') => (e: ThreeEvent<PointerEvent>) => {
           e.stopPropagation()
+          handleConsumedClick.current = true
+          window.setTimeout(() => { handleConsumedClick.current = false }, 50)
           const ref: PointRef = { elementId: el.id, which: pointType }
           if (e.shiftKey) togglePointSelection(ref)
           else selectPoint(ref)
@@ -1012,17 +1032,17 @@ export function SketchPlane() {
         const handleHighlight = highlightElementIds.includes(el.id)
         if (el.type === 'line') return (
           <group key={el.id + '_handles'}>
-            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} onClick={clickPoint('start')} highlighted={handleHighlight} selected={pointSelected('start')} />
-            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} onClick={clickPoint('end')} highlighted={handleHighlight} selected={pointSelected('end')} />
+            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('start')} onClick={clickPoint('start')} highlighted={handleHighlight} selected={pointSelected('start')} />
+            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('end')} onClick={clickPoint('end')} highlighted={handleHighlight} selected={pointSelected('end')} />
           </group>
         )
         if (el.type === 'circle') return (
-          <PointHandle key={el.id + '_handle'} pos={getHandlePoint(el.center)} onDragStart={startDrag('center')} onDragMove={onMove} onDragEnd={onPointerUp} onClick={clickPoint('center')} highlighted={handleHighlight} selected={pointSelected('center')} />
+          <PointHandle key={el.id + '_handle'} pos={getHandlePoint(el.center)} onDragStart={startDrag('center')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('center')} onClick={clickPoint('center')} highlighted={handleHighlight} selected={pointSelected('center')} />
         )
         if (el.type === 'rect') return (
           <group key={el.id + '_handles'}>
-            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} onClick={clickPoint('start')} highlighted={handleHighlight} selected={pointSelected('start')} />
-            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} onClick={clickPoint('end')} highlighted={handleHighlight} selected={pointSelected('end')} />
+            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('start')} onClick={clickPoint('start')} highlighted={handleHighlight} selected={pointSelected('start')} />
+            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('end')} onClick={clickPoint('end')} highlighted={handleHighlight} selected={pointSelected('end')} />
           </group>
         )
         if (el.type === 'arc') {
@@ -1036,6 +1056,7 @@ export function SketchPlane() {
                   onDragStart={startDrag(ref.which)}
                   onDragMove={onMove}
                   onDragEnd={onPointerUp}
+                  onPress={clickPoint(ref.which)}
                   onClick={clickPoint(ref.which)}
                   highlighted={handleHighlight}
                   selected={pointSelected(ref.which)}

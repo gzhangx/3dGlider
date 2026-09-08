@@ -35,6 +35,28 @@ export function elementEndpoints(el: SketchElement): { pt: SketchPoint; ref: Poi
   return []
 }
 
+export function selectablePoints(el: SketchElement): { pt: SketchPoint; ref: PointRef }[] {
+  const points = elementEndpoints(el)
+  if (el.type === 'circle' || el.type === 'arc') {
+    points.push({ pt: el.center, ref: { elementId: el.id, which: 'center' } })
+  }
+  return points
+}
+
+export function nearestSelectablePoint(
+  raw: SketchPoint,
+  el: SketchElement,
+  radius: number,
+): { pt: SketchPoint; ref: PointRef } | null {
+  let best: { pt: SketchPoint; ref: PointRef; dist: number } | null = null
+  for (const candidate of selectablePoints(el)) {
+    const dist = Math.hypot(raw.x - candidate.pt.x, raw.y - candidate.pt.y)
+    if (dist > radius) continue
+    if (!best || dist < best.dist) best = { ...candidate, dist }
+  }
+  return best
+}
+
 export function isLineTangentToCircle(lineStart: SketchPoint, lineEnd: SketchPoint, center: SketchPoint, radius: number, tolerance = 0.05): boolean {
   const dist = distancePointToLine(center, lineStart, lineEnd)
   return Math.abs(dist - radius) < tolerance
