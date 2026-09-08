@@ -140,11 +140,13 @@ export function SketchSidebar() {
     addC({ type: 'equal', elementId1: line1.id, elementId2: line2.id })
   }
   const setTangent = () => {
-    // Tangent can be between line and circle, or circle and line
-    const line = sel1?.type === 'line' ? (sel1 as SketchLine) : sel2?.type === 'line' ? (sel2 as SketchLine) : null
-    const circle = sel1?.type === 'circle' ? sel1 : sel2?.type === 'circle' ? sel2 : null
-    if (!line || !circle) return
-    addC({ type: 'tangent', elementId1: line.id, elementId2: circle.id })
+    const line = sel1?.type === 'line' ? sel1 : sel2?.type === 'line' ? sel2 : null
+    const radial = sel1 && (sel1.type === 'circle' || sel1.type === 'arc') ? sel1
+      : sel2 && (sel2.type === 'circle' || sel2.type === 'arc') ? sel2
+      : null
+    if (!line || !radial) return
+    addC({ type: 'tangent', elementId1: line.id, elementId2: radial.id })
+    applyConstraints()
   }
   const setCoincident = (p1which: 'start' | 'end', p2which: 'start' | 'end') => {
     if (!sel1 || !sel2) return
@@ -207,6 +209,11 @@ export function SketchSidebar() {
 
   const hasTwoLines = !!(line1 && line2)
   const hasTwoEls   = !!(sel1 && sel2)
+  const isRadial = (type: string | undefined) => type === 'circle' || type === 'arc'
+  const hasLineAndRadial = hasTwoEls && (
+    (sel1?.type === 'line' && isRadial(sel2?.type)) ||
+    (isRadial(sel1?.type) && sel2?.type === 'line')
+  )
   const showConstraints = activeTool === 'select' && !!sel1
 
   let hintText = ''
@@ -413,11 +420,14 @@ export function SketchSidebar() {
             </>
           )}
 
-          {/* ── Line + Circle: tangent ── */}
-          {hasTwoEls && ((sel1?.type === 'line' && sel2?.type === 'circle') || (sel1?.type === 'circle' && sel2?.type === 'line')) && (
-            <div className={styles.iconBtnRow}>
-              <button className={styles.iconConstraintBtn} onClick={setTangent} title="Tangent constraint">⌶</button>
-            </div>
+          {/* ── Line + circle/arc: tangent ── */}
+          {hasLineAndRadial && (
+            <>
+              <span className={styles.coincidentLabel}>Tangent:</span>
+              <div className={styles.iconBtnRow}>
+                <button className={styles.iconConstraintBtn} onClick={setTangent} title="Make line tangent to circle or arc">⌶</button>
+              </div>
+            </>
           )}
 
           {/* 2nd element indicator */}
