@@ -118,15 +118,16 @@ const noopRaycast: () => void = () => {}
           if (suppressElementClick?.()) return
           const raw = toSketch(e.point, plane)
           const nearPoint = pointPickRadius != null ? nearestSelectablePoint(raw, el, pointPickRadius) : null
+          const shift = !!(e.shiftKey || e.nativeEvent.shiftKey)
           if (nearPoint) {
-            if (e.shiftKey) togglePointSelection(nearPoint.ref)
+            if (shift) togglePointSelection(nearPoint.ref)
             else selectPoint(nearPoint.ref)
             return
           }
 
           // If shift-clicking to select a second element, and the pair is (line, circle),
           // auto-add a tangent constraint and select the element.
-          if (e.shiftKey) {
+          if (shift) {
             const currentlySelected = selectedElementIds ?? []
             const pickingPointOnCurve = selectedPointRefs.length > 0
             // If exactly one other element is selected and it's not this one
@@ -167,7 +168,7 @@ const noopRaycast: () => void = () => {}
 
   // In non-select modes, pointer events must go to the invisible hit-test plane,
   // not to rendered sketch geometry (which would shift e.point off-plane).
-  const hitPlanePassthrough = activeTool !== 'select' ? { raycast: noopRaycast } : {}
+  const visibleLineProps = { raycast: noopRaycast }
   const dashProps = isConstruction ? { dashed: true, dashSize: 0.18, gapSize: 0.12 } : {}
 
   // Render geometry and optional name label
@@ -177,7 +178,7 @@ const noopRaycast: () => void = () => {}
     const points = linePts(el.start, el.end, plane)
     shape = <>
       {activeTool === 'select' && <Line points={points} color="#ffffff" lineWidth={16} transparent opacity={0} depthWrite={false} {...selectProps} />}
-      <Line points={points} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+      <Line points={points} color={color} lineWidth={width} {...visibleLineProps} {...dashProps} />
     </>
     const mid = { x: (el.start.x + el.end.x) / 2, y: (el.start.y + el.end.y) / 2 }
     labelPos = worldPt(mid, plane)
@@ -185,7 +186,7 @@ const noopRaycast: () => void = () => {}
     const points = rectPts(el.start, el.end, plane)
     shape = <>
       {activeTool === 'select' && <Line points={points} color="#ffffff" lineWidth={16} transparent opacity={0} depthWrite={false} {...selectProps} />}
-      <Line points={points} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+      <Line points={points} color={color} lineWidth={width} {...visibleLineProps} {...dashProps} />
     </>
     const mid = { x: (el.start.x + el.end.x) / 2, y: (el.start.y + el.end.y) / 2 }
     labelPos = worldPt(mid, plane)
@@ -193,14 +194,14 @@ const noopRaycast: () => void = () => {}
     const points = circlePts(el.center, el.radius, plane, 64)
     shape = <>
       {activeTool === 'select' && <Line points={points} color="#ffffff" lineWidth={16} transparent opacity={0} depthWrite={false} {...selectProps} />}
-      <Line points={points} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+      <Line points={points} color={color} lineWidth={width} {...visibleLineProps} {...dashProps} />
     </>
     labelPos = worldPt(el.center, plane)
   } else if (el.type === 'arc') {
     const points = arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64)
     shape = <>
       {activeTool === 'select' && <Line points={points} color="#ffffff" lineWidth={16} transparent opacity={0} depthWrite={false} {...selectProps} />}
-      <Line points={points} color={color} lineWidth={width} {...hitPlanePassthrough} {...selectProps} {...dashProps} />
+      <Line points={points} color={color} lineWidth={width} {...visibleLineProps} {...dashProps} />
     </>
     labelPos = worldPt(el.center, plane)
   }
@@ -1005,11 +1006,7 @@ export function SketchPlane() {
 
       {/* Elements — clickable in select mode, highlighted when targeted by cut */}
       {sketchElements.map((el) => (
-        <SketchEl key={el.id} el={el} plane={plane} highlighted={cutPreview?.lineId === el.id} onPointerMove={onMove} pointPickRadius={snapObjectThreshold} suppressElementClick={() => {
-          if (!handleConsumedClick.current) return false
-          handleConsumedClick.current = false
-          return true
-        }} />
+        <SketchEl key={el.id} el={el} plane={plane} highlighted={cutPreview?.lineId === el.id} onPointerMove={onMove} pointPickRadius={snapObjectThreshold} suppressElementClick={() => handleConsumedClick.current} />
       ))}
 
       {/* Point handles — click to select, drag to move */}
@@ -1022,9 +1019,10 @@ export function SketchPlane() {
         const clickPoint = (pointType: 'start' | 'end' | 'center') => (e: ThreeEvent<PointerEvent>) => {
           e.stopPropagation()
           handleConsumedClick.current = true
-          window.setTimeout(() => { handleConsumedClick.current = false }, 50)
+          window.setTimeout(() => { handleConsumedClick.current = false }, 80)
           const ref: PointRef = { elementId: el.id, which: pointType }
-          if (e.shiftKey) togglePointSelection(ref)
+          const shift = !!(e.shiftKey || e.nativeEvent.shiftKey)
+          if (shift) togglePointSelection(ref)
           else selectPoint(ref)
         }
         const pointSelected = (which: PointRef['which']) =>
