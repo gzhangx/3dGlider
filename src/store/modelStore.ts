@@ -346,6 +346,7 @@ export interface ModelState {
   selectedElementId: string | null
   selectedElementId2: string | null       // second selection for angle constraint
   selectedElementIds: string[]            // full multi-select set (slot1==[0], slot2==[1])
+  selectedPointRefs: PointRef[]           // selected endpoints/centers for coincidence
   isDraggingPoint: boolean
   highlightElementIds: string[]
   showSketchNavigator: boolean
@@ -374,6 +375,8 @@ export interface ModelState {
   selectElement2: (id: string | null) => void
   toggleElementSelection: (id: string) => void
   selectElements: (ids: string[]) => void
+  selectPoint: (ref: PointRef) => void
+  togglePointSelection: (ref: PointRef) => void
   setIsDraggingPoint: (v: boolean) => void
   setHighlightElementIds: (ids: string[]) => void
   resetSketchView: () => void
@@ -439,6 +442,7 @@ export const useModelStore = create<ModelState>((set) => ({
   selectedElementId: null,
   selectedElementId2: null,
   selectedElementIds: [],
+  selectedPointRefs: [],
   isDraggingPoint: false,
   highlightElementIds: [],
   showSketchNavigator: false,
@@ -455,12 +459,12 @@ export const useModelStore = create<ModelState>((set) => ({
   showElementNames: false,
 
   setHoveredPlane: (hoveredPlane) => set({ hoveredPlane }),
-  setActiveTool: (activeTool) => set({ activeTool, selectedElementId: null, selectedElementId2: null, selectedElementIds: [] }),
+  setActiveTool: (activeTool) => set({ activeTool, selectedElementId: null, selectedElementId2: null, selectedElementIds: [], selectedPointRefs: [] }),
   setConstructionMode: (constructionMode) => set({ constructionMode }),
   setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
   setSnapToOtherPlanes: (snapToOtherPlanes) => set({ snapToOtherPlanes }),
   setSnapToObjects: (snapToObjects) => set({ snapToObjects }),
-  selectElement: (id) => set({ selectedElementId: id, selectedElementId2: null, selectedElementIds: id ? [id] : [], highlightElementIds: [] }),
+  selectElement: (id) => set({ selectedElementId: id, selectedElementId2: null, selectedElementIds: id ? [id] : [], selectedPointRefs: [], highlightElementIds: [] }),
   selectElement2: (id) => set((s) => ({
     selectedElementId2: id,
     selectedElementIds: id
@@ -474,13 +478,40 @@ export const useModelStore = create<ModelState>((set) => ({
       selectedElementIds: next,
       selectedElementId:  next[0] ?? null,
       selectedElementId2: next[1] ?? null,
+      selectedPointRefs: already
+        ? s.selectedPointRefs.filter((p) => p.elementId !== id)
+        : s.selectedPointRefs,
     }
   }),
   selectElements: (ids) => set({
     selectedElementIds: ids,
     selectedElementId:  ids[0] ?? null,
     selectedElementId2: ids[1] ?? null,
+    selectedPointRefs: [],
     highlightElementIds: [],
+  }),
+  selectPoint: (ref) => set({
+    selectedPointRefs: [ref],
+    selectedElementIds: [ref.elementId],
+    selectedElementId: ref.elementId,
+    selectedElementId2: null,
+    highlightElementIds: [],
+  }),
+  togglePointSelection: (ref) => set((s) => {
+    const exists = s.selectedPointRefs.some((p) => p.elementId === ref.elementId && p.which === ref.which)
+    let points = exists
+      ? s.selectedPointRefs.filter((p) => !(p.elementId === ref.elementId && p.which === ref.which))
+      : [...s.selectedPointRefs, ref]
+    if (points.length > 2) points = points.slice(-2)
+    const ids = s.selectedElementIds.includes(ref.elementId)
+      ? s.selectedElementIds
+      : [...s.selectedElementIds, ref.elementId]
+    return {
+      selectedPointRefs: points,
+      selectedElementIds: ids,
+      selectedElementId: ids[0] ?? null,
+      selectedElementId2: ids[1] ?? null,
+    }
   }),
   setIsDraggingPoint: (isDraggingPoint) => set({ isDraggingPoint }),
   setHighlightElementIds: (highlightElementIds) => set({ highlightElementIds }),
@@ -540,6 +571,7 @@ export const useModelStore = create<ModelState>((set) => ({
       selectedElementId: null,
       selectedElementId2: null,
       selectedElementIds: [],
+      selectedPointRefs: [],
       sketchElements: s.sketchElements.filter((el) => el.id !== id),
       sketchConstraints: s.sketchConstraints.filter((constraint) => !constraintElementIds(constraint).includes(id)),
     })),
@@ -697,6 +729,7 @@ export const useModelStore = create<ModelState>((set) => ({
       selectedElementId: null,
       selectedElementId2: null,
       selectedElementIds: [],
+      selectedPointRefs: [],
       highlightElementIds: [],
       editingSketchId: null,
     }),
@@ -716,6 +749,7 @@ export const useModelStore = create<ModelState>((set) => ({
         selectedElementId: null,
         selectedElementId2: null,
         selectedElementIds: [],
+        selectedPointRefs: [],
         highlightElementIds: [],
         editingSketchId: target.id,
       }
@@ -764,6 +798,7 @@ export const useModelStore = create<ModelState>((set) => ({
         selectedElementId: null,
         selectedElementId2: null,
         selectedElementIds: [],
+        selectedPointRefs: [],
         highlightElementIds: [],
         editingSketchId: null,
         sketches,

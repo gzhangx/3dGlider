@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
-  useModelStore, SketchTool, SketchLine, SketchRect, SketchCircle, SketchArc, SketchPoint, SketchConstraint,
+  useModelStore, SketchTool, SketchLine, SketchRect, SketchCircle, SketchArc, SketchConstraint,
 } from '../../store/modelStore'
 import {
   lineLength, angleBetween,
@@ -10,6 +10,7 @@ import {
   applyRectWidth, applyRectHeight, rectWidth, rectHeight,
   applyRadius,
 } from '../../lib/constraintSolve'
+import { coincidenceConstraintForSelection, sketchPoint, sketchPointUpdates } from '../../lib/sketchInteraction'
 import styles from './SketchSidebar.module.css'
 import { constraintElementIds } from '../../lib/constraintUtils'
 import { SCENE_TO_MM } from '../../lib/units'
@@ -38,7 +39,7 @@ export function SketchSidebar() {
     mode, activeTool, constructionMode, snapToGrid, snapToOtherPlanes, snapToObjects, showSketchNavigator,
     setActiveTool, setConstructionMode, setSnapToGrid, setSnapToOtherPlanes, setSnapToObjects, setShowSketchNavigator,
     sketchElements, sketchConstraints, parameters,
-    selectedElementIds, selectElement2,
+    selectedElementIds, selectedPointRefs, selectElement2,
     updateSketchElement, addSketchConstraint, deleteSketchConstraint, applyConstraints,
     setHighlightElementIds, showElementNames, setShowElementNames,
   } = useModelStore(useShallow((state) => ({
@@ -50,6 +51,7 @@ export function SketchSidebar() {
     setSnapToObjects: state.setSnapToObjects, setShowSketchNavigator: state.setShowSketchNavigator,
     sketchElements: state.sketchElements, sketchConstraints: state.sketchConstraints,
     parameters: state.parameters, selectedElementIds: state.selectedElementIds,
+    selectedPointRefs: state.selectedPointRefs,
     selectElement2: state.selectElement2, updateSketchElement: state.updateSketchElement,
     addSketchConstraint: state.addSketchConstraint, deleteSketchConstraint: state.deleteSketchConstraint,
     applyConstraints: state.applyConstraints, setHighlightElementIds: state.setHighlightElementIds,
@@ -150,10 +152,27 @@ export function SketchSidebar() {
   }
   const setCoincident = (p1which: 'start' | 'end', p2which: 'start' | 'end') => {
     if (!sel1 || !sel2) return
-    const p1el = sel1 as SketchLine
-    const src: SketchPoint = p1which === 'start' ? p1el.start : p1el.end
-    upd(sel2.id, { [p2which]: { x: src.x, y: src.y } })
+    const src = sketchPoint(sel1, p1which)
+    if (!src) return
+    const updates = sketchPointUpdates(sel2, p2which, src)
+    if (updates) upd(sel2.id, updates)
     addC({ type: 'coincident', p1: { elementId: sel1.id, which: p1which }, p2: { elementId: sel2.id, which: p2which } })
+    applyConstraints()
+  }
+  const applySelectedCoincidence = () => {
+    const draft = coincidenceConstraintForSelection(selectedPointRefs, selectedElementIds, sketchElements)
+    if (!draft) return
+    if (draft.type === 'coincident') {
+      const el1 = sketchElements.find((el) => el.id === draft.p1.elementId)
+      const el2 = sketchElements.find((el) => el.id === draft.p2.elementId)
+      const pt2 = el2 ? sketchPoint(el2, draft.p2.which) : null
+      if (el1 && pt2) {
+        const updates = sketchPointUpdates(el1, draft.p1.which, pt2)
+        if (updates) upd(el1.id, updates)
+      }
+    }
+    addC(draft)
+    applyConstraints()
   }
 
   // ── rect ──────────────────────────────────────────────────────────────────
@@ -204,23 +223,28 @@ export function SketchSidebar() {
     if (c.type === 'equal')         return `= equal`
     if (c.type === 'tangent')       return `⌶ tangent`
     if (c.type === 'pointOnCircle') return `⊙ on circle`
+    if (c.type === 'pointOnLine')   return `⊙ on line`
     return (c as { type: string }).type
   }
 
   const hasTwoLines = !!(line1 && line2)
   const hasTwoEls   = !!(sel1 && sel2)
   const isRadial = (type: string | undefined) => type === 'circle' || type === 'arc'
+  const hasEndpoints = (type: string | undefined) => type === 'line' || type === 'rect' || type === 'arc'
   const hasLineAndRadial = hasTwoEls && (
     (sel1?.type === 'line' && isRadial(sel2?.type)) ||
     (isRadial(sel1?.type) && sel2?.type === 'line')
   )
-  const showConstraints = activeTool === 'select' && !!sel1
+  const coincidenceDraft = coincidenceConstraintForSelection(selectedPointRefs, selectedElementIds, sketchElements)
+  const showConstraints = activeTool === 'select' && (!!sel1 || selectedPointRefs.length > 0)
 
   let hintText = ''
   if (activeTool !== 'select') {
     hintText = constructionMode ? 'Drawing construction geometry' : 'Click 1st point · Click 2nd point · Esc cancel'
   } else if (!sel1) {
-    hintText = 'Click element · Shift+click or drag-box for multi'
+    hintText = 'Click element or endpoint · Shift+click for multi'
+  } else if (selectedPointRefs.length === 1 && !sel2) {
+    hintText = 'Shift-click another endpoint or a line/circle/arc'
   } else if (!sel2) {
     hintText = `${selectedElementIds.length} selected · Shift+click 2nd for constraints`
   }
@@ -401,8 +425,32 @@ export function SketchSidebar() {
             </>
           )}
 
-          {/* ── Two elements: coincident endpoint picker ── */}
-          {hasTwoEls && (sel1?.type === 'line' || sel1?.type === 'rect') && (sel2?.type === 'line' || sel2?.type === 'rect') && (
+          {/* ── Selected endpoints / endpoint + curve: coincidence ── */}
+          {coincidenceDraft && (
+            <>
+              <span className={styles.coincidentLabel}>
+                {coincidenceDraft.type === 'coincident' ? 'Coincident points:' : 'Coincident on curve:'}
+              </span>
+              <div className={styles.iconBtnRow}>
+                <button
+                  className={styles.iconConstraintBtn}
+                  onClick={applySelectedCoincidence}
+                  title={
+                    coincidenceDraft.type === 'coincident'
+                      ? 'Connect the two selected endpoints'
+                      : coincidenceDraft.type === 'pointOnLine'
+                        ? 'Put the selected endpoint on the line'
+                        : 'Put the selected endpoint on the circle or arc'
+                  }
+                >
+                  ⊙
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── Two elements with endpoints: coincident pair picker ── */}
+          {hasTwoEls && hasEndpoints(sel1?.type) && hasEndpoints(sel2?.type) && selectedPointRefs.length === 0 && (
             <>
               <span className={styles.coincidentLabel}>Coincident:</span>
               <div className={styles.iconBtnRow}>

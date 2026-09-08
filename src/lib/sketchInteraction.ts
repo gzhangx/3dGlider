@@ -222,3 +222,65 @@ export function findSnapTarget(
 
   return best
 }
+
+export function pointRefsEqual(a: PointRef, b: PointRef): boolean {
+  return a.elementId === b.elementId && a.which === b.which
+}
+
+export function sketchPoint(el: SketchElement, which: PointRef['which']): SketchPoint | null {
+  if ((el.type === 'line' || el.type === 'rect') && (which === 'start' || which === 'end')) {
+    return which === 'start' ? el.start : el.end
+  }
+  if ((el.type === 'circle' || el.type === 'arc') && which === 'center') return el.center
+  if (el.type === 'arc' && (which === 'start' || which === 'end')) {
+    const angle = which === 'start' ? el.startAngle : el.endAngle
+    return {
+      x: el.center.x + Math.cos(angle) * el.radius,
+      y: el.center.y + Math.sin(angle) * el.radius,
+    }
+  }
+  return null
+}
+
+export function sketchPointUpdates(
+  el: SketchElement,
+  which: PointRef['which'],
+  pt: SketchPoint,
+): Partial<SketchElement> | null {
+  if ((el.type === 'line' || el.type === 'rect') && (which === 'start' || which === 'end')) {
+    return { [which]: pt }
+  }
+  if ((el.type === 'circle' || el.type === 'arc') && which === 'center') return { center: pt }
+  if (el.type === 'arc' && (which === 'start' || which === 'end')) {
+    const key = which === 'start' ? 'startAngle' : 'endAngle'
+    return { [key]: Math.atan2(pt.y - el.center.y, pt.x - el.center.x) }
+  }
+  return null
+}
+
+export type CoincidenceDraft =
+  | { type: 'coincident'; p1: PointRef; p2: PointRef }
+  | { type: 'pointOnLine'; p: PointRef; lineId: string }
+  | { type: 'pointOnCircle'; p: PointRef; circleId: string }
+
+/** Build a coincidence constraint from selected endpoints and/or a second curve. */
+export function coincidenceConstraintForSelection(
+  pointRefs: PointRef[],
+  selectedIds: string[],
+  elements: SketchElement[],
+): CoincidenceDraft | null {
+  if (pointRefs.length >= 2) {
+    const [p1, p2] = pointRefs
+    if (pointRefsEqual(p1, p2)) return null
+    return { type: 'coincident', p1, p2 }
+  }
+  if (pointRefs.length !== 1) return null
+  const p = pointRefs[0]
+  const otherId = selectedIds.find((id) => id !== p.elementId)
+  if (!otherId) return null
+  const other = elements.find((el) => el.id === otherId)
+  if (!other) return null
+  if (other.type === 'line') return { type: 'pointOnLine', p, lineId: other.id }
+  if (other.type === 'circle' || other.type === 'arc') return { type: 'pointOnCircle', p, circleId: other.id }
+  return null
+}
