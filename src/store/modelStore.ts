@@ -385,6 +385,7 @@ export interface ModelState {
   setShowElementNames: (v: boolean) => void
   addSketchElement: (el: SketchElement) => void
   updateSketchElement: (id: string, updates: Partial<SketchElement>) => void
+  replaceSketchElements: (elements: SketchElement[]) => void
   deleteSketchElement: (id: string) => void
   cutSketchElement: (id: string, replacements: SketchElement[]) => void
   addSketchConstraint: (c: SketchConstraint) => void
@@ -557,6 +558,8 @@ export const useModelStore = create<ModelState>((set) => ({
     set((s) => ({
       sketchElements: s.sketchElements.map((el) => el.id === id ? { ...el, ...updates } as SketchElement : el),
     })),
+
+  replaceSketchElements: (elements) => set({ sketchElements: elements }),
 
   // Only touches the live `sketchElements` scratch state (like addSketchElement/
   // updateSketchElement/cutSketchElement) — `sketches[]` is just a snapshot,

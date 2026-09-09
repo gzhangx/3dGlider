@@ -312,6 +312,20 @@ function pinCoincidentPartners(
   return { elements: current, fixedPoints: pinned }
 }
 
+/** Dragging a point that already sits on a circle must not drag the circle with it. */
+function pinPointOnCircleHosts(
+  constraints: SketchConstraint[],
+  fixedPoints: Set<string>,
+): Set<string> {
+  const pinned = new Set(fixedPoints)
+  for (const constraint of constraints) {
+    if (constraint.type !== 'pointOnCircle') continue
+    if (!pinned.has(`${constraint.p.elementId}:${constraint.p.which}`)) continue
+    pinned.add(`${constraint.circleId}:center`)
+  }
+  return pinned
+}
+
 /** Finite-difference row for constraints whose target geometry may also move. */
 function numericJacobian(
   residual: (elements: SketchElement[]) => number,
@@ -849,7 +863,7 @@ export function solveConstraintsDetailed(
 
   const pinned = pinCoincidentPartners(elements, constraints, fixedPoints ?? new Set())
   const workingElements = pinned.elements
-  const workingFixed = pinned.fixedPoints
+  const workingFixed = pinPointOnCircleHosts(constraints, pinned.fixedPoints)
 
   // Find all variables (movable element points)
   const variables: SolverVariable[] = []
@@ -918,7 +932,7 @@ export function solveConstraintsDetailed(
       return now - rest
     },
     jacobian: (_els, vars) => vars.map((candidate) => candidate.index === variable.index ? 1 : 0),
-    weight: 0.08,
+    weight: 0.008,
   }))
 
   const sketchEquations = buildConstraintEquations(constraints)

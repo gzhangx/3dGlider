@@ -28,7 +28,15 @@ import {
   closestPointOnCircle,
   angleInArc,
 } from '../../lib/sketchGeometry'
-import { findSnapTarget, rectCorners, elementEndpoints, nearestSelectablePoint } from '../../lib/sketchInteraction'
+import {
+  findSnapTarget,
+  rectCorners,
+  elementEndpoints,
+  nearestSelectablePoint,
+  constraintClusterIds,
+  dragSnapConflictsWithConstraints,
+  constrainDragPosition,
+} from '../../lib/sketchInteraction'
 import { planeOriginFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { PLANE_SIZE } from '../../lib/units'
 import { distToSeg, distToCircle, distToArc, computeCut, computeCircleCut, computeArcCut, CutResult, CircleCutResult, ArcCutResult } from '../../lib/cutTool'
@@ -314,7 +322,7 @@ export function SketchPlane() {
     activePlane, activeTool, constructionMode, snapToGrid, snapToOtherPlanes, snapToObjects,
     sketchElements, sketchConstraints, sketches, editingSketchId,
     selectedElementIds, selectedPointRefs, selectElement, selectElements, selectPoint, togglePointSelection,
-    addSketchElement, updateSketchElement, deleteSketchElement, cutSketchElement, exitSketch,
+    addSketchElement, updateSketchElement, replaceSketchElements, deleteSketchElement, cutSketchElement, exitSketch,
     addSketchConstraint, addSketchConstraintsBatch, setIsDraggingPoint, highlightElementIds, setHighlightElementIds,
   } = useModelStore(useShallow((state) => ({
     activePlane: state.activePlane, activeTool: state.activeTool,
@@ -325,7 +333,8 @@ export function SketchPlane() {
     selectedElementIds: state.selectedElementIds, selectedPointRefs: state.selectedPointRefs,
     selectElement: state.selectElement, selectPoint: state.selectPoint, togglePointSelection: state.togglePointSelection,
     selectElements: state.selectElements, addSketchElement: state.addSketchElement,
-    updateSketchElement: state.updateSketchElement, deleteSketchElement: state.deleteSketchElement,
+    updateSketchElement: state.updateSketchElement, replaceSketchElements: state.replaceSketchElements,
+    deleteSketchElement: state.deleteSketchElement,
     cutSketchElement: state.cutSketchElement, exitSketch: state.exitSketch,
     addSketchConstraint: state.addSketchConstraint,
     addSketchConstraintsBatch: state.addSketchConstraintsBatch,
@@ -523,11 +532,18 @@ export function SketchPlane() {
 
     // ── drag mode ────────────────────────────────────────────────────────────
     if (dragTarget) {
+      const live = useModelStore.getState()
+      const liveElements = live.sketchElements
+      const liveConstraints = live.sketchConstraints
+      const dragRef: PointRef = { elementId: dragTarget.elementId, which: dragTarget.pointType }
+      const cluster = constraintClusterIds(dragTarget.elementId, liveConstraints)
+
       // If dragging a line endpoint, provide the other endpoint as `lineStart`
-      // so tangent-to-circle snapping can be detected while dragging.
+      // so tangent-to-circle snapping can be detected while dragging — but only
+      // onto geometry that is not already in this constraint cluster.
       let lineStartForSnap: SketchPoint | null = null
       let activeToolForSnap = activeTool
-      const draggedEl = sketchElements.find((e) => e.id === dragTarget.elementId)
+      const draggedEl = liveElements.find((e) => e.id === dragTarget.elementId)
       if (draggedEl && draggedEl.type === 'line') {
         const le = draggedEl as SketchLine
         lineStartForSnap = dragTarget.pointType === 'start' ? le.end : le.start
@@ -536,7 +552,7 @@ export function SketchPlane() {
 
       const snap = findSnapTarget(
         raw,
-        sketchElements,
+        liveElements,
         sketches,
         editingSketchId,
         plane,
@@ -548,11 +564,18 @@ export function SketchPlane() {
         snapTangentThreshold,
         lineStartForSnap,
         dragTarget.elementId,
+        cluster,
       )
-      setDragSnapTarget(snap)
-      const pt = snap ? snap.pt : doSnap(raw)
+      const usableSnap = snap && !dragSnapConflictsWithConstraints(dragRef, snap, liveConstraints) ? snap : null
+      setDragSnapTarget(usableSnap)
+      const pt = constrainDragPosition(
+        usableSnap ? usableSnap.pt : doSnap(raw),
+        dragRef,
+        liveElements,
+        liveConstraints,
+      )
 
-      let updated = sketchElements.map((el) => {
+      let updated = liveElements.map((el) => {
         if (el.id !== dragTarget.elementId) return el
         if (el.type === 'arc' && (dragTarget.pointType === 'start' || dragTarget.pointType === 'end')) {
           const angle = Math.atan2(pt.y - el.center.y, pt.x - el.center.x)
@@ -565,11 +588,8 @@ export function SketchPlane() {
       })
 
       const fixedPoints = new Set<string>([`${dragTarget.elementId}:${dragTarget.pointType}`])
-      updated = solveConstraints(updated, sketchConstraints, fixedPoints)
-
-      for (const newEl of updated) {
-        updateSketchElement(newEl.id, newEl as Parameters<typeof updateSketchElement>[1])
-      }
+      updated = solveConstraints(updated, liveConstraints, fixedPoints)
+      replaceSketchElements(updated)
       return
     }
 
@@ -840,10 +860,16 @@ export function SketchPlane() {
 
   const onPointerUp = () => {
     if (dragTarget) {
-      if (dragSnapTarget?.ref) {
+      const live = useModelStore.getState()
+      const liveElements = live.sketchElements
+      const liveConstraints = live.sketchConstraints
+      const dragRef: PointRef = { elementId: dragTarget.elementId, which: dragTarget.pointType }
+      const snapOk = dragSnapTarget && !dragSnapConflictsWithConstraints(dragRef, dragSnapTarget, liveConstraints)
+
+      if (snapOk && dragSnapTarget?.ref) {
         const p1: PointRef = { elementId: dragTarget.elementId, which: dragTarget.pointType }
         const p2 = dragSnapTarget.ref
-        const alreadyLinked = sketchConstraints.some(
+        const alreadyLinked = liveConstraints.some(
           (c) => c.type === 'coincident' && (
             (c.p1.elementId === p1.elementId && c.p1.which === p1.which && c.p2.elementId === p2.elementId && c.p2.which === p2.which) ||
             (c.p2.elementId === p1.elementId && c.p2.which === p1.which && c.p1.elementId === p2.elementId && c.p1.which === p2.which)
@@ -852,12 +878,9 @@ export function SketchPlane() {
         if (!alreadyLinked) {
           const c = { id: crypto.randomUUID(), type: 'coincident' as const, p1, p2 }
           addSketchConstraint(c)
-          // Immediately apply the new coincident constraint so elements stay snapped
-          const allConstraints = [...sketchConstraints, c]
-          const solved = solveConstraints(sketchElements, allConstraints, new Set())
-          for (const sEl of solved) updateSketchElement(sEl.id, sEl as Parameters<typeof updateSketchElement>[1])
+          replaceSketchElements(solveConstraints(liveElements, [...liveConstraints, c], new Set()))
         }
-      } else if (dragSnapTarget?.tangentCircleId) {
+      } else if (snapOk && dragSnapTarget?.tangentCircleId) {
         const tc: TangentConstraint = { id: crypto.randomUUID(), type: 'tangent', elementId1: dragTarget.elementId, elementId2: dragSnapTarget.tangentCircleId }
         const pointOnCircle: SketchConstraint = {
           id: crypto.randomUUID(),
@@ -865,22 +888,21 @@ export function SketchPlane() {
           p: { elementId: dragTarget.elementId, which: dragTarget.pointType },
           circleId: dragSnapTarget.tangentCircleId,
         }
-        // The batch API de-duplicates either constraint and solves them together.
         addSketchConstraintsBatch([tc, pointOnCircle], true)
-      } else if (dragSnapTarget?.circleId) {
+      } else if (snapOk && dragSnapTarget?.circleId) {
         const c = { id: crypto.randomUUID(), type: 'pointOnCircle' as const, p: { elementId: dragTarget.elementId, which: dragTarget.pointType } as PointRef, circleId: dragSnapTarget.circleId }
         addSketchConstraintsBatch([c], true)
       } else {
-        // Fallback: if we didn't snap to a ref, try to find a nearby endpoint and link coincident
-        const draggedEl = sketchElements.find((e) => e.id === dragTarget.elementId)
+        const cluster = constraintClusterIds(dragTarget.elementId, liveConstraints)
+        const draggedEl = liveElements.find((e) => e.id === dragTarget.elementId)
         const draggedPt = draggedEl && 'start' in draggedEl && 'end' in draggedEl
           ? (dragTarget.pointType === 'start' ? draggedEl.start : draggedEl.end)
           : null
         if (draggedPt) {
           let bestRef: PointRef | null = null
           let bestDist = Infinity
-          for (const el of sketchElements) {
-            if (el.id === dragTarget.elementId) continue
+          for (const el of liveElements) {
+            if (cluster.has(el.id)) continue
             if (el.type === 'line' || el.type === 'rect') {
               const endpoints = el.type === 'line'
                 ? [{ pt: (el as SketchLine).start, which: 'start' as const }, { pt: (el as SketchLine).end, which: 'end' as const }]
@@ -897,7 +919,7 @@ export function SketchPlane() {
           if (bestRef) {
             const p1: PointRef = { elementId: dragTarget.elementId, which: dragTarget.pointType }
             const p2 = bestRef
-            const alreadyLinked = sketchConstraints.some(
+            const alreadyLinked = liveConstraints.some(
               (c) => c.type === 'coincident' && (
                 (c.p1.elementId === p1.elementId && c.p1.which === p1.which && c.p2.elementId === p2.elementId && c.p2.which === p2.which) ||
                 (c.p2.elementId === p1.elementId && c.p2.which === p1.which && c.p1.elementId === p2.elementId && c.p1.which === p2.which)
@@ -906,9 +928,7 @@ export function SketchPlane() {
             if (!alreadyLinked) {
               const c = { id: crypto.randomUUID(), type: 'coincident' as const, p1, p2 }
               addSketchConstraint(c)
-              const allConstraints = [...sketchConstraints, c]
-              const solved = solveConstraints(sketchElements, allConstraints, new Set())
-              for (const sEl of solved) updateSketchElement(sEl.id, sEl as Parameters<typeof updateSketchElement>[1])
+              replaceSketchElements(solveConstraints(liveElements, [...liveConstraints, c], new Set()))
             }
           }
         }

@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   coincidenceConstraintForSelection,
+  constrainDragPosition,
+  constraintClusterIds,
+  dragSnapConflictsWithConstraints,
   nearestSelectablePoint,
   sketchPoint,
   sketchPointUpdates,
 } from '../src/lib/sketchInteraction'
-import type { SketchArc, SketchCircle, SketchLine } from '../src/store/modelStore'
+import type { SketchArc, SketchCircle, SketchConstraint, SketchLine } from '../src/store/modelStore'
 
 describe('coincidenceConstraintForSelection', () => {
   const line: SketchLine = { type: 'line', id: 'l1', start: { x: 0, y: 0 }, end: { x: 4, y: 0 } }
@@ -94,5 +97,53 @@ describe('nearestSelectablePoint', () => {
     const hit = nearestSelectablePoint({ x: 0.05, y: 0.02 }, line, 0.2)
     expect(hit?.ref).toEqual({ elementId: 'l1', which: 'start' })
     expect(nearestSelectablePoint({ x: 5, y: 0 }, line, 0.2)).toBeNull()
+  })
+})
+
+describe('constrained drag snapping', () => {
+  const circle: SketchCircle = { type: 'circle', id: 'c1', center: { x: 2, y: 2 }, radius: 2 }
+  const lineH: SketchLine = { type: 'line', id: 'lh', start: { x: 0, y: 4 }, end: { x: 2, y: 4 } }
+  const lineV: SketchLine = { type: 'line', id: 'lv', start: { x: 0, y: 4 }, end: { x: 0, y: 2 } }
+  const constraints: SketchConstraint[] = [
+    { id: 'join', type: 'coincident', p1: { elementId: 'lh', which: 'start' }, p2: { elementId: 'lv', which: 'start' } },
+    { id: 'th', type: 'tangent', elementId1: 'lh', elementId2: 'c1' },
+    { id: 'tv', type: 'tangent', elementId1: 'lv', elementId2: 'c1' },
+    { id: 'ph', type: 'pointOnCircle', p: { elementId: 'lh', which: 'end' }, circleId: 'c1' },
+    { id: 'pv', type: 'pointOnCircle', p: { elementId: 'lv', which: 'end' }, circleId: 'c1' },
+  ]
+
+  it('treats the two tangent lines and the circle as one cluster', () => {
+    expect([...constraintClusterIds('lh', constraints)].sort()).toEqual(['c1', 'lh', 'lv'])
+  })
+
+  it('rejects snapping the shared corner back onto the same circle', () => {
+    expect(dragSnapConflictsWithConstraints(
+      { elementId: 'lh', which: 'start' },
+      { pt: { x: 2, y: 4 }, ref: null, tangentCircleId: 'c1' },
+      constraints,
+    )).toBe(true)
+    expect(dragSnapConflictsWithConstraints(
+      { elementId: 'lh', which: 'start' },
+      { pt: { x: 0, y: 2 }, ref: { elementId: 'lv', which: 'end' } },
+      constraints,
+    )).toBe(true)
+  })
+
+  it('projects a contact point onto the circle but not the free corner', () => {
+    const elements = [circle, lineH, lineV]
+    expect(constrainDragPosition(
+      { x: 4, y: 8 },
+      { elementId: 'lh', which: 'start' },
+      elements,
+      constraints,
+    )).toEqual({ x: 4, y: 8 })
+
+    const onCircle = constrainDragPosition(
+      { x: 4, y: 4 },
+      { elementId: 'lh', which: 'end' },
+      elements,
+      constraints,
+    )
+    expect(Math.hypot(onCircle.x - 2, onCircle.y - 2)).toBeCloseTo(2, 5)
   })
 })

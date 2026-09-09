@@ -371,4 +371,54 @@ describe('Constraint Solver', () => {
     expect(Math.abs(distH - solvedCircle.radius)).toBeLessThan(0.08)
     expect(Math.abs(distV - solvedCircle.radius)).toBeLessThan(0.08)
   })
+
+  it('keeps snap-created tangent+point-on-circle lines attached when the shared corner is dragged', () => {
+    const circle: SketchCircle = {
+      type: 'circle',
+      id: 'c1',
+      center: { x: 2, y: 2 },
+      radius: 2,
+    }
+    const lineH: SketchLine = {
+      type: 'line',
+      id: 'lh',
+      start: { x: 0, y: 4 },
+      end: { x: 2, y: 4 },
+    }
+    const lineV: SketchLine = {
+      type: 'line',
+      id: 'lv',
+      start: { x: 0, y: 4 },
+      end: { x: 0, y: 2 },
+    }
+    const constraints: SketchConstraint[] = [
+      { id: 'join', type: 'coincident', p1: { elementId: 'lh', which: 'start' }, p2: { elementId: 'lv', which: 'start' } },
+      { id: 'th', type: 'tangent', elementId1: 'lh', elementId2: 'c1' },
+      { id: 'tv', type: 'tangent', elementId1: 'lv', elementId2: 'c1' },
+      { id: 'ph', type: 'pointOnCircle', p: { elementId: 'lh', which: 'end' }, circleId: 'c1' },
+      { id: 'pv', type: 'pointOnCircle', p: { elementId: 'lv', which: 'end' }, circleId: 'c1' },
+    ]
+
+    const dragged = { ...lineH, start: { x: 1, y: 6 } }
+    const solved = solveConstraints(
+      [circle, dragged, lineV],
+      constraints,
+      new Set(['lh:start']),
+    )
+
+    const solvedCircle = solved.find((e): e is SketchCircle => e.id === 'c1' && e.type === 'circle')!
+    const solvedH = solved.find((e): e is SketchLine => e.id === 'lh' && e.type === 'line')!
+    const solvedV = solved.find((e): e is SketchLine => e.id === 'lv' && e.type === 'line')!
+
+    expect(Math.hypot(solvedH.start.x - 1, solvedH.start.y - 6)).toBeLessThan(0.05)
+    expect(Math.hypot(solvedH.start.x - solvedV.start.x, solvedH.start.y - solvedV.start.y)).toBeLessThan(0.05)
+    expect(Math.abs(solvedCircle.radius - 2)).toBeLessThan(0.01)
+    expect(Math.hypot(solvedH.end.x - solvedCircle.center.x, solvedH.end.y - solvedCircle.center.y)).toBeCloseTo(2, 1)
+    expect(Math.hypot(solvedV.end.x - solvedCircle.center.x, solvedV.end.y - solvedCircle.center.y)).toBeCloseTo(2, 1)
+
+    const distH = Math.abs((solvedH.end.y - solvedH.start.y) * solvedCircle.center.x - (solvedH.end.x - solvedH.start.x) * solvedCircle.center.y + solvedH.end.x * solvedH.start.y - solvedH.end.y * solvedH.start.x) / Math.hypot(solvedH.end.x - solvedH.start.x, solvedH.end.y - solvedH.start.y)
+    const distV = Math.abs((solvedV.end.y - solvedV.start.y) * solvedCircle.center.x - (solvedV.end.x - solvedV.start.x) * solvedCircle.center.y + solvedV.end.x * solvedV.start.y - solvedV.end.y * solvedV.start.x) / Math.hypot(solvedV.end.x - solvedV.start.x, solvedV.end.y - solvedV.start.y)
+    expect(Math.abs(distH - solvedCircle.radius)).toBeLessThan(0.08)
+    expect(Math.abs(distV - solvedCircle.radius)).toBeLessThan(0.08)
+  })
 })

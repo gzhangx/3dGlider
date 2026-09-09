@@ -1,4 +1,5 @@
-import { SketchTool, SketchPlanePose, SketchPoint, SketchElement, PointRef, Sketch } from '../store/modelStore'
+import { SketchTool, SketchPlanePose, SketchPoint, SketchElement, PointRef, Sketch, SketchConstraint } from '../store/modelStore'
+import { constraintElementIds } from './constraintUtils'
 import {
   worldPt, toSketch, rectCorners, angleInArc,
   closestPointOnSegment, distToSegment as distancePointToLine,
@@ -102,11 +103,14 @@ export function findSnapTarget(
   snapTangentThreshold: number,
   lineStart: SketchPoint | null = null,
   excludeElementId: string | null = null,
+  excludeElementIds?: Iterable<string> | null,
 ): SnapTarget | null {
   let best: (SnapTarget & { dist: number }) | null = null
+  const excluded = new Set(excludeElementIds ?? [])
+  if (excludeElementId) excluded.add(excludeElementId)
 
   for (const el of sketchElements) {
-    if (el.id === excludeElementId) continue
+    if (excluded.has(el.id)) continue
 
     for (const { pt, ref } of elementEndpoints(el)) {
       const d = Math.hypot(raw.x - pt.x, raw.y - pt.y)
@@ -247,6 +251,74 @@ export function findSnapTarget(
 
 export function pointRefsEqual(a: PointRef, b: PointRef): boolean {
   return a.elementId === b.elementId && a.which === b.which
+}
+
+/** All sketch elements reachable from `seedId` through existing constraints. */
+export function constraintClusterIds(seedId: string, constraints: SketchConstraint[]): Set<string> {
+  const ids = new Set<string>([seedId])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const constraint of constraints) {
+      const involved = constraintElementIds(constraint)
+      if (!involved.some((id) => ids.has(id))) continue
+      for (const id of involved) {
+        if (ids.has(id)) continue
+        ids.add(id)
+        changed = true
+      }
+    }
+  }
+  return ids
+}
+
+/**
+ * Snapping a drag onto geometry already in this point's constraint cluster
+ * (the other tangent line, the circle, the far contact point) collapses or
+ * over-constrains the sketch — the same failure as adding a second tangent
+ * at the shared corner.
+ */
+export function dragSnapConflictsWithConstraints(
+  target: PointRef,
+  snap: SnapTarget,
+  constraints: SketchConstraint[],
+): boolean {
+  const cluster = constraintClusterIds(target.elementId, constraints)
+  if (snap.tangentCircleId && cluster.has(snap.tangentCircleId)) return true
+  if (snap.circleId && cluster.has(snap.circleId)) return true
+  if (snap.ref && cluster.has(snap.ref.elementId)) return true
+  return false
+}
+
+/** Keep a dragged point-on-circle contact on its circle; leave free corners alone. */
+export function constrainDragPosition(
+  pt: SketchPoint,
+  target: PointRef,
+  elements: SketchElement[],
+  constraints: SketchConstraint[],
+): SketchPoint {
+  const keys = new Set([`${target.elementId}:${target.which}`])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const constraint of constraints) {
+      if (constraint.type !== 'coincident') continue
+      const key1 = `${constraint.p1.elementId}:${constraint.p1.which}`
+      const key2 = `${constraint.p2.elementId}:${constraint.p2.which}`
+      if (keys.has(key1) && !keys.has(key2)) { keys.add(key2); changed = true }
+      if (keys.has(key2) && !keys.has(key1)) { keys.add(key1); changed = true }
+    }
+  }
+
+  let next = pt
+  for (const constraint of constraints) {
+    if (constraint.type !== 'pointOnCircle') continue
+    if (!keys.has(`${constraint.p.elementId}:${constraint.p.which}`)) continue
+    const curve = elements.find((el) => el.id === constraint.circleId)
+    if (!curve || (curve.type !== 'circle' && curve.type !== 'arc')) continue
+    next = closestPointOnCircle(next, curve.center, curve.radius)
+  }
+  return next
 }
 
 export function sketchPoint(el: SketchElement, which: PointRef['which']): SketchPoint | null {
