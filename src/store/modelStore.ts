@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { reapplyParametricConstraints, solveConstraints } from '../lib/constraintSolve'
+import { reapplyParametricConstraints, solveConstraints, solveConstraintsDetailed, type ConstraintSolveResult, type SolverDebugLog } from '../lib/constraintSolve'
 import { constraintElementIds, constraintsEquivalent, remapConstraintsAfterRemoval } from '../lib/constraintUtils'
 
 export type PlaneId = 'XY' | 'XZ' | 'YZ'
@@ -362,6 +362,8 @@ export interface ModelState {
   circleCounter: number
   arcCounter: number
   showElementNames: boolean
+  solverDebugEnabled: boolean
+  solverDebugLog: SolverDebugLog | null
 
   setHoveredPlane: (plane: PlaneId | null) => void
   setActiveTool: (tool: SketchTool) => void
@@ -383,6 +385,8 @@ export interface ModelState {
   setShowSketchNavigator: (v: boolean) => void
   setHideOtherSketches: (v: boolean) => void
   setShowElementNames: (v: boolean) => void
+  setSolverDebugEnabled: (v: boolean) => void
+  commitSolvedSketch: (result: ConstraintSolveResult) => void
   addSketchElement: (el: SketchElement) => void
   updateSketchElement: (id: string, updates: Partial<SketchElement>) => void
   replaceSketchElements: (elements: SketchElement[]) => void
@@ -421,7 +425,7 @@ export interface ModelState {
   loadModel: (data: unknown) => boolean
 }
 
-export const useModelStore = create<ModelState>((set) => ({
+export const useModelStore = create<ModelState>((set, get) => ({
   mode: 'view',
   activePlane: null,
   hoveredPlane: null,
@@ -458,6 +462,8 @@ export const useModelStore = create<ModelState>((set) => ({
   circleCounter: 0,
   arcCounter: 0,
   showElementNames: false,
+  solverDebugEnabled: false,
+  solverDebugLog: null,
 
   setHoveredPlane: (hoveredPlane) => set({ hoveredPlane }),
   setActiveTool: (activeTool) => set({ activeTool, selectedElementId: null, selectedElementId2: null, selectedElementIds: [], selectedPointRefs: [] }),
@@ -523,17 +529,32 @@ export const useModelStore = create<ModelState>((set) => ({
 
     const sketchConstraints = [...s.sketchConstraints, ...newConstraints]
     if (!apply) return { sketchConstraints }
-    const solved = solveConstraints(s.sketchElements, sketchConstraints, new Set())
-    return { sketchConstraints, sketchElements: solved }
+    const result = solveConstraintsDetailed(s.sketchElements, sketchConstraints, new Set())
+    return {
+      sketchConstraints,
+      sketchElements: result.elements,
+      ...(s.solverDebugEnabled ? { solverDebugLog: result.debug } : {}),
+    }
   }),
   applyConstraints: (fixedPoints) => set((s) => {
-    const solved = solveConstraints(s.sketchElements, s.sketchConstraints, fixedPoints ?? new Set())
-    return { sketchElements: solved }
+    const result = solveConstraintsDetailed(s.sketchElements, s.sketchConstraints, fixedPoints ?? new Set())
+    return {
+      sketchElements: result.elements,
+      ...(s.solverDebugEnabled ? { solverDebugLog: result.debug } : {}),
+    }
   }),
   resetSketchView: () => set((s) => ({ sketchViewResetCounter: s.sketchViewResetCounter + 1 })),
   setShowSketchNavigator: (showSketchNavigator) => set({ showSketchNavigator }),
   setHideOtherSketches: (hideOtherSketches) => set({ hideOtherSketches }),
   setShowElementNames: (showElementNames) => set({ showElementNames }),
+  setSolverDebugEnabled: (solverDebugEnabled) => {
+    set({ solverDebugEnabled })
+    if (solverDebugEnabled) get().applyConstraints()
+  },
+  commitSolvedSketch: (result) => set((s) => ({
+    sketchElements: result.elements,
+    ...(s.solverDebugEnabled ? { solverDebugLog: result.debug } : {}),
+  })),
 
   addSketchElement: (el) => set((s) => {
     // assign a friendly name if not present

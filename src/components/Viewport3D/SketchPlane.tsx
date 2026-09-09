@@ -40,7 +40,7 @@ import {
 import { planeOriginFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { PLANE_SIZE } from '../../lib/units'
 import { distToSeg, distToCircle, distToArc, computeCut, computeCircleCut, computeArcCut, CutResult, CircleCutResult, ArcCutResult } from '../../lib/cutTool'
-import { solveConstraints } from '../../lib/constraintSolve'
+import { solveConstraintsDetailed } from '../../lib/constraintSolve'
 
 const HIT_PLANE_SIZE = PLANE_SIZE * 4
 const SNAP_ENDPOINT_SCREEN = 24
@@ -322,7 +322,7 @@ export function SketchPlane() {
     activePlane, activeTool, constructionMode, snapToGrid, snapToOtherPlanes, snapToObjects,
     sketchElements, sketchConstraints, sketches, editingSketchId,
     selectedElementIds, selectedPointRefs, selectElement, selectElements, selectPoint, togglePointSelection,
-    addSketchElement, updateSketchElement, replaceSketchElements, deleteSketchElement, cutSketchElement, exitSketch,
+    addSketchElement, updateSketchElement, commitSolvedSketch, deleteSketchElement, cutSketchElement, exitSketch,
     addSketchConstraint, addSketchConstraintsBatch, setIsDraggingPoint, highlightElementIds, setHighlightElementIds,
   } = useModelStore(useShallow((state) => ({
     activePlane: state.activePlane, activeTool: state.activeTool,
@@ -333,7 +333,8 @@ export function SketchPlane() {
     selectedElementIds: state.selectedElementIds, selectedPointRefs: state.selectedPointRefs,
     selectElement: state.selectElement, selectPoint: state.selectPoint, togglePointSelection: state.togglePointSelection,
     selectElements: state.selectElements, addSketchElement: state.addSketchElement,
-    updateSketchElement: state.updateSketchElement, replaceSketchElements: state.replaceSketchElements,
+    updateSketchElement: state.updateSketchElement,
+    commitSolvedSketch: state.commitSolvedSketch,
     deleteSketchElement: state.deleteSketchElement,
     cutSketchElement: state.cutSketchElement, exitSketch: state.exitSketch,
     addSketchConstraint: state.addSketchConstraint,
@@ -575,7 +576,7 @@ export function SketchPlane() {
         liveConstraints,
       )
 
-      let updated = liveElements.map((el) => {
+      const updated = liveElements.map((el) => {
         if (el.id !== dragTarget.elementId) return el
         if (el.type === 'arc' && (dragTarget.pointType === 'start' || dragTarget.pointType === 'end')) {
           const angle = Math.atan2(pt.y - el.center.y, pt.x - el.center.x)
@@ -588,8 +589,7 @@ export function SketchPlane() {
       })
 
       const fixedPoints = new Set<string>([`${dragTarget.elementId}:${dragTarget.pointType}`])
-      updated = solveConstraints(updated, liveConstraints, fixedPoints)
-      replaceSketchElements(updated)
+      commitSolvedSketch(solveConstraintsDetailed(updated, liveConstraints, fixedPoints))
       return
     }
 
@@ -844,8 +844,7 @@ export function SketchPlane() {
       if (addedConstraints.length > 0) {
         const combined = [...sketchElements, ...newLines]
         const allConstraints = [...sketchConstraints, ...addedConstraints]
-        const solved = solveConstraints(combined, allConstraints, new Set())
-        for (const sEl of solved) updateSketchElement(sEl.id, sEl as Parameters<typeof updateSketchElement>[1])
+        commitSolvedSketch(solveConstraintsDetailed(combined, allConstraints, new Set()))
       }
     } else if (activeTool === 'circle') {
       const r = Math.hypot(pt.x - startPt.x, pt.y - startPt.y)
@@ -878,7 +877,7 @@ export function SketchPlane() {
         if (!alreadyLinked) {
           const c = { id: crypto.randomUUID(), type: 'coincident' as const, p1, p2 }
           addSketchConstraint(c)
-          replaceSketchElements(solveConstraints(liveElements, [...liveConstraints, c], new Set()))
+          commitSolvedSketch(solveConstraintsDetailed(liveElements, [...liveConstraints, c], new Set()))
         }
       } else if (snapOk && dragSnapTarget?.tangentCircleId) {
         const tc: TangentConstraint = { id: crypto.randomUUID(), type: 'tangent', elementId1: dragTarget.elementId, elementId2: dragSnapTarget.tangentCircleId }
@@ -928,7 +927,7 @@ export function SketchPlane() {
             if (!alreadyLinked) {
               const c = { id: crypto.randomUUID(), type: 'coincident' as const, p1, p2 }
               addSketchConstraint(c)
-              replaceSketchElements(solveConstraints(liveElements, [...liveConstraints, c], new Set()))
+              commitSolvedSketch(solveConstraintsDetailed(liveElements, [...liveConstraints, c], new Set()))
             }
           }
         }

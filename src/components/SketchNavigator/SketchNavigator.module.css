@@ -9,6 +9,42 @@
   font-size: 12px;
 }
 
+.panelDebug {
+  width: 320px;
+}
+
+.debugToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 4px;
+  color: #7788aa;
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.debugToggle input {
+  margin: 0;
+  accent-color: #cc66ff;
+}
+
+.debugLog {
+  margin: 0 8px 8px;
+  padding: 6px 8px;
+  max-height: 280px;
+  overflow: auto;
+  background: #080814;
+  border: 1px solid #1e1e3a;
+  border-radius: 4px;
+  color: #99bb88;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .heading {
   font-size: 10px;
   letter-spacing: 0.1em;

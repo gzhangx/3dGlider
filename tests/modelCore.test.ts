@@ -17,6 +17,10 @@ describe('model core', () => {
     expect(result.converged).toBe(true)
     expect(result.iterations).toBeGreaterThan(0)
     expect(result.maxResidual).toBeLessThan(1e-6)
+    expect(result.debug.steps.length).toBeGreaterThan(0)
+    expect(result.debug.steps.some((step) =>
+      step.moves.some((move) => move.elementId === 'line' && move.pointType === 'end' && move.kind === 'point'),
+    )).toBe(true)
   })
 
   it('moves an arc endpoint when it is coincident with a fixed line endpoint', () => {

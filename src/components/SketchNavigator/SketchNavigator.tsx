@@ -8,6 +8,7 @@ import {
 import styles from './SketchNavigator.module.css'
 import { constraintElementIds } from '../../lib/constraintUtils'
 import { SCENE_TO_MM } from '../../lib/units'
+import type { SolverDebugLog, SolverGeomMove } from '../../lib/constraintSolve'
 
 // ── element label ─────────────────────────────────────────────────────────────
 
@@ -48,6 +49,62 @@ function constraintLabel(c: SketchConstraint, elements: SketchElement[]): string
   }
 }
 
+function elementTag(elements: SketchElement[], id: string): string {
+  const idx = elements.findIndex((e) => e.id === id)
+  if (idx === -1) return id.slice(0, 6)
+  const el = elements[idx]
+  return el.name ?? `${el.type[0].toUpperCase()}${idx + 1}`
+}
+
+function fmtMm(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) return '?'
+  return (value * SCENE_TO_MM).toFixed(3)
+}
+
+function fmtScalar(pointType: string, value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) return '?'
+  if (pointType === 'startAngle' || pointType === 'endAngle') return `${(value * 180 / Math.PI).toFixed(2)}°`
+  if (pointType === 'radius') return fmtMm(value)
+  return value.toFixed(4)
+}
+
+function formatMove(move: SolverGeomMove, elements: SketchElement[]): string {
+  const tag = `${elementTag(elements, move.elementId)}.${move.pointType}`
+  if (move.kind === 'point') {
+    return `${tag}  (${fmtMm(move.fromX)}, ${fmtMm(move.fromY)}) → (${fmtMm(move.toX)}, ${fmtMm(move.toY)})`
+  }
+  return `${tag}  ${fmtScalar(move.pointType, move.fromValue)} → ${fmtScalar(move.pointType, move.toValue)}`
+}
+
+function formatSolverDebug(log: SolverDebugLog, elements: SketchElement[]): string {
+  const lines = [
+    `${log.converged ? 'converged' : 'DID NOT CONVERGE'}  iters=${log.iterations}  maxR=${log.maxResidual.toExponential(2)}`,
+  ]
+  if (log.fixedPoints.length > 0) {
+    const labels = log.fixedPoints.map((key) => {
+      const [id, which] = key.split(':')
+      return `${elementTag(elements, id)}.${which}`
+    })
+    lines.push(`fixed: ${labels.join(', ')}`)
+  }
+  if (log.pinMoves.length > 0) {
+    lines.push('pin coincident:')
+    for (const move of log.pinMoves) lines.push(`  ${formatMove(move, elements)}`)
+  }
+  if (log.steps.length === 0) {
+    lines.push(log.iterations === 0 ? 'already satisfied (no Newton steps)' : 'no geometry moved')
+  }
+  for (const step of log.steps) {
+    lines.push(`iter ${step.iteration}  maxR=${step.maxResidual.toExponential(2)}`)
+    if (step.moves.length === 0) {
+      lines.push('  (no point moved)')
+      continue
+    }
+    for (const move of step.moves) lines.push(`  ${formatMove(move, elements)}`)
+  }
+  return lines.join('\n')
+}
+
 // ── ids referenced by a constraint ───────────────────────────────────────────
 
 // ── main component ────────────────────────────────────────────────────────────
@@ -56,12 +113,16 @@ export function SketchNavigator() {
   const {
     mode, sketchElements, sketchConstraints,
     setHighlightElementIds, deleteSketchElement, deleteSketchConstraint,
+    solverDebugEnabled, solverDebugLog, setSolverDebugEnabled,
   } = useModelStore(useShallow((state) => ({
     mode: state.mode, sketchElements: state.sketchElements,
     sketchConstraints: state.sketchConstraints,
     setHighlightElementIds: state.setHighlightElementIds,
     deleteSketchElement: state.deleteSketchElement,
     deleteSketchConstraint: state.deleteSketchConstraint,
+    solverDebugEnabled: state.solverDebugEnabled,
+    solverDebugLog: state.solverDebugLog,
+    setSolverDebugEnabled: state.setSolverDebugEnabled,
   })))
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -98,8 +159,25 @@ export function SketchNavigator() {
   }
 
   return (
-    <aside className={styles.panel}>
+    <aside className={`${styles.panel} ${solverDebugEnabled ? styles.panelDebug : ''}`}>
       <div className={styles.heading}>Sketch Items</div>
+
+      <label className={styles.debugToggle}>
+        <input
+          type="checkbox"
+          checked={solverDebugEnabled}
+          onChange={(e) => setSolverDebugEnabled(e.target.checked)}
+        />
+        Debug solver
+      </label>
+
+      {solverDebugEnabled && (
+        <div className={styles.debugLog}>
+          {solverDebugLog
+            ? formatSolverDebug(solverDebugLog, sketchElements)
+            : 'No solve yet — drag a point or add a constraint.'}
+        </div>
+      )}
 
       <div className={styles.section}>
         <div className={styles.sectionTitle}>Elements ({sketchElements.length})</div>

@@ -864,11 +864,129 @@ export function solveConstraints(
   return solveConstraintsDetailed(elements, constraints, fixedPoints, maxIterations, tolerance).elements
 }
 
+export interface SolverGeomMove {
+  elementId: string
+  pointType: string
+  kind: 'point' | 'scalar'
+  fromX?: number
+  fromY?: number
+  toX?: number
+  toY?: number
+  fromValue?: number
+  toValue?: number
+}
+
+export interface SolverIterationLog {
+  iteration: number
+  maxResidual: number
+  moves: SolverGeomMove[]
+}
+
+export interface SolverDebugLog {
+  converged: boolean
+  iterations: number
+  maxResidual: number
+  fixedPoints: string[]
+  pinMoves: SolverGeomMove[]
+  steps: SolverIterationLog[]
+}
+
 export interface ConstraintSolveResult {
   elements: SketchElement[]
   converged: boolean
   iterations: number
   maxResidual: number
+  debug: SolverDebugLog
+}
+
+const MOVE_EPS = 1e-8
+
+interface GeomSnapshotEntry {
+  elementId: string
+  pointType: string
+  kind: 'point' | 'scalar'
+  x?: number
+  y?: number
+  value?: number
+}
+
+function geometrySnapshot(elements: SketchElement[]): GeomSnapshotEntry[] {
+  const entries: GeomSnapshotEntry[] = []
+  for (const el of elements) {
+    if (el.type === 'line' || el.type === 'rect') {
+      entries.push({ elementId: el.id, pointType: 'start', kind: 'point', x: el.start.x, y: el.start.y })
+      entries.push({ elementId: el.id, pointType: 'end', kind: 'point', x: el.end.x, y: el.end.y })
+    } else if (el.type === 'circle') {
+      entries.push({ elementId: el.id, pointType: 'center', kind: 'point', x: el.center.x, y: el.center.y })
+      entries.push({ elementId: el.id, pointType: 'radius', kind: 'scalar', value: el.radius })
+    } else if (el.type === 'arc') {
+      entries.push({ elementId: el.id, pointType: 'center', kind: 'point', x: el.center.x, y: el.center.y })
+      entries.push({ elementId: el.id, pointType: 'radius', kind: 'scalar', value: el.radius })
+      const start = getPoint(elements, el.id, 'start')
+      const end = getPoint(elements, el.id, 'end')
+      if (start) entries.push({ elementId: el.id, pointType: 'start', kind: 'point', x: start.x, y: start.y })
+      if (end) entries.push({ elementId: el.id, pointType: 'end', kind: 'point', x: end.x, y: end.y })
+      entries.push({ elementId: el.id, pointType: 'startAngle', kind: 'scalar', value: el.startAngle })
+      entries.push({ elementId: el.id, pointType: 'endAngle', kind: 'scalar', value: el.endAngle })
+    }
+  }
+  return entries
+}
+
+function diffGeometry(before: GeomSnapshotEntry[], after: GeomSnapshotEntry[]): SolverGeomMove[] {
+  const byKey = new Map(before.map((entry) => [`${entry.elementId}:${entry.pointType}`, entry]))
+  const moves: SolverGeomMove[] = []
+  for (const next of after) {
+    const prev = byKey.get(`${next.elementId}:${next.pointType}`)
+    if (!prev || prev.kind !== next.kind) continue
+    if (next.kind === 'point') {
+      const dx = (next.x ?? 0) - (prev.x ?? 0)
+      const dy = (next.y ?? 0) - (prev.y ?? 0)
+      if (Math.hypot(dx, dy) <= MOVE_EPS) continue
+      moves.push({
+        elementId: next.elementId,
+        pointType: next.pointType,
+        kind: 'point',
+        fromX: prev.x, fromY: prev.y,
+        toX: next.x, toY: next.y,
+      })
+    } else {
+      const delta = (next.value ?? 0) - (prev.value ?? 0)
+      if (Math.abs(delta) <= MOVE_EPS) continue
+      moves.push({
+        elementId: next.elementId,
+        pointType: next.pointType,
+        kind: 'scalar',
+        fromValue: prev.value,
+        toValue: next.value,
+      })
+    }
+  }
+  return moves
+}
+
+function emptySolverDebug(extra: Partial<SolverDebugLog> = {}): SolverDebugLog {
+  return {
+    converged: extra.converged ?? true,
+    iterations: extra.iterations ?? 0,
+    maxResidual: extra.maxResidual ?? 0,
+    fixedPoints: extra.fixedPoints ?? [],
+    pinMoves: extra.pinMoves ?? [],
+    steps: extra.steps ?? [],
+  }
+}
+
+function solverResult(
+  elements: SketchElement[],
+  debug: SolverDebugLog,
+): ConstraintSolveResult {
+  return {
+    elements,
+    converged: debug.converged,
+    iterations: debug.iterations,
+    maxResidual: debug.maxResidual,
+    debug,
+  }
 }
 
 function elementNeedsRadiusVariable(
@@ -896,11 +1014,14 @@ export function solveConstraintsDetailed(
   maxIterations: number = 50,
   tolerance: number = 1e-6,
 ): ConstraintSolveResult {
+  const requestedFixed = [...(fixedPoints ?? new Set())]
   if (constraints.length === 0 || elements.length === 0) {
-    return { elements, converged: true, iterations: 0, maxResidual: 0 }
+    return solverResult(elements, emptySolverDebug({ fixedPoints: requestedFixed }))
   }
 
+  const beforePin = geometrySnapshot(elements)
   const pinned = pinCoincidentPartners(elements, constraints, fixedPoints ?? new Set())
+  const pinMoves = diffGeometry(beforePin, geometrySnapshot(pinned.elements))
   const workingElements = pinned.elements
   const workingFixed = pinPointOnCircleHosts(constraints, pinned.fixedPoints)
 
@@ -955,7 +1076,10 @@ export function solveConstraintsDetailed(
   }
 
   if (variables.length === 0) {
-    return { elements: workingElements, converged: true, iterations: 0, maxResidual: 0 }
+    return solverResult(workingElements, emptySolverDebug({
+      fixedPoints: [...workingFixed],
+      pinMoves,
+    }))
   }
 
   const restPose = workingElements
@@ -979,11 +1103,17 @@ export function solveConstraintsDetailed(
     ...arcEndpointPinEquations(workingElements, workingFixed),
   ]
   const equations = [...sketchEquations, ...restEquations]
-  if (sketchEquations.length === 0) return { elements: workingElements, converged: true, iterations: 0, maxResidual: 0 }
+  if (sketchEquations.length === 0) {
+    return solverResult(workingElements, emptySolverDebug({
+      fixedPoints: [...workingFixed],
+      pinMoves,
+    }))
+  }
 
   let currentElements = [...workingElements]
   let iteration = 0
   let maxResidual = Infinity
+  const steps: SolverIterationLog[] = []
 
   for (iteration; iteration < maxIterations; iteration++) {
     const sketchResiduals = sketchEquations.map((eq) => eq.residual(currentElements))
@@ -1012,6 +1142,7 @@ export function solveConstraintsDetailed(
     for (const element of currentElements) {
       updates.set(element.id, element)
     }
+    const beforeStep = geometrySnapshot(currentElements)
     for (const v of variables) {
       const el = updates.get(v.elementId)
       if (!el) continue
@@ -1024,7 +1155,20 @@ export function solveConstraintsDetailed(
       updates.set(el.id, setPoint(el, v.pointType, v.coord, newValue))
     }
     currentElements = currentElements.map((element) => updates.get(element.id) ?? element)
+    steps.push({
+      iteration: iteration + 1,
+      maxResidual,
+      moves: diffGeometry(beforeStep, geometrySnapshot(currentElements)),
+    })
   }
 
-  return { elements: currentElements, converged: maxResidual < tolerance, iterations: iteration, maxResidual }
+  const debug = emptySolverDebug({
+    converged: maxResidual < tolerance,
+    iterations: iteration,
+    maxResidual: Number.isFinite(maxResidual) ? maxResidual : 0,
+    fixedPoints: [...workingFixed],
+    pinMoves,
+    steps,
+  })
+  return solverResult(currentElements, debug)
 }
