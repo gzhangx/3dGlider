@@ -241,10 +241,12 @@ export function SketchSidebar() {
   let hintText = ''
   if (activeTool !== 'select') {
     hintText = constructionMode ? 'Drawing construction geometry' : 'Click 1st point · Click 2nd point · Esc cancel'
-  } else if (!sel1) {
+  } else if (!sel1 && selectedPointRefs.length === 0) {
     hintText = 'Click element or endpoint · Shift+click for multi'
-  } else if (selectedPointRefs.length === 1 && !sel2) {
-    hintText = 'Shift-click another endpoint or a line/circle/arc'
+  } else if (selectedPointRefs.length === 1) {
+    hintText = 'Shift-click another endpoint, or a line/circle/arc'
+  } else if (selectedPointRefs.length >= 2) {
+    hintText = '2 points selected · Coincidence in Constrain'
   } else if (!sel2) {
     hintText = `${selectedElementIds.length} selected · Shift+click 2nd for constraints`
   }

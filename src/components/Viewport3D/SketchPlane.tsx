@@ -1030,17 +1030,17 @@ export function SketchPlane() {
         const handleHighlight = highlightElementIds.includes(el.id)
         if (el.type === 'line') return (
           <group key={el.id + '_handles'}>
-            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('start')} onClick={clickPoint('start')} highlighted={handleHighlight} selected={pointSelected('start')} />
-            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('end')} onClick={clickPoint('end')} highlighted={handleHighlight} selected={pointSelected('end')} />
+            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('start')} highlighted={handleHighlight} selected={pointSelected('start')} />
+            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('end')} highlighted={handleHighlight} selected={pointSelected('end')} />
           </group>
         )
         if (el.type === 'circle') return (
-          <PointHandle key={el.id + '_handle'} pos={getHandlePoint(el.center)} onDragStart={startDrag('center')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('center')} onClick={clickPoint('center')} highlighted={handleHighlight} selected={pointSelected('center')} />
+          <PointHandle key={el.id + '_handle'} pos={getHandlePoint(el.center)} onDragStart={startDrag('center')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('center')} highlighted={handleHighlight} selected={pointSelected('center')} />
         )
         if (el.type === 'rect') return (
           <group key={el.id + '_handles'}>
-            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('start')} onClick={clickPoint('start')} highlighted={handleHighlight} selected={pointSelected('start')} />
-            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('end')} onClick={clickPoint('end')} highlighted={handleHighlight} selected={pointSelected('end')} />
+            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('start')} highlighted={handleHighlight} selected={pointSelected('start')} />
+            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('end')} highlighted={handleHighlight} selected={pointSelected('end')} />
           </group>
         )
         if (el.type === 'arc') {
@@ -1055,7 +1055,6 @@ export function SketchPlane() {
                   onDragMove={onMove}
                   onDragEnd={onPointerUp}
                   onPress={clickPoint(ref.which)}
-                  onClick={clickPoint(ref.which)}
                   highlighted={handleHighlight}
                   selected={pointSelected(ref.which)}
                 />

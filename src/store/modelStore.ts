@@ -492,8 +492,8 @@ export const useModelStore = create<ModelState>((set) => ({
   }),
   selectPoint: (ref) => set({
     selectedPointRefs: [ref],
-    selectedElementIds: [ref.elementId],
-    selectedElementId: ref.elementId,
+    selectedElementIds: [],
+    selectedElementId: null,
     selectedElementId2: null,
     highlightElementIds: [],
   }),
@@ -503,9 +503,8 @@ export const useModelStore = create<ModelState>((set) => ({
       ? s.selectedPointRefs.filter((p) => !(p.elementId === ref.elementId && p.which === ref.which))
       : [...s.selectedPointRefs, ref]
     if (points.length > 2) points = points.slice(-2)
-    const ids = s.selectedElementIds.includes(ref.elementId)
-      ? s.selectedElementIds
-      : [...s.selectedElementIds, ref.elementId]
+    const pointElementIds = new Set(points.map((p) => p.elementId))
+    const ids = s.selectedElementIds.filter((id) => !pointElementIds.has(id))
     return {
       selectedPointRefs: points,
       selectedElementIds: ids,
