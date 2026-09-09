@@ -370,6 +370,104 @@ function arcEndpointPinEquations(
   return equations
 }
 
+function pointsAlreadyCoincident(
+  constraints: SketchConstraint[],
+  a: { elementId: string; which: 'start' | 'end' | 'center' },
+  b: { elementId: string; which: 'start' | 'end' | 'center' },
+): boolean {
+  return constraints.some((c) => {
+    if (c.type !== 'coincident') return false
+    const direct = c.p1.elementId === a.elementId && c.p1.which === a.which && c.p2.elementId === b.elementId && c.p2.which === b.which
+    const reverse = c.p1.elementId === b.elementId && c.p1.which === b.which && c.p2.elementId === a.elementId && c.p2.which === a.which
+    return direct || reverse
+  })
+}
+
+/**
+ * Tangent + point-on-circle to an arc is a contact at a tip in this sketch
+ * (two tangents from a point onto a cut arc). Pair each contact with the
+ * nearer arc endpoint so the line cannot slide off the tip.
+ */
+function tangentArcTipPairs(
+  elements: SketchElement[],
+  constraints: SketchConstraint[],
+): { p: { elementId: string; which: 'start' | 'end' | 'center' }; arcId: string; which: 'start' | 'end' }[] {
+  const byId = new Map(elements.map((el) => [el.id, el]))
+  const pairs: { p: { elementId: string; which: 'start' | 'end' | 'center' }; arcId: string; which: 'start' | 'end' }[] = []
+  for (const constraint of constraints) {
+    if (constraint.type !== 'pointOnCircle') continue
+    const host = byId.get(constraint.circleId)
+    if (!host || host.type !== 'arc') continue
+    const tangent = constraints.some((candidate) => (
+      candidate.type === 'tangent'
+      && (
+        (candidate.elementId1 === constraint.p.elementId && candidate.elementId2 === constraint.circleId)
+        || (candidate.elementId2 === constraint.p.elementId && candidate.elementId1 === constraint.circleId)
+      )
+    ))
+    if (!tangent) continue
+    const pt = getPoint(elements, constraint.p.elementId, constraint.p.which)
+    if (!pt) continue
+    const start = getPoint(elements, host.id, 'start')
+    const end = getPoint(elements, host.id, 'end')
+    if (!start || !end) continue
+    const distStart = Math.hypot(pt.x - start.x, pt.y - start.y)
+    const distEnd = Math.hypot(pt.x - end.x, pt.y - end.y)
+    pairs.push({
+      p: constraint.p,
+      arcId: host.id,
+      which: distStart <= distEnd ? 'start' : 'end',
+    })
+  }
+  return pairs
+}
+
+function snapTangentContactsToArcTips(
+  elements: SketchElement[],
+  constraints: SketchConstraint[],
+  fixedPoints: Set<string>,
+): SketchElement[] {
+  let current = elements
+  for (const pair of tangentArcTipPairs(current, constraints)) {
+    if (pair.p.which === 'center') continue
+    if (fixedPoints.has(`${pair.p.elementId}:${pair.p.which}`)) continue
+    const tip = getPoint(current, pair.arcId, pair.which)
+    if (!tip) continue
+    current = current.map((el) => (
+      el.id === pair.p.elementId ? setFullPoint(el, pair.p.which, tip) : el
+    ))
+  }
+  return current
+}
+
+function tangentArcTipCoincidentEquations(
+  elements: SketchElement[],
+  constraints: SketchConstraint[],
+): ConstraintEquation[] {
+  const equations: ConstraintEquation[] = []
+  for (const pair of tangentArcTipPairs(elements, constraints)) {
+    if (pointsAlreadyCoincident(constraints, pair.p, { elementId: pair.arcId, which: pair.which })) continue
+    const p = pair.p
+    const which = pair.which
+    const arcId = pair.arcId
+    for (const coord of ['x', 'y'] as const) {
+      const residual = (els: SketchElement[]) => {
+        const a = getPoint(els, p.elementId, p.which)
+        const b = getPoint(els, arcId, which)
+        if (!a || !b) return 0
+        return a[coord] - b[coord]
+      }
+      equations.push({
+        type: 'coincident',
+        residual,
+        jacobian: (els, vars) => numericJacobian(residual, els, vars),
+        weight: 10,
+      })
+    }
+  }
+  return equations
+}
+
 /** Finite-difference row for constraints whose target geometry may also move. */
 function numericJacobian(
   residual: (elements: SketchElement[]) => number,
@@ -1030,8 +1128,9 @@ export function solveConstraintsDetailed(
 
   const beforePin = geometrySnapshot(elements)
   const pinned = pinCoincidentPartners(elements, constraints, fixedPoints ?? new Set())
-  const pinMoves = diffGeometry(beforePin, geometrySnapshot(pinned.elements))
-  const workingElements = pinned.elements
+  const snapped = snapTangentContactsToArcTips(pinned.elements, constraints, pinned.fixedPoints)
+  const pinMoves = diffGeometry(beforePin, geometrySnapshot(snapped))
+  const workingElements = snapped
   const workingFixed = pinPointOnCircleHosts(constraints, pinned.fixedPoints)
 
   // Find all variables (movable element points)
@@ -1111,6 +1210,7 @@ export function solveConstraintsDetailed(
   const sketchEquations = [
     ...buildConstraintEquations(constraints),
     ...arcEndpointPinEquations(workingElements, workingFixed, constraints),
+    ...tangentArcTipCoincidentEquations(workingElements, constraints),
   ]
   const equations = [...sketchEquations, ...restEquations]
   if (sketchEquations.length === 0) {
@@ -1139,9 +1239,13 @@ export function solveConstraintsDetailed(
     return { peak, type }
   }
 
-  const variableStepLimit = (variable: SolverVariable) => (
-    variable.pointType === 'startAngle' || variable.pointType === 'endAngle' ? 0.35 : 2
-  )
+  const variableStepLimit = (variable: SolverVariable) => {
+    const cartesian = Math.max(2, maxResidual)
+    if (variable.pointType !== 'startAngle' && variable.pointType !== 'endAngle') return cartesian
+    const el = currentElements.find((candidate) => candidate.id === variable.elementId)
+    const radius = el && el.type === 'arc' ? Math.max(el.radius, 1e-3) : 1
+    return Math.max(0.35, cartesian / radius)
+  }
 
   for (iteration; iteration < maxIterations; iteration++) {
     const peak = peakSketchResidual(currentElements)

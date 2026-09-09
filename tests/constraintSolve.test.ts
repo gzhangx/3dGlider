@@ -467,4 +467,44 @@ describe('Constraint Solver', () => {
     expect(Math.hypot(solved1.end.x - end.x, solved1.end.y - end.y)).toBeLessThan(0.05)
     expect(Math.hypot(solved2.end.x - start.x, solved2.end.y - start.y)).toBeLessThan(0.05)
   })
+
+  it('keeps tangent line ends on arc tips even without an explicit coincident', () => {
+    const dist = 15
+    const radius = 5
+    const half = Math.acos(radius / dist)
+    const t1 = { x: radius * Math.cos(Math.PI - half), y: radius * Math.sin(Math.PI - half) }
+    const t2 = { x: radius * Math.cos(Math.PI + half), y: radius * Math.sin(Math.PI + half) }
+    const line1: SketchLine = { type: 'line', id: 'Line1', start: { x: -dist, y: 0 }, end: t1 }
+    const line2: SketchLine = { type: 'line', id: 'Line2', start: { x: -dist, y: 0 }, end: t2 }
+    const arc: SketchArc = {
+      type: 'arc',
+      id: 'A3',
+      center: { x: 0, y: 0 },
+      radius,
+      startAngle: Math.atan2(t2.y, t2.x),
+      endAngle: Math.atan2(t1.y, t1.x),
+    }
+    const constraints: SketchConstraint[] = [
+      { id: 'joinS', type: 'coincident', p1: { elementId: 'Line1', which: 'start' }, p2: { elementId: 'Line2', which: 'start' } },
+      { id: 't1', type: 'tangent', elementId1: 'Line1', elementId2: 'A3' },
+      { id: 't2', type: 'tangent', elementId1: 'Line2', elementId2: 'A3' },
+      { id: 'p1', type: 'pointOnCircle', p: { elementId: 'Line1', which: 'end' }, circleId: 'A3' },
+      { id: 'p2', type: 'pointOnCircle', p: { elementId: 'Line2', which: 'end' }, circleId: 'A3' },
+    ]
+
+    const dragged = { ...line1, start: { x: -dist, y: 10 } }
+    const result = solveConstraintsDetailed(
+      [dragged, line2, arc],
+      constraints,
+      new Set(['Line1:start']),
+    )
+
+    const solvedArc = result.elements.find((e): e is SketchArc => e.id === 'A3' && e.type === 'arc')!
+    const solved1 = result.elements.find((e): e is SketchLine => e.id === 'Line1' && e.type === 'line')!
+    const solved2 = result.elements.find((e): e is SketchLine => e.id === 'Line2' && e.type === 'line')!
+    const start = arcEndpoint(solvedArc, 'start')
+    const end = arcEndpoint(solvedArc, 'end')
+    expect(Math.hypot(solved1.end.x - end.x, solved1.end.y - end.y)).toBeLessThan(0.05)
+    expect(Math.hypot(solved2.end.x - start.x, solved2.end.y - start.y)).toBeLessThan(0.05)
+  })
 })

@@ -36,6 +36,22 @@ export function elementEndpoints(el: SketchElement): { pt: SketchPoint; ref: Poi
   return []
 }
 
+/** If `pt` is close to an arc endpoint, return that endpoint ref. */
+export function nearestArcEndpoint(
+  el: SketchElement,
+  pt: SketchPoint,
+  maxDist: number,
+): PointRef | null {
+  if (el.type !== 'arc') return null
+  let best: { ref: PointRef; dist: number } | null = null
+  for (const end of elementEndpoints(el)) {
+    const dist = Math.hypot(pt.x - end.pt.x, pt.y - end.pt.y)
+    if (dist > maxDist) continue
+    if (!best || dist < best.dist) best = { ref: end.ref, dist }
+  }
+  return best?.ref ?? null
+}
+
 export function selectablePoints(el: SketchElement): { pt: SketchPoint; ref: PointRef }[] {
   const points = elementEndpoints(el)
   if (el.type === 'circle' || el.type === 'arc') {
@@ -189,7 +205,7 @@ export function findSnapTarget(
                 if (dToTangent < snapTangentThreshold) {
                   best = {
                     pt: tangentPt,
-                    ref: null,
+                    ref: nearestArcEndpoint(el, tangentPt, snapEndpointThreshold),
                     constraintHint: '⌶ Tangent to arc',
                     tangentCircleId: el.id,
                     dist: dToTangent,
@@ -201,7 +217,7 @@ export function findSnapTarget(
           }
           best = {
             pt: closest,
-            ref: null,
+            ref: nearestArcEndpoint(el, closest, snapEndpointThreshold),
             constraintHint: '⊙ Coincident on arc',
             circleId: el.id,
             dist: dPerimeter,

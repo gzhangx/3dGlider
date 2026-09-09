@@ -796,12 +796,13 @@ export function SketchPlane() {
         // Tangency constrains the infinite line. Keep the snapped endpoint at the
         // actual contact point as a separate point-on-circle constraint.
         addedConstraints.push({ id: crypto.randomUUID(), type: 'pointOnCircle', p: { elementId: id, which: 'end' }, circleId: snapTarget.tangentCircleId })
-      } else if (snapTarget?.circleId) {
-        const c = { id: crypto.randomUUID(), type: 'pointOnCircle' as const, p: { elementId: id, which: 'end' } as PointRef, circleId: snapTarget.circleId }
-        addedConstraints.push(c as SketchConstraint)
-      } else if (snapTarget?.ref) {
+      }
+      if (snapTarget?.ref) {
         const c: CoincidentConstraint = { id: crypto.randomUUID(), type: 'coincident', p1: snapTarget.ref, p2: { elementId: id, which: 'end' } }
         addedConstraints.push(c)
+      } else if (snapTarget?.circleId && !snapTarget.tangentCircleId) {
+        const c = { id: crypto.randomUUID(), type: 'pointOnCircle' as const, p: { elementId: id, which: 'end' } as PointRef, circleId: snapTarget.circleId }
+        addedConstraints.push(c as SketchConstraint)
       }
       // Use the store's batch API to append constraints and apply solver once
       if (addedConstraints.length > 0) {
@@ -876,7 +877,16 @@ export function SketchPlane() {
           p: { elementId: dragTarget.elementId, which: dragTarget.pointType },
           circleId: dragSnapTarget.tangentCircleId,
         }
-        addSketchConstraintsBatch([tc, pointOnCircle], true)
+        const batch: SketchConstraint[] = [tc, pointOnCircle]
+        if (dragSnapTarget.ref) {
+          batch.push({
+            id: crypto.randomUUID(),
+            type: 'coincident',
+            p1: { elementId: dragTarget.elementId, which: dragTarget.pointType },
+            p2: dragSnapTarget.ref,
+          })
+        }
+        addSketchConstraintsBatch(batch, true)
       } else if (snapOk && dragSnapTarget?.circleId) {
         const c = { id: crypto.randomUUID(), type: 'pointOnCircle' as const, p: { elementId: dragTarget.elementId, which: dragTarget.pointType } as PointRef, circleId: dragSnapTarget.circleId }
         addSketchConstraintsBatch([c], true)
