@@ -1161,29 +1161,39 @@ export function solveConstraintsDetailed(
       eq.jacobian(currentElements, variables).map((value, column) => value * weights[index] / columnScale[column]),
     )
 
-    const delta = solveDampedLeastSquares(jacobian, residuals, 1e-3)
+    const lambda = Math.max(1e-9, 1e-3 * Math.min(1, maxResidual))
+    const delta = solveDampedLeastSquares(jacobian, residuals, lambda)
     const scaled = delta.map((value, index) => value / columnScale[index])
 
-    const dampingFactor = 0.5
-    const updates = new Map<string, SketchElement>()
-    for (const element of currentElements) {
-      updates.set(element.id, element)
+    const applyFactor = (factor: number) => {
+      const updates = new Map<string, SketchElement>()
+      for (const element of currentElements) updates.set(element.id, element)
+      for (const v of variables) {
+        const el = updates.get(v.elementId)
+        if (!el) continue
+        const oldValue = getVariableValue(el, v)
+        if (oldValue === null) continue
+        const limit = variableStepLimit(v)
+        const step = Math.max(-limit, Math.min(limit, scaled[v.index]))
+        const newValue = oldValue + factor * step
+        if (!Number.isFinite(newValue)) continue
+        updates.set(el.id, setPoint(el, v.pointType, v.coord, newValue))
+      }
+      return currentElements.map((element) => updates.get(element.id) ?? element)
     }
+
     const beforeStep = geometrySnapshot(currentElements)
-    for (const v of variables) {
-      const el = updates.get(v.elementId)
-      if (!el) continue
-
-      const oldValue = getVariableValue(el, v)
-      if (oldValue === null) continue
-
-      const limit = variableStepLimit(v)
-      const step = Math.max(-limit, Math.min(limit, scaled[v.index]))
-      const newValue = oldValue + dampingFactor * step
-      if (!Number.isFinite(newValue)) continue
-      updates.set(el.id, setPoint(el, v.pointType, v.coord, newValue))
+    let nextElements = currentElements
+    let nextPeak = maxResidual
+    for (const factor of [1, 0.5, 0.25, 0.125]) {
+      const trial = applyFactor(factor)
+      const trialPeak = peakSketchResidual(trial).peak
+      if (trialPeak < nextPeak) {
+        nextElements = trial
+        nextPeak = trialPeak
+      }
     }
-    currentElements = currentElements.map((element) => updates.get(element.id) ?? element)
+    currentElements = nextElements
     steps.push({
       iteration: iteration + 1,
       maxResidual,

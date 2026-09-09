@@ -444,6 +444,8 @@ describe('Constraint Solver', () => {
       { id: 'join2', type: 'coincident', p1: { elementId: 'Line2', which: 'end' }, p2: { elementId: 'A3', which: 'start' } },
       { id: 't1', type: 'tangent', elementId1: 'Line1', elementId2: 'A3' },
       { id: 't2', type: 'tangent', elementId1: 'Line2', elementId2: 'A3' },
+      { id: 'p1', type: 'pointOnCircle', p: { elementId: 'Line1', which: 'end' }, circleId: 'A3' },
+      { id: 'p2', type: 'pointOnCircle', p: { elementId: 'Line2', which: 'end' }, circleId: 'A3' },
     ]
 
     const dragged = { ...line1, start: { x: -dist, y: 1 } }
@@ -453,7 +455,8 @@ describe('Constraint Solver', () => {
       new Set(['Line1:start']),
     )
 
-    expect(result.maxResidual).toBeLessThan(1e-3)
+    expect(result.converged).toBe(true)
+    expect(result.maxResidual).toBeLessThan(1e-6)
     const solvedArc = result.elements.find((e): e is SketchArc => e.id === 'A3' && e.type === 'arc')!
     const solved1 = result.elements.find((e): e is SketchLine => e.id === 'Line1' && e.type === 'line')!
     const solved2 = result.elements.find((e): e is SketchLine => e.id === 'Line2' && e.type === 'line')!
