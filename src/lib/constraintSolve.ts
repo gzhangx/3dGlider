@@ -150,7 +150,7 @@ interface SolverVariable {
 
 /** Constraint residual and Jacobian row. */
 interface ConstraintEquation {
-  type: SketchConstraint['type']
+  type: SketchConstraint['type'] | 'rest'
   residual(elements: SketchElement[]): number
   jacobian(elements: SketchElement[], variables: SolverVariable[]): number[]
   /** Larger weights are preferred in the least-squares solve (e.g. coincident). */
@@ -245,20 +245,71 @@ function setPoint(el: SketchElement, pointType: SolverVariable['pointType'], coo
   return el
 }
 
-function tangentResidual(elements: SketchElement[], id1: string, id2: string): number {
+function tangentSignedDistance(elements: SketchElement[], id1: string, id2: string): { signed: number; radius: number } | null {
   const a = elements.find((e) => e.id === id1)
   const b = elements.find((e) => e.id === id2)
-  if (!a || !b) return 0
+  if (!a || !b) return null
   const line = a.type === 'line' ? a : b.type === 'line' ? b : null
   const curve = a.type === 'circle' || a.type === 'arc' ? a : b.type === 'circle' || b.type === 'arc' ? b : null
-  if (!line || !curve) return 0
+  if (!line || !curve) return null
 
   const dx = line.end.x - line.start.x
   const dy = line.end.y - line.start.y
   const lineLen = Math.hypot(dx, dy)
-  if (lineLen < 1e-9) return curve.radius
+  if (lineLen < 1e-9) return { signed: 0, radius: curve.radius }
   const signed = (dy * curve.center.x - dx * curve.center.y + line.end.x * line.start.y - line.end.y * line.start.x) / lineLen
-  return Math.abs(signed) - curve.radius
+  return { signed, radius: curve.radius }
+}
+
+function tangentResidual(elements: SketchElement[], id1: string, id2: string, side: number): number {
+  const result = tangentSignedDistance(elements, id1, id2)
+  if (!result) return 0
+  if (side === 0) return Math.abs(result.signed) - result.radius
+  return result.signed - side * result.radius
+}
+
+function setFullPoint(el: SketchElement, which: 'start' | 'end' | 'center', pt: SketchPoint): SketchElement {
+  if ((el.type === 'line' || el.type === 'rect') && (which === 'start' || which === 'end')) {
+    return { ...el, [which]: pt }
+  }
+  if ((el.type === 'circle' || el.type === 'arc') && which === 'center') {
+    return { ...el, center: pt }
+  }
+  if (el.type === 'arc' && (which === 'start' || which === 'end')) {
+    const key = which === 'start' ? 'startAngle' : 'endAngle'
+    return { ...el, [key]: Math.atan2(pt.y - el.center.y, pt.x - el.center.x) }
+  }
+  return el
+}
+
+/** When a point is dragged/fixed, snap coincident partners to it and pin them too. */
+function pinCoincidentPartners(
+  elements: SketchElement[],
+  constraints: SketchConstraint[],
+  fixedPoints: Set<string>,
+): { elements: SketchElement[]; fixedPoints: Set<string> } {
+  let current = elements
+  const pinned = new Set(fixedPoints)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const constraint of constraints) {
+      if (constraint.type !== 'coincident') continue
+      const key1 = `${constraint.p1.elementId}:${constraint.p1.which}`
+      const key2 = `${constraint.p2.elementId}:${constraint.p2.which}`
+      const pin1 = pinned.has(key1)
+      const pin2 = pinned.has(key2)
+      if (pin1 === pin2) continue
+      const source = pin1 ? constraint.p1 : constraint.p2
+      const target = pin1 ? constraint.p2 : constraint.p1
+      const point = getPoint(current, source.elementId, source.which)
+      if (!point) continue
+      current = current.map((el) => el.id === target.elementId ? setFullPoint(el, target.which, point) : el)
+      pinned.add(`${target.elementId}:${target.which}`)
+      changed = true
+    }
+  }
+  return { elements: current, fixedPoints: pinned }
 }
 
 /** Finite-difference row for constraints whose target geometry may also move. */
@@ -678,10 +729,24 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
         },
       })
     } else if (c.type === 'tangent') {
+      const initial = { side: 0 }
       equations.push({
         type: 'tangent',
-        residual: (els) => tangentResidual(els, c.elementId1, c.elementId2),
-        jacobian: (els, vars) => numericJacobian((candidates) => tangentResidual(candidates, c.elementId1, c.elementId2), els, vars),
+        residual: (els) => {
+          const result = tangentSignedDistance(els, c.elementId1, c.elementId2)
+          if (!result) return 0
+          if (initial.side === 0 && Math.abs(result.signed) > 1e-9) {
+            initial.side = Math.sign(result.signed)
+          }
+          return tangentResidual(els, c.elementId1, c.elementId2, initial.side)
+        },
+        jacobian: (els, vars) => numericJacobian(
+          (candidates) => tangentResidual(candidates, c.elementId1, c.elementId2, initial.side || Math.sign(
+            tangentSignedDistance(candidates, c.elementId1, c.elementId2)?.signed ?? 0,
+          )),
+          els,
+          vars,
+        ),
       })
     } else if (c.type === 'pointOnCircle') {
       const pRef = c.p
@@ -782,6 +847,10 @@ export function solveConstraintsDetailed(
     return { elements, converged: true, iterations: 0, maxResidual: 0 }
   }
 
+  const pinned = pinCoincidentPartners(elements, constraints, fixedPoints ?? new Set())
+  const workingElements = pinned.elements
+  const workingFixed = pinned.fixedPoints
+
   // Find all variables (movable element points)
   const variables: SolverVariable[] = []
   let varIndex = 0
@@ -789,29 +858,29 @@ export function solveConstraintsDetailed(
   // Radius is a DOF only when a dimension (or equal-length) actually pins or
   // drives it. Tangent / point-on-circle must not resize arcs or circles —
   // those constraints are satisfied by moving centers or the other geometry.
-  for (const el of elements) {
+  for (const el of workingElements) {
     const fixKey = (pt: string) => `${el.id}:${pt}`
 
     if (el.type === 'line') {
-      if (!fixedPoints?.has(fixKey('start'))) {
+      if (!workingFixed.has(fixKey('start'))) {
         variables.push({ elementId: el.id, pointType: 'start', coord: 'x', index: varIndex++ })
         variables.push({ elementId: el.id, pointType: 'start', coord: 'y', index: varIndex++ })
       }
-      if (!fixedPoints?.has(fixKey('end'))) {
+      if (!workingFixed.has(fixKey('end'))) {
         variables.push({ elementId: el.id, pointType: 'end', coord: 'x', index: varIndex++ })
         variables.push({ elementId: el.id, pointType: 'end', coord: 'y', index: varIndex++ })
       }
     } else if (el.type === 'rect') {
-      if (!fixedPoints?.has(fixKey('start'))) {
+      if (!workingFixed.has(fixKey('start'))) {
         variables.push({ elementId: el.id, pointType: 'start', coord: 'x', index: varIndex++ })
         variables.push({ elementId: el.id, pointType: 'start', coord: 'y', index: varIndex++ })
       }
-      if (!fixedPoints?.has(fixKey('end'))) {
+      if (!workingFixed.has(fixKey('end'))) {
         variables.push({ elementId: el.id, pointType: 'end', coord: 'x', index: varIndex++ })
         variables.push({ elementId: el.id, pointType: 'end', coord: 'y', index: varIndex++ })
       }
     } else if (el.type === 'circle' || el.type === 'arc') {
-      if (!fixedPoints?.has(fixKey('center'))) {
+      if (!workingFixed.has(fixKey('center'))) {
         variables.push({ elementId: el.id, pointType: 'center', coord: 'x', index: varIndex++ })
         variables.push({ elementId: el.id, pointType: 'center', coord: 'y', index: varIndex++ })
       }
@@ -819,10 +888,10 @@ export function solveConstraintsDetailed(
         // One angular DOF per endpoint. Cartesian x/y pairs over-parameterize
         // the circle and make coincident constraints rank-deficient, which
         // showed up as disconnected endpoints and oversized motion.
-        if (!fixedPoints?.has(fixKey('start'))) {
+        if (!workingFixed.has(fixKey('start'))) {
           variables.push({ elementId: el.id, pointType: 'startAngle', coord: 'x', index: varIndex++ })
         }
-        if (!fixedPoints?.has(fixKey('end'))) {
+        if (!workingFixed.has(fixKey('end'))) {
           variables.push({ elementId: el.id, pointType: 'endAngle', coord: 'x', index: varIndex++ })
         }
       }
@@ -832,24 +901,42 @@ export function solveConstraintsDetailed(
     }
   }
 
-  if (variables.length === 0) return { elements, converged: false, iterations: 0, maxResidual: Infinity }
+  if (variables.length === 0) {
+    return { elements: workingElements, converged: true, iterations: 0, maxResidual: 0 }
+  }
 
-  // Build constraint equations
-  const equations = buildConstraintEquations(constraints)
-  if (equations.length === 0) return { elements, converged: true, iterations: 0, maxResidual: 0 }
+  const restPose = workingElements
+  const restEquations: ConstraintEquation[] = variables.map((variable) => ({
+    type: 'rest',
+    residual: (els) => {
+      const el = els.find((candidate) => candidate.id === variable.elementId)
+      const restEl = restPose.find((candidate) => candidate.id === variable.elementId)
+      if (!el || !restEl) return 0
+      const now = getVariableValue(el, variable)
+      const rest = getVariableValue(restEl, variable)
+      if (now === null || rest === null) return 0
+      return now - rest
+    },
+    jacobian: (_els, vars) => vars.map((candidate) => candidate.index === variable.index ? 1 : 0),
+    weight: 0.08,
+  }))
 
-  let currentElements = [...elements]
+  const sketchEquations = buildConstraintEquations(constraints)
+  const equations = [...sketchEquations, ...restEquations]
+  if (sketchEquations.length === 0) return { elements: workingElements, converged: true, iterations: 0, maxResidual: 0 }
+
+  let currentElements = [...workingElements]
   let iteration = 0
   let maxResidual = Infinity
 
   for (iteration; iteration < maxIterations; iteration++) {
-    const rawResiduals = equations.map((eq) => eq.residual(currentElements))
-    maxResidual = Math.max(...rawResiduals.map(Math.abs))
+    const sketchResiduals = sketchEquations.map((eq) => eq.residual(currentElements))
+    maxResidual = Math.max(...sketchResiduals.map(Math.abs))
 
     if (maxResidual < tolerance) break
 
     const weights = equations.map((eq) => eq.weight ?? 1)
-    const residuals = rawResiduals.map((value, index) => value * weights[index])
+    const residuals = equations.map((eq, index) => eq.residual(currentElements) * weights[index])
     const columnScale = variables.map((variable) => {
       if (variable.pointType !== 'startAngle' && variable.pointType !== 'endAngle') return 1
       const el = currentElements.find((candidate) => candidate.id === variable.elementId)
@@ -859,10 +946,10 @@ export function solveConstraintsDetailed(
       eq.jacobian(currentElements, variables).map((value, column) => value * weights[index] / columnScale[column]),
     )
 
-    // Solve using damped least-squares: (J^T J + λI) δ = -J^T r
-    // Angle columns are scaled to arc-length so the solver does not prefer
-    // huge angular steps over translating the center.
-    const delta = solveDampedLeastSquares(jacobian, residuals, 1e-6)
+    const delta = solveDampedLeastSquares(jacobian, residuals, 1e-3)
+    const scaled = delta.map((value, index) => value / columnScale[index])
+    const maxStep = scaled.reduce((peak, value) => Math.max(peak, Math.abs(value)), 0)
+    const stepScale = maxStep > 2 ? 2 / maxStep : 1
 
     const dampingFactor = 0.5
     const updates = new Map<string, SketchElement>()
@@ -876,7 +963,8 @@ export function solveConstraintsDetailed(
       const oldValue = getVariableValue(el, v)
       if (oldValue === null) continue
 
-      const newValue = oldValue + dampingFactor * delta[v.index] / columnScale[v.index]
+      const newValue = oldValue + dampingFactor * stepScale * scaled[v.index]
+      if (!Number.isFinite(newValue)) continue
       updates.set(el.id, setPoint(el, v.pointType, v.coord, newValue))
     }
     currentElements = currentElements.map((element) => updates.get(element.id) ?? element)
