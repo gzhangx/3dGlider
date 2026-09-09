@@ -1,14 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   useModelStore,
+  PointRef,
   SketchConstraint,
   SketchElement,
 } from '../../store/modelStore'
 import styles from './SketchNavigator.module.css'
 import { constraintElementIds } from '../../lib/constraintUtils'
 import { SCENE_TO_MM } from '../../lib/units'
-import type { SolverDebugLog, SolverGeomMove } from '../../lib/constraintSolve'
+import { solveConstraintsDetailed, type SolverDebugLog, type SolverGeomMove } from '../../lib/constraintSolve'
+import { applyDraggedPoint, sketchPoint } from '../../lib/sketchInteraction'
 
 // ── element label ─────────────────────────────────────────────────────────────
 
@@ -105,6 +107,23 @@ function formatSolverDebug(log: SolverDebugLog, elements: SketchElement[]): stri
   return lines.join('\n')
 }
 
+function parseMmPair(raw: string): { x: number; y: number } | null {
+  const parts = raw.trim().split(/[\s,;]+/).filter(Boolean)
+  if (parts.length !== 2) return null
+  const x = parseFloat(parts[0])
+  const y = parseFloat(parts[1])
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+  return { x: x / SCENE_TO_MM, y: y / SCENE_TO_MM }
+}
+
+function pointPosText(elements: SketchElement[], ref: PointRef): string {
+  const el = elements.find((candidate) => candidate.id === ref.elementId)
+  if (!el) return ''
+  const pt = sketchPoint(el, ref.which)
+  if (!pt) return ''
+  return `${fmtMm(pt.x)}, ${fmtMm(pt.y)}`
+}
+
 // ── ids referenced by a constraint ───────────────────────────────────────────
 
 // ── main component ────────────────────────────────────────────────────────────
@@ -114,6 +133,7 @@ export function SketchNavigator() {
     mode, sketchElements, sketchConstraints,
     setHighlightElementIds, deleteSketchElement, deleteSketchConstraint,
     solverDebugEnabled, solverDebugLog, setSolverDebugEnabled,
+    selectedPointRefs, commitSolvedSketch,
   } = useModelStore(useShallow((state) => ({
     mode: state.mode, sketchElements: state.sketchElements,
     sketchConstraints: state.sketchConstraints,
@@ -123,9 +143,29 @@ export function SketchNavigator() {
     solverDebugEnabled: state.solverDebugEnabled,
     solverDebugLog: state.solverDebugLog,
     setSolverDebugEnabled: state.setSolverDebugEnabled,
+    selectedPointRefs: state.selectedPointRefs,
+    commitSolvedSketch: state.commitSolvedSketch,
   })))
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [posText, setPosText] = useState('')
+  const [posDirty, setPosDirty] = useState(false)
+
+  const debugPoint = selectedPointRefs[selectedPointRefs.length - 1] ?? null
+  const debugPointKey = debugPoint ? `${debugPoint.elementId}:${debugPoint.which}` : ''
+
+  useEffect(() => {
+    setPosDirty(false)
+  }, [debugPointKey])
+
+  useEffect(() => {
+    if (!solverDebugEnabled || posDirty) return
+    if (!debugPoint) {
+      setPosText('')
+      return
+    }
+    setPosText(pointPosText(sketchElements, debugPoint))
+  }, [solverDebugEnabled, debugPoint, debugPointKey, sketchElements, posDirty])
 
   if (mode !== 'sketch') return null
 
@@ -158,6 +198,19 @@ export function SketchNavigator() {
     deleteSketchConstraint(id)
   }
 
+  const applyDebugPoint = () => {
+    if (!debugPoint) return
+    const pt = parseMmPair(posText)
+    if (!pt) return
+    setPosDirty(false)
+    const updated = applyDraggedPoint(sketchElements, debugPoint, pt)
+    commitSolvedSketch(solveConstraintsDetailed(
+      updated,
+      sketchConstraints,
+      new Set([`${debugPoint.elementId}:${debugPoint.which}`]),
+    ))
+  }
+
   return (
     <aside className={`${styles.panel} ${solverDebugEnabled ? styles.panelDebug : ''}`}>
       <div className={styles.heading}>Sketch Items</div>
@@ -172,11 +225,35 @@ export function SketchNavigator() {
       </label>
 
       {solverDebugEnabled && (
-        <div className={styles.debugLog}>
-          {solverDebugLog
-            ? formatSolverDebug(solverDebugLog, sketchElements)
-            : 'No solve yet — drag a point or add a constraint.'}
-        </div>
+        <>
+          <div className={styles.debugPoint}>
+            <div className={styles.debugPointLabel}>
+              {debugPoint
+                ? `${elementTag(sketchElements, debugPoint.elementId)}.${debugPoint.which} (mm)`
+                : 'Click a point'}
+            </div>
+            <div className={styles.debugPointRow}>
+              <input
+                className={styles.debugPointInput}
+                value={posText}
+                placeholder="x, y"
+                disabled={!debugPoint}
+                onChange={(e) => { setPosDirty(true); setPosText(e.target.value) }}
+                onKeyDown={(e) => { if (e.key === 'Enter') applyDebugPoint() }}
+              />
+              <button
+                className={styles.debugSetBtn}
+                disabled={!debugPoint}
+                onClick={applyDebugPoint}
+              >Set</button>
+            </div>
+          </div>
+          <div className={styles.debugLog}>
+            {solverDebugLog
+              ? formatSolverDebug(solverDebugLog, sketchElements)
+              : 'No solve yet — drag a point, Set a position, or add a constraint.'}
+          </div>
+        </>
       )}
 
       <div className={styles.section}>

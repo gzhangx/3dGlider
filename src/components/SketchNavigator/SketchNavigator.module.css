@@ -45,6 +45,62 @@
   word-break: break-word;
 }
 
+.debugPoint {
+  padding: 2px 8px 8px;
+}
+
+.debugPointLabel {
+  font-size: 10px;
+  color: #667;
+  padding: 0 2px 4px;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.debugPointRow {
+  display: flex;
+  gap: 6px;
+}
+
+.debugPointInput {
+  flex: 1;
+  min-width: 0;
+  background: #080814;
+  border: 1px solid #2a2a4a;
+  border-radius: 4px;
+  color: #cce;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  padding: 4px 6px;
+}
+
+.debugPointInput:focus {
+  outline: none;
+  border-color: #aa66cc;
+}
+
+.debugPointInput:disabled {
+  opacity: 0.4;
+}
+
+.debugSetBtn {
+  background: #2a1840;
+  border: 1px solid #663388;
+  color: #ddaaee;
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.debugSetBtn:hover:not(:disabled) {
+  background: #3a2260;
+}
+
+.debugSetBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .heading {
   font-size: 10px;
   letter-spacing: 0.1em;

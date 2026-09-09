@@ -352,6 +352,19 @@ export function sketchPointUpdates(
   return null
 }
 
+/** Move a sketch point as a live drag would, before the solver runs. */
+export function applyDraggedPoint(
+  elements: SketchElement[],
+  ref: PointRef,
+  pt: SketchPoint,
+): SketchElement[] {
+  return elements.map((el) => {
+    if (el.id !== ref.elementId) return el
+    const updates = sketchPointUpdates(el, ref.which, pt)
+    return updates ? { ...el, ...updates } as SketchElement : el
+  })
+}
+
 export type CoincidenceDraft =
   | { type: 'coincident'; p1: PointRef; p2: PointRef }
   | { type: 'pointOnLine'; p: PointRef; lineId: string }

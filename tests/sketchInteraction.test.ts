@@ -7,6 +7,7 @@ import {
   nearestSelectablePoint,
   sketchPoint,
   sketchPointUpdates,
+  applyDraggedPoint,
 } from '../src/lib/sketchInteraction'
 import type { SketchArc, SketchCircle, SketchConstraint, SketchLine } from '../src/store/modelStore'
 
@@ -145,5 +146,13 @@ describe('constrained drag snapping', () => {
       constraints,
     )
     expect(Math.hypot(onCircle.x - 2, onCircle.y - 2)).toBeCloseTo(2, 5)
+  })
+})
+
+describe('applyDraggedPoint', () => {
+  it('moves a line endpoint like a live drag', () => {
+    const line: SketchLine = { type: 'line', id: 'l1', start: { x: 0, y: 0 }, end: { x: 4, y: 0 } }
+    const moved = applyDraggedPoint([line], { elementId: 'l1', which: 'end' }, { x: 10, y: 2 })
+    expect(moved[0]).toMatchObject({ id: 'l1', start: { x: 0, y: 0 }, end: { x: 10, y: 2 } })
   })
 })

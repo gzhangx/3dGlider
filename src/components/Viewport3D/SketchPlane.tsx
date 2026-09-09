@@ -36,6 +36,7 @@ import {
   constraintClusterIds,
   dragSnapConflictsWithConstraints,
   constrainDragPosition,
+  applyDraggedPoint,
 } from '../../lib/sketchInteraction'
 import { planeOriginFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { PLANE_SIZE } from '../../lib/units'
@@ -576,20 +577,8 @@ export function SketchPlane() {
         liveConstraints,
       )
 
-      const updated = liveElements.map((el) => {
-        if (el.id !== dragTarget.elementId) return el
-        if (el.type === 'arc' && (dragTarget.pointType === 'start' || dragTarget.pointType === 'end')) {
-          const angle = Math.atan2(pt.y - el.center.y, pt.x - el.center.x)
-          return {
-            ...el,
-            [dragTarget.pointType === 'start' ? 'startAngle' : 'endAngle']: angle,
-          } satisfies SketchArc
-        }
-        return { ...el, [dragTarget.pointType]: pt } as SketchElement
-      })
-
-      const fixedPoints = new Set<string>([`${dragTarget.elementId}:${dragTarget.pointType}`])
-      commitSolvedSketch(solveConstraintsDetailed(updated, liveConstraints, fixedPoints))
+      const updated = applyDraggedPoint(liveElements, dragRef, pt)
+      commitSolvedSketch(solveConstraintsDetailed(updated, liveConstraints, new Set([`${dragRef.elementId}:${dragRef.which}`])))
       return
     }
 
