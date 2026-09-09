@@ -276,8 +276,21 @@ function setFullPoint(el: SketchElement, which: 'start' | 'end' | 'center', pt: 
     return { ...el, center: pt }
   }
   if (el.type === 'arc' && (which === 'start' || which === 'end')) {
-    const key = which === 'start' ? 'startAngle' : 'endAngle'
-    return { ...el, [key]: Math.atan2(pt.y - el.center.y, pt.x - el.center.x) }
+    const angle = which === 'start' ? el.startAngle : el.endAngle
+    const current = {
+      x: el.center.x + Math.cos(angle) * el.radius,
+      y: el.center.y + Math.sin(angle) * el.radius,
+    }
+    // Follow the target point by moving the whole arc. Rewriting only the
+    // angle leaves the endpoint on the old circle, so coincident-to-line
+    // drags look disconnected.
+    return {
+      ...el,
+      center: {
+        x: el.center.x + pt.x - current.x,
+        y: el.center.y + pt.y - current.y,
+      },
+    }
   }
   return el
 }
@@ -324,6 +337,32 @@ function pinPointOnCircleHosts(
     pinned.add(`${constraint.circleId}:center`)
   }
   return pinned
+}
+
+/** Keep a pinned arc endpoint at its Cartesian location while the center moves. */
+function arcEndpointPinEquations(
+  elements: SketchElement[],
+  fixedPoints: Set<string>,
+): ConstraintEquation[] {
+  const equations: ConstraintEquation[] = []
+  for (const el of elements) {
+    if (el.type !== 'arc') continue
+    for (const which of ['start', 'end'] as const) {
+      if (!fixedPoints.has(`${el.id}:${which}`)) continue
+      const pin = getPoint([el], el.id, which)
+      if (!pin) continue
+      for (const coord of ['x', 'y'] as const) {
+        const residual = (els: SketchElement[]) => (getPoint(els, el.id, which)?.[coord] ?? pin[coord]) - pin[coord]
+        equations.push({
+          type: 'coincident',
+          residual,
+          jacobian: (els, vars) => numericJacobian(residual, els, vars),
+          weight: 10,
+        })
+      }
+    }
+  }
+  return equations
 }
 
 /** Finite-difference row for constraints whose target geometry may also move. */
@@ -935,7 +974,10 @@ export function solveConstraintsDetailed(
     weight: 0.008,
   }))
 
-  const sketchEquations = buildConstraintEquations(constraints)
+  const sketchEquations = [
+    ...buildConstraintEquations(constraints),
+    ...arcEndpointPinEquations(workingElements, workingFixed),
+  ]
   const equations = [...sketchEquations, ...restEquations]
   if (sketchEquations.length === 0) return { elements: workingElements, converged: true, iterations: 0, maxResidual: 0 }
 
