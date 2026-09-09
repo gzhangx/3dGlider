@@ -343,10 +343,15 @@ function pinPointOnCircleHosts(
 function arcEndpointPinEquations(
   elements: SketchElement[],
   fixedPoints: Set<string>,
+  constraints: SketchConstraint[],
 ): ConstraintEquation[] {
   const equations: ConstraintEquation[] = []
   for (const el of elements) {
     if (el.type !== 'arc') continue
+    // Cartesian pins on endpoints fight a radius DOF (the pinned point would
+    // have to stay put while r changes). "Fixed end" already means the angle
+    // is not a variable.
+    if (elementNeedsRadiusVariable(el, elements, constraints)) continue
     for (const which of ['start', 'end'] as const) {
       if (!fixedPoints.has(`${el.id}:${which}`)) continue
       const pin = getPoint([el], el.id, which)
@@ -800,6 +805,7 @@ function buildConstraintEquations(constraints: SketchConstraint[]): ConstraintEq
           els,
           vars,
         ),
+        weight: 10,
       })
     } else if (c.type === 'pointOnCircle') {
       const pRef = c.p
@@ -879,6 +885,7 @@ export interface SolverGeomMove {
 export interface SolverIterationLog {
   iteration: number
   maxResidual: number
+  maxResidualType?: string
   moves: SolverGeomMove[]
 }
 
@@ -886,6 +893,7 @@ export interface SolverDebugLog {
   converged: boolean
   iterations: number
   maxResidual: number
+  maxResidualType?: string
   fixedPoints: string[]
   pinMoves: SolverGeomMove[]
   steps: SolverIterationLog[]
@@ -970,6 +978,7 @@ function emptySolverDebug(extra: Partial<SolverDebugLog> = {}): SolverDebugLog {
     converged: extra.converged ?? true,
     iterations: extra.iterations ?? 0,
     maxResidual: extra.maxResidual ?? 0,
+    maxResidualType: extra.maxResidualType,
     fixedPoints: extra.fixedPoints ?? [],
     pinMoves: extra.pinMoves ?? [],
     steps: extra.steps ?? [],
@@ -1095,12 +1104,13 @@ export function solveConstraintsDetailed(
       return now - rest
     },
     jacobian: (_els, vars) => vars.map((candidate) => candidate.index === variable.index ? 1 : 0),
-    weight: 0.008,
+    // Keep this far below sketch weights so rest cannot park the solve at ~1e-3.
+    weight: 1e-6,
   }))
 
   const sketchEquations = [
     ...buildConstraintEquations(constraints),
-    ...arcEndpointPinEquations(workingElements, workingFixed),
+    ...arcEndpointPinEquations(workingElements, workingFixed, constraints),
   ]
   const equations = [...sketchEquations, ...restEquations]
   if (sketchEquations.length === 0) {
@@ -1113,11 +1123,30 @@ export function solveConstraintsDetailed(
   let currentElements = [...workingElements]
   let iteration = 0
   let maxResidual = Infinity
+  let maxResidualType = ''
   const steps: SolverIterationLog[] = []
 
+  const peakSketchResidual = (els: SketchElement[]) => {
+    let peak = 0
+    let type = ''
+    for (const eq of sketchEquations) {
+      const value = Math.abs(eq.residual(els))
+      if (value >= peak) {
+        peak = value
+        type = eq.type
+      }
+    }
+    return { peak, type }
+  }
+
+  const variableStepLimit = (variable: SolverVariable) => (
+    variable.pointType === 'startAngle' || variable.pointType === 'endAngle' ? 0.35 : 2
+  )
+
   for (iteration; iteration < maxIterations; iteration++) {
-    const sketchResiduals = sketchEquations.map((eq) => eq.residual(currentElements))
-    maxResidual = Math.max(...sketchResiduals.map(Math.abs))
+    const peak = peakSketchResidual(currentElements)
+    maxResidual = peak.peak
+    maxResidualType = peak.type
 
     if (maxResidual < tolerance) break
 
@@ -1134,8 +1163,6 @@ export function solveConstraintsDetailed(
 
     const delta = solveDampedLeastSquares(jacobian, residuals, 1e-3)
     const scaled = delta.map((value, index) => value / columnScale[index])
-    const maxStep = scaled.reduce((peak, value) => Math.max(peak, Math.abs(value)), 0)
-    const stepScale = maxStep > 2 ? 2 / maxStep : 1
 
     const dampingFactor = 0.5
     const updates = new Map<string, SketchElement>()
@@ -1150,7 +1177,9 @@ export function solveConstraintsDetailed(
       const oldValue = getVariableValue(el, v)
       if (oldValue === null) continue
 
-      const newValue = oldValue + dampingFactor * stepScale * scaled[v.index]
+      const limit = variableStepLimit(v)
+      const step = Math.max(-limit, Math.min(limit, scaled[v.index]))
+      const newValue = oldValue + dampingFactor * step
       if (!Number.isFinite(newValue)) continue
       updates.set(el.id, setPoint(el, v.pointType, v.coord, newValue))
     }
@@ -1158,6 +1187,7 @@ export function solveConstraintsDetailed(
     steps.push({
       iteration: iteration + 1,
       maxResidual,
+      maxResidualType,
       moves: diffGeometry(beforeStep, geometrySnapshot(currentElements)),
     })
   }
@@ -1166,6 +1196,7 @@ export function solveConstraintsDetailed(
     converged: maxResidual < tolerance,
     iterations: iteration,
     maxResidual: Number.isFinite(maxResidual) ? maxResidual : 0,
+    maxResidualType,
     fixedPoints: [...workingFixed],
     pinMoves,
     steps,

@@ -45,6 +45,21 @@
   word-break: break-word;
 }
 
+.debugLogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 8px 4px;
+}
+
+.debugLogTitle {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #667;
+}
+
 .debugPoint {
   padding: 2px 8px 8px;
 }

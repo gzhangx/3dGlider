@@ -80,7 +80,7 @@ function formatMove(move: SolverGeomMove, elements: SketchElement[]): string {
 
 function formatSolverDebug(log: SolverDebugLog, elements: SketchElement[]): string {
   const lines = [
-    `${log.converged ? 'converged' : 'DID NOT CONVERGE'}  iters=${log.iterations}  maxR=${log.maxResidual.toExponential(2)}`,
+    `${log.converged ? 'converged' : 'DID NOT CONVERGE'}  iters=${log.iterations}  maxR=${log.maxResidual.toExponential(2)}${log.maxResidualType ? `  (${log.maxResidualType})` : ''}`,
   ]
   if (log.fixedPoints.length > 0) {
     const labels = log.fixedPoints.map((key) => {
@@ -97,7 +97,7 @@ function formatSolverDebug(log: SolverDebugLog, elements: SketchElement[]): stri
     lines.push(log.iterations === 0 ? 'already satisfied (no Newton steps)' : 'no geometry moved')
   }
   for (const step of log.steps) {
-    lines.push(`iter ${step.iteration}  maxR=${step.maxResidual.toExponential(2)}`)
+    lines.push(`iter ${step.iteration}  maxR=${step.maxResidual.toExponential(2)}${step.maxResidualType ? `  (${step.maxResidualType})` : ''}`)
     if (step.moves.length === 0) {
       lines.push('  (no point moved)')
       continue
@@ -150,6 +150,7 @@ export function SketchNavigator() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [posText, setPosText] = useState('')
   const [posDirty, setPosDirty] = useState(false)
+  const [logCopied, setLogCopied] = useState(false)
 
   const debugPoint = selectedPointRefs[selectedPointRefs.length - 1] ?? null
   const debugPointKey = debugPoint ? `${debugPoint.elementId}:${debugPoint.which}` : ''
@@ -211,6 +212,28 @@ export function SketchNavigator() {
     ))
   }
 
+  const debugLogText = solverDebugLog
+    ? formatSolverDebug(solverDebugLog, sketchElements)
+    : ''
+
+  const copyDebugLog = async () => {
+    if (!debugLogText) return
+    try {
+      await navigator.clipboard.writeText(debugLogText)
+    } catch {
+      const area = document.createElement('textarea')
+      area.value = debugLogText
+      area.style.position = 'fixed'
+      area.style.left = '-9999px'
+      document.body.appendChild(area)
+      area.select()
+      document.execCommand('copy')
+      document.body.removeChild(area)
+    }
+    setLogCopied(true)
+    window.setTimeout(() => setLogCopied(false), 1500)
+  }
+
   return (
     <aside className={`${styles.panel} ${solverDebugEnabled ? styles.panelDebug : ''}`}>
       <div className={styles.heading}>Sketch Items</div>
@@ -248,10 +271,17 @@ export function SketchNavigator() {
               >Set</button>
             </div>
           </div>
+          <div className={styles.debugLogHeader}>
+            <span className={styles.debugLogTitle}>Solver log</span>
+            <button
+              className={styles.debugSetBtn}
+              disabled={!debugLogText}
+              onClick={() => { void copyDebugLog() }}
+              title="Copy solver log to clipboard"
+            >{logCopied ? 'Copied' : 'Copy'}</button>
+          </div>
           <div className={styles.debugLog}>
-            {solverDebugLog
-              ? formatSolverDebug(solverDebugLog, sketchElements)
-              : 'No solve yet — drag a point, Set a position, or add a constraint.'}
+            {debugLogText || 'No solve yet — drag a point, Set a position, or add a constraint.'}
           </div>
         </>
       )}
