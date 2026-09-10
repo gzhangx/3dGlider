@@ -1,11 +1,11 @@
-import { useRef, useEffect, useMemo } from 'react'
+import { useRef, useEffect, useLayoutEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { Grid, CameraControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { Box3, PlaneGeometry, EdgesGeometry, DoubleSide, Vector3 } from 'three'
 import { useModelStore, SketchPlanePose } from '../../store/modelStore'
 import { planeNormalFromPose, planeOriginFromPose } from '../../lib/planePose'
-import { PLANE_SIZE } from '../../lib/units'
+import { PLANE_SIZE, distanceToFitPlane } from '../../lib/units'
 import { AxesHelper } from './AxesHelper'
 import { PlaneGizmo } from './PlaneGizmo'
 import { SketchPlane } from './SketchPlane'
@@ -55,32 +55,37 @@ export function Scene() {
   const { camera } = useThree()
   const controlsRef = useRef<CameraControls>(null)
   const initialViewSet = useRef(false)
+  const plateDist = distanceToFitPlane('fov' in camera && typeof camera.fov === 'number' ? camera.fov : 50)
 
-  useEffect(() => {
-    if (initialViewSet.current || !controlsRef.current) return
-    const half = PLANE_SIZE / 2
-    const sceneBounds = new Box3(
-      new Vector3(-half, -half, -half),
-      new Vector3(half, half, half),
-    )
-    controlsRef.current.fitToBox(sceneBounds, true)
-    initialViewSet.current = true
+  useLayoutEffect(() => {
+    if (initialViewSet.current) return
+    const id = requestAnimationFrame(() => {
+      const controls = controlsRef.current
+      if (!controls) return
+      const half = PLANE_SIZE / 2
+      const sceneBounds = new Box3(
+        new Vector3(-half, 0, -half),
+        new Vector3(half, half * 0.08, half),
+      )
+      controls.fitToBox(sceneBounds, false)
+      initialViewSet.current = true
+    })
+    return () => cancelAnimationFrame(id)
   }, [])
 
   // Snap camera perpendicular to plane when entering sketch mode
   useEffect(() => {
     if (!activePlane || !controlsRef.current) return
-    const dist = camera.position.length() || 12
     const normal = planeNormalFromPose(activePlane)
     const origin = planeOriginFromPose(activePlane)
-    const nx = normal.x
-    const ny = normal.y
-    const nz = normal.z
-    const tx = origin.x
-    const ty = origin.y
-    const tz = origin.z
-    controlsRef.current.setLookAt(tx + nx * dist, ty + ny * dist, tz + nz * dist, tx, ty, tz, true)
-  }, [activePlane, camera])
+    controlsRef.current.setLookAt(
+      origin.x + normal.x * plateDist,
+      origin.y + normal.y * plateDist,
+      origin.z + normal.z * plateDist,
+      origin.x, origin.y, origin.z,
+      true,
+    )
+  }, [activePlane, plateDist])
 
   // Reset sketch view on demand (same logic as entering sketch mode)
   useEffect(() => {
@@ -88,11 +93,13 @@ export function Scene() {
     const normal = planeNormalFromPose(activePlane)
     const origin = planeOriginFromPose(activePlane)
     controlsRef.current.setLookAt(
-      origin.x + normal.x * 12, origin.y + normal.y * 12, origin.z + normal.z * 12,
+      origin.x + normal.x * plateDist,
+      origin.y + normal.y * plateDist,
+      origin.z + normal.z * plateDist,
       origin.x, origin.y, origin.z,
       true,
     )
-  }, [sketchViewResetCounter, activePlane])
+  }, [sketchViewResetCounter, activePlane, plateDist])
 
   // In sketch mode with a draw tool: disable left-button orbit so clicks reach the sketch plane.
   // Right-drag and scroll still pan/zoom freely.
@@ -113,14 +120,14 @@ export function Scene() {
       <directionalLight position={[5, 10, 5]} intensity={1} />
 
       <Grid
-        args={[20, 20]}
-        cellSize={0.5}
+        args={[PLANE_SIZE, PLANE_SIZE]}
+        cellSize={1}
         cellThickness={0.5}
         cellColor="#3a3a5c"
-        sectionSize={2}
+        sectionSize={10}
         sectionThickness={1}
         sectionColor="#5a5a8c"
-        fadeDistance={30}
+        fadeDistance={PLANE_SIZE * 1.6}
         fadeStrength={1}
         followCamera={false}
         infiniteGrid
@@ -152,8 +159,8 @@ export function Scene() {
       <CameraControls
         ref={controlsRef}
         makeDefault
-        minDistance={2}
-        maxDistance={PLANE_SIZE * 1.5}
+        minDistance={0.5}
+        maxDistance={PLANE_SIZE * 6}
         smoothTime={0.25}
       />
     </>
