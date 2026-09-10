@@ -88,7 +88,7 @@ describe('sketchPointUpdates', () => {
     const updates = sketchPointUpdates(arc, 'end', { x: 0, y: -5 })
     expect(updates).toBeDefined()
     expect('endAngle' in (updates ?? {})).toBe(true)
-    expect(sketchPoint({ ...arc, ...updates }, 'end')!.y).toBeCloseTo(-5, 5)
+    expect(sketchPoint({ ...arc, ...updates } as SketchArc, 'end')!.y).toBeCloseTo(-5, 5)
   })
 })
 
