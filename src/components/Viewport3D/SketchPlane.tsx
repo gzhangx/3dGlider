@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { DoubleSide, Plane as ThreePlane, Vector3 } from 'three'
+import { DoubleSide, Group, Mesh, Plane as ThreePlane, Vector3 } from 'three'
+import type { Camera } from 'three'
 import { Line, Text } from '@react-three/drei'
-import { ThreeEvent, useThree } from '@react-three/fiber'
+import { ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import {
   useModelStore,
   SketchPlanePose,
@@ -53,6 +54,15 @@ const SNAP_RING_SCREEN = 18
 const SNAP_DOT_SCREEN = 10
 const SNAP_MIN_WORLD = 0.08
 const DOT_MIN_WORLD = 0.04
+const HANDLE_SCREEN = 8
+const _screenSizePt = new Vector3()
+
+function worldSizeForScreenPx(camera: Camera, viewHeight: number, pos: [number, number, number], screenPx: number) {
+  const dist = camera.position.distanceTo(_screenSizePt.set(pos[0], pos[1], pos[2])) || 1
+  const fovDeg = 'fov' in camera && typeof camera.fov === 'number' ? camera.fov : 50
+  const fov = (fovDeg * Math.PI) / 180
+  return Math.max((2 * dist * Math.tan(fov / 2) / viewHeight) * screenPx, DOT_MIN_WORLD)
+}
 
 type CoincidenceTarget =
   | { kind: 'point'; pt: SketchPoint; ref: PointRef }
@@ -65,29 +75,32 @@ type CoincidenceTarget =
 
 function Dot({ pos, color, screenSize, size = 0.06, ring = false }: { pos: [number, number, number]; color: string; screenSize?: number; size?: number; ring?: boolean }) {
   const { camera, size: viewSize } = useThree()
-  // compute world size so the dot appears approximately `screenSize` CSS pixels on screen
-  let worldSize = size
-  if (screenSize) {
-    const p = new Vector3(pos[0], pos[1], pos[2])
-    // Use Euclidean distance so dot size remains constant regardless of view angle
-    const distance = camera.position.distanceTo(p) || 1
-    const fov = 'fov' in camera ? camera.fov * Math.PI / 180 : 50 * Math.PI / 180
-    const worldPerPixel = 2 * distance * Math.tan(fov / 2) / viewSize.height
-    worldSize = Math.max(worldPerPixel * screenSize, DOT_MIN_WORLD)
-  }
+  const groupRef = useRef<Group>(null)
+  const worldSize = screenSize ? worldSizeForScreenPx(camera, viewSize.height, pos, screenSize) : size
+  useFrame(() => {
+    if (!screenSize || !groupRef.current) return
+    const live = worldSizeForScreenPx(camera, viewSize.height, pos, screenSize)
+    groupRef.current.scale.setScalar(live)
+  })
   if (ring) {
     const pts: [number, number, number][] = []
     for (let i = 0; i <= 32; i++) {
       const a = (i / 32) * Math.PI * 2
-      pts.push([pos[0] + Math.cos(a) * worldSize, pos[1] + Math.sin(a) * worldSize, pos[2]])
+      pts.push([Math.cos(a), Math.sin(a), 0])
     }
-    return <Line points={pts} color={color} lineWidth={2} />
+    return (
+      <group ref={groupRef} position={pos} scale={[worldSize, worldSize, worldSize]}>
+        <Line points={pts} color={color} lineWidth={2} />
+      </group>
+    )
   }
   return (
-    <mesh position={pos}>
-      <sphereGeometry args={[worldSize, 8, 8]} />
-      <meshBasicMaterial color={color} depthTest={false} />
-    </mesh>
+    <group ref={groupRef} position={pos} scale={[worldSize, worldSize, worldSize]}>
+      <mesh>
+        <sphereGeometry args={[1, 8, 8]} />
+        <meshBasicMaterial color={color} depthTest={false} />
+      </mesh>
+    </group>
   )
 }
 
@@ -308,17 +321,17 @@ function PointHandle({
   const [hovered, setHovered] = useState(false)
   const dragging = useRef(false)
   const downPos = useRef<{ x: number; y: number } | null>(null)
+  const meshRef = useRef<Mesh>(null)
   const { camera, size: viewSize } = useThree()
-  const HANDLE_SCREEN = 22
   const DRAG_PX = 5
-  const p = new Vector3(pos[0], pos[1], pos[2])
-  const distance = camera.position.distanceTo(p) || 1
-  const fov = 'fov' in camera ? camera.fov * Math.PI / 180 : 50 * Math.PI / 180
-  const worldPerPixel = 2 * distance * Math.tan(fov / 2) / viewSize.height
-  const worldSize = Math.max(worldPerPixel * HANDLE_SCREEN, DOT_MIN_WORLD)
+  const worldSize = worldSizeForScreenPx(camera, viewSize.height, pos, HANDLE_SCREEN)
+  useFrame(() => {
+    meshRef.current?.scale.setScalar(worldSizeForScreenPx(camera, viewSize.height, pos, HANDLE_SCREEN))
+  })
   const color = hovered ? '#ffffff' : selected ? '#66ddff' : highlighted ? '#88ff88' : '#ffdd44'
   return (
     <mesh
+      ref={meshRef}
       position={pos}
       scale={[worldSize, worldSize, worldSize]}
       renderOrder={50}
