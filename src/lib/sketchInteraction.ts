@@ -381,6 +381,33 @@ export function applyDraggedPoint(
   })
 }
 
+/** Update a circle/arc radius as a live perimeter drag would, before the solver runs. */
+export function applyDraggedRadius(
+  elements: SketchElement[],
+  elementId: string,
+  radius: number,
+): SketchElement[] {
+  const r = Math.max(1e-6, Math.abs(radius))
+  return elements.map((el) => {
+    if (el.id !== elementId) return el
+    if (el.type === 'circle' || el.type === 'arc') return { ...el, radius: r } as SketchElement
+    return el
+  })
+}
+
+/** Fixed DOFs while the user drags a circle/arc perimeter (keep center/angles, pin radius). */
+export function radiusDragFixedPoints(elementId: string, elType: SketchElement['type']): Set<string> {
+  if (elType === 'arc') {
+    return new Set([
+      `${elementId}:radius`,
+      `${elementId}:center`,
+      `${elementId}:start`,
+      `${elementId}:end`,
+    ])
+  }
+  return new Set([`${elementId}:radius`, `${elementId}:center`])
+}
+
 export type CoincidenceDraft =
   | { type: 'coincident'; p1: PointRef; p2: PointRef }
   | { type: 'pointOnLine'; p: PointRef; lineId: string }

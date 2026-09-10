@@ -37,6 +37,8 @@ import {
   dragSnapConflictsWithConstraints,
   constrainDragPosition,
   applyDraggedPoint,
+  applyDraggedRadius,
+  radiusDragFixedPoints,
 } from '../../lib/sketchInteraction'
 import { planeOriginFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { PLANE_SIZE } from '../../lib/units'
@@ -94,7 +96,7 @@ function Dot({ pos, color, screenSize, size = 0.06, ring = false }: { pos: [numb
 /** Let the invisible sketch plane receive hits in cut mode (Line2 otherwise wins the raycast). */
 const noopRaycast: () => void = () => {}
 
-  function SketchEl({ el, plane, highlighted, onPointerMove, pointPickRadius, suppressElementClick }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean; onPointerMove?: (e: ThreeEvent<PointerEvent>) => void; pointPickRadius?: number; suppressElementClick?: () => boolean }) {
+  function SketchEl({ el, plane, highlighted, onPointerMove, pointPickRadius, suppressElementClick, onRadiusDragStart, onRadiusDragEnd }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean; onPointerMove?: (e: ThreeEvent<PointerEvent>) => void; pointPickRadius?: number; suppressElementClick?: () => boolean; onRadiusDragStart?: (elementId: string, e: ThreeEvent<PointerEvent>) => void; onRadiusDragEnd?: (e: ThreeEvent<PointerEvent>) => void }) {
   const { activeTool, selectedElementIds, selectedPointRefs, highlightElementIds, selectElement, selectPoint, togglePointSelection, toggleElementSelection, showElementNames, addSketchConstraint, applyConstraints } = useModelStore(useShallow((state) => ({
     activeTool: state.activeTool, selectedElementIds: state.selectedElementIds,
     selectedPointRefs: state.selectedPointRefs,
@@ -104,6 +106,10 @@ const noopRaycast: () => void = () => {}
     addSketchConstraint: state.addSketchConstraint, applyConstraints: state.applyConstraints,
   })))
   const [hovered, setHovered] = useState(false)
+  const radiusGesture = useRef<{ downX: number; downY: number; dragging: boolean } | null>(null)
+  const skipClickAfterRadiusDrag = useRef(false)
+  const supportsRadiusDrag = el.type === 'circle' || el.type === 'arc'
+  const RADIUS_DRAG_PX = 5
 
   const isConstruction = !!el.construction
   const isPointPicked = selectedPointRefs.some((p) => p.elementId === el.id)
@@ -120,10 +126,50 @@ const noopRaycast: () => void = () => {}
         // fall through to the background plane behind it, which treats the
         // gesture as a click on empty space and clears selectedElementIds
         // *before* the click handler below runs, breaking shift-click multi-select.
-        onPointerDown: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation() },
-        onPointerUp: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation() },
+        // Circle/arc perimeters also use this gesture for radius drag (same ~5px
+        // threshold as PointHandle); near center/endpoints prefer point select.
+        onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+          e.stopPropagation()
+          if (e.button !== 0 || !supportsRadiusDrag) return
+          const raw = toSketch(e.point, plane)
+          const nearPoint = pointPickRadius != null ? nearestSelectablePoint(raw, el, pointPickRadius) : null
+          if (nearPoint) {
+            radiusGesture.current = null
+            return
+          }
+          radiusGesture.current = { downX: e.clientX, downY: e.clientY, dragging: false }
+          ;(e.currentTarget as unknown as { setPointerCapture: (id: number) => void }).setPointerCapture(e.pointerId)
+        },
+        onPointerUp: (e: ThreeEvent<PointerEvent>) => {
+          e.stopPropagation()
+          const gesture = radiusGesture.current
+          radiusGesture.current = null
+          if (supportsRadiusDrag) {
+            ;(e.currentTarget as unknown as { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(e.pointerId)
+          }
+          if (gesture?.dragging) {
+            skipClickAfterRadiusDrag.current = true
+            onRadiusDragEnd?.(e)
+          }
+        },
+        onPointerCancel: (e: ThreeEvent<PointerEvent>) => {
+          e.stopPropagation()
+          const gesture = radiusGesture.current
+          radiusGesture.current = null
+          if (supportsRadiusDrag) {
+            ;(e.currentTarget as unknown as { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(e.pointerId)
+          }
+          if (gesture?.dragging) {
+            skipClickAfterRadiusDrag.current = true
+            onRadiusDragEnd?.(e)
+          }
+        },
         onClick: (e: ThreeEvent<MouseEvent>) => {
           e.stopPropagation()
+          if (skipClickAfterRadiusDrag.current) {
+            skipClickAfterRadiusDrag.current = false
+            return
+          }
           if (suppressElementClick?.()) return
           const raw = toSketch(e.point, plane)
           const nearPoint = pointPickRadius != null ? nearestSelectablePoint(raw, el, pointPickRadius) : null
@@ -171,10 +217,21 @@ const noopRaycast: () => void = () => {}
         },
         onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setHovered(true) },
         onPointerOut: () => setHovered(false),
-        onPointerMove: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); onPointerMove?.(e) },
+        onPointerMove: (e: ThreeEvent<PointerEvent>) => {
+          e.stopPropagation()
+          const gesture = radiusGesture.current
+          if (gesture && !gesture.dragging) {
+            const dx = e.clientX - gesture.downX
+            const dy = e.clientY - gesture.downY
+            if (Math.hypot(dx, dy) >= RADIUS_DRAG_PX) {
+              gesture.dragging = true
+              onRadiusDragStart?.(el.id, e)
+            }
+          }
+          onPointerMove?.(e)
+        },
       }
     : {}
-
   // In non-select modes, pointer events must go to the invisible hit-test plane,
   // not to rendered sketch geometry (which would shift e.point off-plane).
   const visibleLineProps = { raycast: noopRaycast }
@@ -355,7 +412,7 @@ export function SketchPlane() {
     | { kind: 'arc'; arc: SketchArc }
     | null
   >(null)
-  const [dragTarget, setDragTarget] = useState<{ elementId: string; pointType: 'start' | 'end' | 'center' } | null>(null)
+  const [dragTarget, setDragTarget] = useState<{ elementId: string; pointType: 'start' | 'end' | 'center' | 'radius' } | null>(null)
   const [dragSnapTarget, setDragSnapTarget] = useState<{ pt: SketchPoint; ref: PointRef | null; constraintHint?: string; tangentCircleId?: string; circleId?: string } | null>(null)
   
   const [startSnapRef, setStartSnapRef] = useState<PointRef | null>(null)
@@ -537,6 +594,40 @@ export function SketchPlane() {
       const live = useModelStore.getState()
       const liveElements = live.sketchElements
       const liveConstraints = live.sketchConstraints
+
+      // Perimeter radius drag: update r from cursor distance to center; pin radius
+      // (and center / arc angles) so the solver keeps constraints consistent.
+      if (dragTarget.pointType === 'radius') {
+        const draggedEl = liveElements.find((e) => e.id === dragTarget.elementId)
+        if (draggedEl && (draggedEl.type === 'circle' || draggedEl.type === 'arc')) {
+          const r = Math.max(1e-6, Math.hypot(raw.x - draggedEl.center.x, raw.y - draggedEl.center.y))
+          const updated = applyDraggedRadius(liveElements, dragTarget.elementId, r)
+          // Keep driving radius dimensions in sync so a later unpinned solve
+          // does not snap the dragged radius back to the old value.
+          let constraints = liveConstraints
+          let constraintsChanged = false
+          constraints = liveConstraints.map((c) => {
+            if (c.type !== 'length' || c.elementId !== dragTarget.elementId) return c
+            const drivesRadius =
+              draggedEl.type === 'circle'
+                ? (c.dimension === 'radius' || c.dimension == null)
+                : c.dimension === 'radius'
+            if (!drivesRadius || Math.abs(c.value - r) < 1e-12) return c
+            constraintsChanged = true
+            return { ...c, value: r }
+          })
+          if (constraintsChanged) {
+            useModelStore.setState({ sketchConstraints: constraints })
+          }
+          commitSolvedSketch(solveConstraintsDetailed(
+            updated,
+            constraints,
+            radiusDragFixedPoints(dragTarget.elementId, draggedEl.type),
+          ))
+        }
+        return
+      }
+
       const dragRef: PointRef = { elementId: dragTarget.elementId, which: dragTarget.pointType }
       const cluster = constraintClusterIds(dragTarget.elementId, liveConstraints)
 
@@ -849,6 +940,12 @@ export function SketchPlane() {
 
   const onPointerUp = () => {
     if (dragTarget) {
+      if (dragTarget.pointType === 'radius') {
+        setDragTarget(null)
+        setDragSnapTarget(null)
+        setIsDraggingPoint(false)
+        return
+      }
       const live = useModelStore.getState()
       const liveElements = live.sketchElements
       const liveConstraints = live.sketchConstraints
@@ -1024,7 +1121,23 @@ export function SketchPlane() {
 
       {/* Elements — clickable in select mode, highlighted when targeted by cut */}
       {sketchElements.map((el) => (
-        <SketchEl key={el.id} el={el} plane={plane} highlighted={cutPreview?.lineId === el.id} onPointerMove={onMove} pointPickRadius={snapObjectThreshold} suppressElementClick={() => handleConsumedClick.current} />
+        <SketchEl
+          key={el.id}
+          el={el}
+          plane={plane}
+          highlighted={cutPreview?.lineId === el.id}
+          onPointerMove={onMove}
+          pointPickRadius={snapObjectThreshold}
+          suppressElementClick={() => handleConsumedClick.current}
+          onRadiusDragStart={(elementId, e) => {
+            e.stopPropagation()
+            handleConsumedClick.current = true
+            window.setTimeout(() => { handleConsumedClick.current = false }, 80)
+            setDragTarget({ elementId, pointType: 'radius' })
+            setIsDraggingPoint(true)
+          }}
+          onRadiusDragEnd={() => { onPointerUp() }}
+        />
       ))}
 
       {/* Point handles — click to select, drag to move */}

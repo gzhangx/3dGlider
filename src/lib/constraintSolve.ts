@@ -1177,7 +1177,7 @@ export function solveConstraintsDetailed(
           variables.push({ elementId: el.id, pointType: 'endAngle', coord: 'x', index: varIndex++ })
         }
       }
-      if (elementNeedsRadiusVariable(el, elements, constraints)) {
+      if (elementNeedsRadiusVariable(el, elements, constraints) && !workingFixed.has(fixKey('radius'))) {
         variables.push({ elementId: el.id, pointType: 'radius', coord: 'x', index: varIndex++ })
       }
     }
