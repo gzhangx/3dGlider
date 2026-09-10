@@ -1,10 +1,10 @@
-﻿# 3D Glider — Improvement Tasks
+# 3D Glider — Improvement Tasks
 
 > Status update (September 2026): loft, sweep, and shell generation are implemented. Both **STL and STEP** export are available. Geometry rendering is memoized, Zustand subscriptions use selectors, and solver updates are indexed and batched. Automated tests live under `tests/` (including `sketchInteraction.test.ts`).
 
 ## Critical gaps (CAD fundamentals)
 
-### ✅ Constraint solver (COMPLETED)
+### [x] Constraint solver (COMPLETED)
 ~~The biggest weakness. Constraints are applied once and forgotten — drag an endpoint and all constraints are violated. Real CAD uses an iterative solver (Newton-Raphson or similar) that enforces all constraints simultaneously during every drag. Without this, constraints are just convenient one-shot operations.~~
 
 **IMPLEMENTED May 1, 2026:**
@@ -24,7 +24,7 @@ Show how many DOF the sketch has. Color unconstrained elements blue, fully-const
 
 ## Sketch capability
 
-### ✅ Tangent constraint (COMPLETED)
+### [x] Tangent constraint (COMPLETED)
 ~~Ability to constrain a line to be tangent to a circle.~~
 
 **IMPLEMENTED May 1, 2026:**
@@ -48,9 +48,9 @@ Still open:
 
 ## 3D operations
 
-- ✅ **Loft** — solid between two profiles on different planes (`loftModel.ts` / `LoftedSolids`)
-- ✅ **Sweep** — extrude a profile along a path (`sweepModel.ts` / `SweepedSolids`; included in STL/STEP)
-- ✅ **Shell** — hollow out via `applyShellFeatures` (FeatureTree create/delete; UI still shows "(pending mesh)" label; no scripting `addShell`)
+- [x] **Loft** — solid between two profiles on different planes (`loftModel.ts` / `LoftedSolids`)
+- [x] **Sweep** — extrude a profile along a path (`sweepModel.ts` / `SweepedSolids`; included in STL/STEP)
+- [x] **Shell** — hollow out via `applyShellFeatures` (FeatureTree create/delete; UI still shows "(pending mesh)" label; no scripting `addShell`)
 - **Edge fillet/chamfer** — round or bevel edges on the 3D solid
 - **Linear/circular pattern** — array a feature N times
 - **Boolean operations (cut with solid)** — cut one body with another, not just with a sketch
@@ -60,8 +60,8 @@ Still open:
 
 ## File formats
 
-- ✅ **STL export** — binary STL via `exportSTL.ts`
-- ✅ **STEP export** — implemented May 2, 2026; `exportSTEP.ts` emits mesh-derived ISO-10303-21-style ASCII (`3dglider_model.step`); Toolbar exposes both STL and STEP
+- [x] **STL export** — binary STL via `exportSTL.ts`
+- [x] **STEP export** — implemented May 2, 2026; `exportSTEP.ts` emits mesh-derived ISO-10303-21-style ASCII (`3dglider_model.step`); Toolbar exposes both STL and STEP
 - **DXF import/export** — for 2D sketch exchange with other tools
 - **Versioned save format** — migration logic when the JSON schema evolves
 
@@ -81,16 +81,16 @@ Still open:
 
 - **Error boundaries** — a crash in one feature shouldn't blank the whole viewport
 - **Input validation with user feedback** — right now invalid input silently does nothing
-- ✅ **Unit tests for geometry/solver** — `tests/constraintSolve.test.ts`, `modelCore.test.ts`, `solidModel.test.ts`, `sketchInteraction.test.ts`
-- ✅ **Solid geometry memoization** — feature solid components memoize builds; keep watching large-model CSG cost
+- [x] **Unit tests for geometry/solver** — `tests/constraintSolve.test.ts`, `modelCore.test.ts`, `solidModel.test.ts`, `sketchInteraction.test.ts`
+- [x] **Solid geometry memoization** — feature solid components memoize builds; keep watching large-model CSG cost
 
 ---
 
 ## Priority order (highest ROI first)
 
-1. ✅ **Constraint solver** (DONE)
-2. ✅ **STEP export** (DONE) — STL also available
-3. ✅ **Loft / sweep / shell** (DONE)
+1. [x] **Constraint solver** (DONE)
+2. [x] **STEP export** (DONE) — STL also available
+3. [x] **Loft / sweep / shell** (DONE)
 4. Undo/Redo
 5. DOF tracking
 6. Trim/Extend

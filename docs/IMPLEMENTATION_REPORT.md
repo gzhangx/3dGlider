@@ -1,4 +1,4 @@
-﻿# Constraint Solver Implementation - Final Report
+# Constraint Solver Implementation - Final Report
 
 **Date**: May 1, 2026  
 **Status**: âœ… **COMPLETE**  
@@ -39,7 +39,11 @@ export function solveConstraints(
 - **Stability**: Damping factor (0.5) prevents oscillation
 - **Convergence**: Typically 5-20 iterations per frame
 
-### 2. Constraint Types Supported (8 total)
+### 2. Constraint Types Supported
+**Original delivery (8):** coincident, length, angle, horizontal, vertical, parallel, perpendicular, equal.
+
+**Also in code now** (`modelStore` / `constraintSolve`): tangent, pointOnLine, pointOnAxis, pointAtOrigin, pointOnCircle — see `CONSTRAINT_SOLVER.md`.
+
 | # | Type | Purpose | Equations |
 |---|------|---------|-----------|
 | 1 | Coincident | Points merge | 2 (x, y) |
@@ -48,9 +52,13 @@ export function solveConstraints(
 | 4 | Horizontal | Line level | 1 |
 | 5 | Vertical | Line plumb | 1 |
 | 6 | Parallel | Same direction | 1 |
-| 7 | Perpendicular | 90Â° angle | 1 |
+| 7 | Perpendicular | 90 deg angle | 1 |
 | 8 | Equal | Same length | 1 |
-
+| 9 | Tangent | Line to circle/arc | 1 |
+| 10 | PointOnLine | Point on line | 1 |
+| 11 | PointOnAxis | Point on X/Y axis | 1 |
+| 12 | PointAtOrigin | Point at origin | 2 |
+| 13 | PointOnCircle | Point on circle | 1 |
 ### 3. Integration
 **File**: `src/components/Viewport3D/SketchPlane.tsx`
 

@@ -46,7 +46,7 @@ export interface SketchArc {
 }
 export type SketchElement = SketchLine | SketchRect | SketchCircle | SketchArc
 
-// ── Sketch constraints ────────────────────────────────────────────────────────
+// â”€â”€ Sketch constraints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export type PointRef = { elementId: string; which: 'start' | 'end' | 'center' }
 export interface LengthConstraint       { id: string; type: 'length';       elementId: string; value: number; dimension?: 'width' | 'height' | 'radius'; paramRef?: string }
 export interface AngleConstraint        { id: string; type: 'angle';        elementId1: string; elementId2: string; value: number; paramRef?: string }
@@ -77,7 +77,7 @@ export interface Sketch {
   opacity?: number
 }
 
-// ── Named parameters ──────────────────────────────────────────────────────────
+// â”€â”€ Named parameters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export interface Parameter { id: string; name: string; value: number }
 
 export interface ExtrudeFeature {
@@ -98,7 +98,7 @@ export interface RevolveFeature {
   sketchId: string
   axisType: RevolveAxis
   axisElementId?: string  // line element id within the sketch, only when axisType === 'element'
-  angle: number           // degrees, 1–360
+  angle: number           // degrees, 1â€“360
   color?: string
   opacity?: number
 }
@@ -131,6 +131,7 @@ export interface ShellFeature {
 
 export interface ModelData {
   version: number
+  name?: string
   sketches: Sketch[]
   extrudes: ExtrudeFeature[]
   revolves: RevolveFeature[]
@@ -156,7 +157,7 @@ function isSketchElement(value: unknown): value is SketchElement {
   return el.type === 'line' || el.type === 'rect' || el.type === 'circle' || el.type === 'arc'
 }
 
-function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: ExtrudeFeature[]; revolves: RevolveFeature[]; lofts: LoftFeature[]; sweeps: SweepFeature[]; shells: ShellFeature[]; parameters: Parameter[] } | null {
+function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: ExtrudeFeature[]; revolves: RevolveFeature[]; lofts: LoftFeature[]; sweeps: SweepFeature[]; shells: ShellFeature[]; parameters: Parameter[]; name?: string } | null {
   if (!value || typeof value !== 'object') return null
   const raw = value as Partial<ModelData>
   // sketches is required; other arrays are optional and will default to empty arrays
@@ -321,7 +322,11 @@ function sanitizeModelData(value: unknown): { sketches: Sketch[]; extrudes: Extr
         && Number.isFinite((p as Parameter).value))
     : []
 
-  return { sketches, extrudes, revolves, lofts, sweeps, shells, parameters }
+  const name = typeof raw.name === 'string' && raw.name.trim().length > 0
+    ? raw.name.trim()
+    : undefined
+
+  return { sketches, extrudes, revolves, lofts, sweeps, shells, parameters, ...(name ? { name } : {}) }
 }
 
 export interface ModelState {
@@ -362,6 +367,7 @@ export interface ModelState {
   circleCounter: number
   arcCounter: number
   showElementNames: boolean
+  documentName: string
   solverDebugEnabled: boolean
   solverDebugLog: SolverDebugLog | null
 
@@ -385,6 +391,7 @@ export interface ModelState {
   setShowSketchNavigator: (v: boolean) => void
   setHideOtherSketches: (v: boolean) => void
   setShowElementNames: (v: boolean) => void
+  setDocumentName: (name: string) => void
   setSolverDebugEnabled: (v: boolean) => void
   commitSolvedSketch: (result: ConstraintSolveResult) => void
   addSketchElement: (el: SketchElement) => void
@@ -422,7 +429,7 @@ export interface ModelState {
   startNewSketch: (plane: PlaneId | SketchPlanePose, offset?: number) => void
   editSketch: (sketchId: string) => void
   exitSketch: () => string | null
-  loadModel: (data: unknown) => boolean
+  loadModel: (data: unknown, fallbackName?: string) => boolean
 }
 
 export const useModelStore = create<ModelState>((set, get) => ({
@@ -462,6 +469,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   circleCounter: 0,
   arcCounter: 0,
   showElementNames: false,
+  documentName: 'Untitled',
   solverDebugEnabled: false,
   solverDebugLog: null,
 
@@ -547,6 +555,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   setShowSketchNavigator: (showSketchNavigator) => set({ showSketchNavigator }),
   setHideOtherSketches: (hideOtherSketches) => set({ hideOtherSketches }),
   setShowElementNames: (showElementNames) => set({ showElementNames }),
+  setDocumentName: (documentName) => set({ documentName }),
   setSolverDebugEnabled: (solverDebugEnabled) => {
     set({ solverDebugEnabled })
     if (solverDebugEnabled) get().applyConstraints()
@@ -583,11 +592,11 @@ export const useModelStore = create<ModelState>((set, get) => ({
   replaceSketchElements: (elements) => set({ sketchElements: elements }),
 
   // Only touches the live `sketchElements` scratch state (like addSketchElement/
-  // updateSketchElement/cutSketchElement) — `sketches[]` is just a snapshot,
+  // updateSketchElement/cutSketchElement) â€” `sketches[]` is just a snapshot,
   // synced from `sketchElements` on exitSketch. Mutating `sketches[]` here too
   // (as this used to) would race with that snapshot: if this was the sketch's
   // last element, the sketch got dropped from `sketches[]` immediately, even
-  // mid-edit — so exitSketch's lookup by id later found nothing to update and
+  // mid-edit â€” so exitSketch's lookup by id later found nothing to update and
   // silently discarded the sketch, along with anything drawn afterward.
   deleteSketchElement: (id) =>
     set((s) => ({
@@ -606,7 +615,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
         sketchElements: [...s.sketchElements.filter((el) => el.id !== id), ...replacements],
         // Re-point constraints at whichever replacement piece preserves the
         // same point (e.g. a circle's center survives unchanged on every kept
-        // arc) instead of just dropping them — see remapConstraintsAfterRemoval.
+        // arc) instead of just dropping them â€” see remapConstraintsAfterRemoval.
         sketchConstraints: original
           ? remapConstraintsAfterRemoval(s.sketchConstraints, id, original, replacements)
           : s.sketchConstraints.filter((constraint) => !constraintElementIds(constraint).includes(id)),
@@ -802,7 +811,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
       }
 
       // If the sketch itself just disappeared (emptied out above), drop any
-      // feature that referenced it too — otherwise it lingers forever as a
+      // feature that referenced it too â€” otherwise it lingers forever as a
       // dead entry silently skipped by solidModel.ts (and still exported).
       const extrudes = droppedSketchId ? s.extrudes.filter((e) => e.sketchId !== droppedSketchId) : s.extrudes
       const revolves = droppedSketchId ? s.revolves.filter((r) => r.sketchId !== droppedSketchId) : s.revolves
@@ -835,9 +844,13 @@ export const useModelStore = create<ModelState>((set, get) => ({
     return newSketchId
   },
 
-  loadModel: (data) => {
+  loadModel: (data, fallbackName) => {
     const parsed = sanitizeModelData(data)
     if (!parsed) return false
+    const documentName =
+      (parsed.name && parsed.name.trim()) ||
+      (fallbackName && fallbackName.trim()) ||
+      'Untitled'
     // estimate counters from loaded element names to avoid duplicates
     let lineCounter = 0, rectCounter = 0, circleCounter = 0, arcCounter = 0
     for (const sk of parsed.sketches) {
@@ -887,6 +900,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
       sweeps: parsed.sweeps,
       shells: parsed.shells,
       parameters: parsed.parameters,
+      documentName,
       lineCounter,
       rectCounter,
       circleCounter,

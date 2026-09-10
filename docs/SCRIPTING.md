@@ -367,3 +367,8 @@ await api.addLoft('1', '2', 'add');
 - Large scripts with many constraints may take a few seconds to execute
 - Start simple and build up complexity
 - Use construction geometry for helper lines
+
+
+#### Shell (FeatureTree only)
+
+There is **no** `addShell` (or equivalent) on the scripting API. Shell features are created from the FeatureTree UI via `addShell` on the Zustand store and applied during model building with `applyShellFeatures`. Scripted models that need a shell must use the UI (or call store APIs outside this scripting surface).

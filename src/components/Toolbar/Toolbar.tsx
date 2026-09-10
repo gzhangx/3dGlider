@@ -12,7 +12,7 @@ export function Toolbar() {
   const {
     mode, activePlane, extrudes, revolves, lofts, sweeps, shells, sketches, parameters,
     sketchElements, sketchConstraints, editingSketchId,
-    exitSketch, loadModel, resetSketchView, hideOtherSketches, setHideOtherSketches,
+    exitSketch, loadModel, resetSketchView, hideOtherSketches, setHideOtherSketches, documentName, setDocumentName,
   } = useModelStore(useShallow((state) => ({
     mode: state.mode, activePlane: state.activePlane, extrudes: state.extrudes,
     revolves: state.revolves, lofts: state.lofts, sweeps: state.sweeps,
@@ -21,6 +21,7 @@ export function Toolbar() {
     editingSketchId: state.editingSketchId, exitSketch: state.exitSketch,
     loadModel: state.loadModel, resetSketchView: state.resetSketchView,
     hideOtherSketches: state.hideOtherSketches, setHideOtherSketches: state.setHideOtherSketches,
+    documentName: state.documentName, setDocumentName: state.setDocumentName,
   })))
   const activePlaneLabel = activePlane ? planeIdFromPose(activePlane) : null
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -33,6 +34,13 @@ export function Toolbar() {
   const [rotZInput, setRotZInput] = useState('0')
 
   const setActivePlane = useModelStore((s) => s.setActivePlane)
+
+  const sanitizeDownloadFilename = (name: string) => {
+    const cleaned = name
+      .replace(/[<>:"\/\\|?*\x00-\x1f]/g, '')
+      .trim()
+    return cleaned.length > 0 ? cleaned : 'Untitled'
+  }
 
   const handleSaveJson = () => {
     // Include the active, in-progress sketch when in sketch mode so the
@@ -53,6 +61,7 @@ export function Toolbar() {
 
     const payload = {
       version: 1,
+      name: documentName,
       sketches: exportSketches,
       extrudes,
       revolves,
@@ -65,7 +74,7 @@ export function Toolbar() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `3dglider-model-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+    a.download = `${sanitizeDownloadFilename(documentName)}.json`
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -83,7 +92,8 @@ export function Toolbar() {
     try {
       const text = await file.text()
       const parsed = JSON.parse(text)
-      const ok = loadModel(parsed)
+      const fileBaseName = file.name.replace(/\.json$/i, '')
+      const ok = loadModel(parsed, fileBaseName)
       if (!ok) {
         window.alert('Invalid model JSON format.')
       }
@@ -106,6 +116,18 @@ export function Toolbar() {
     <>
       <header className={styles.toolbar}>
         <span className={styles.logo}>3D Glider v.01</span>
+
+        <input
+          className={styles.docName}
+          type="text"
+          value={documentName}
+          onChange={(e) => setDocumentName(e.target.value)}
+          onBlur={() => {
+            if (!documentName.trim()) setDocumentName('Untitled')
+          }}
+          aria-label="Document name"
+          title="Document name"
+        />
 
         <div className={styles.status}>
           {mode === 'view' && (
@@ -220,7 +242,7 @@ export function Toolbar() {
             title={hasExports ? 'Export all solids as STL' : 'No solids to export'}
             disabled={!hasExports}
           >
-            ⬇ Export STL
+            â¬‡ Export STL
           </button>
           <button
             className={styles.exportBtn}
@@ -228,7 +250,7 @@ export function Toolbar() {
             title={hasExports ? 'Export all solids as STEP' : 'No solids to export'}
             disabled={!hasExports}
           >
-            ⬇ Export STEP
+            â¬‡ Export STEP
           </button>
         </div>
       </header>

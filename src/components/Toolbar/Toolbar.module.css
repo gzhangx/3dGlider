@@ -17,6 +17,25 @@
   letter-spacing: 0.05em;
 }
 
+.docName {
+  width: 180px;
+  max-width: 28vw;
+  margin-left: 4px;
+  padding: 4px 8px;
+  background: #1a1a32;
+  border: 1px solid #2a2a4a;
+  border-radius: 4px;
+  color: #e0e0f0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.docName:focus {
+  outline: none;
+  border-color: #7cacff;
+  background: #1e1e44;
+}
+
 .status {
   display: flex;
   align-items: center;
