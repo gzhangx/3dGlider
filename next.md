@@ -1,45 +1,44 @@
-# Next Steps
+﻿# Next Steps
 
 ## Goal
-Finish the sketch-plane refactor so New Sketch works from raycast hits on arbitrary flat faces, while keeping XY/XZ/YZ presets as convenience picks.
+Keep sketch-plane and docs aligned with the `SketchPlanePose` model, and finish remaining validation. New Sketch from raycast hits on **extruded** flat faces already uses hit normal + point → `SketchPlanePose` (XY/XZ/YZ presets still work via the same pose path).
 
-## Remaining Tasks
+## Status
 
-1. Remove the principal-axis-only face filter from solid picking.
-   - Current blocker: [src/components/Viewport3D/ExtrudedSolids.tsx](src/components/Viewport3D/ExtrudedSolids.tsx) still rejects non-XY/XZ/YZ normals.
-   - Target: any flat face accepted, using hit normal + hit point to derive `SketchPlanePose`.
+1. **DONE** — Principal-axis-only face filter removed.
+   - `src/components/Viewport3D/ExtrudedSolids.tsx` calls `startNewSketch(planePoseFromHit(worldNormal, e.point))` for any flat face hit (no XY/XZ/YZ normal reject).
 
-2. Keep XY/XZ/YZ preset picking working through the same plane-pose path.
-   - Current state: implemented in [src/components/Viewport3D/PlaneGizmo.tsx](src/components/Viewport3D/PlaneGizmo.tsx).
-   - Verify no regression.
+2. **DONE** — XY/XZ/YZ preset picking through the same plane-pose path.
+   - `src/components/Viewport3D/PlaneGizmo.tsx` / `presetPlanePose` in the store.
 
-3. Refresh architecture docs to match the new plane representation.
-   - Update [teach.md](d:/work/3dGlider/teach.md)
-   - Update [plan.md](d:/work/3dGlider/plan.md)
-   - Replace old `PlaneId + offset` explanations with `SketchPlanePose { rotation, offset }`.
+3. **In progress** — Refresh architecture docs to match the new plane representation.
+   - Update `teach.md`, `plan.md`, and related docs: replace old `PlaneId + offset` explanations with `SketchPlanePose { rotation, offset }`.
 
-4. Confirm all rendering/editing paths consistently use pose-based transforms.
-   - Store: [src/store/modelStore.ts](src/store/modelStore.ts)
-   - Geometry: [src/lib/sketchGeometry.ts](src/lib/sketchGeometry.ts)
-   - Solids: [src/lib/solidModel.ts](src/lib/solidModel.ts)
-   - Viewport sketching: [src/components/Viewport3D/SketchPlane.tsx](src/components/Viewport3D/SketchPlane.tsx)
-   - Saved sketch display: [src/components/Viewport3D/CommittedSketches.tsx](src/components/Viewport3D/CommittedSketches.tsx)
+4. **Mostly done** — Rendering/editing paths use pose-based transforms.
+   - Store: `src/store/modelStore.ts`
+   - Geometry: `src/lib/sketchGeometry.ts`
+   - Solids: `src/lib/solidModel.ts`
+   - Viewport: `src/components/Viewport3D/SketchPlane.tsx`, `CommittedSketches.tsx`
+   - Spot-check after further edits; keep consistent with pose APIs in `src/lib/planePose.ts`.
 
-5. Validate build after each implementation step.
-   - Command: `npm run build`
+5. Validate build after doc/code changes: `npm run build`
 
-6. Runtime validation still needed after code changes.
-   - Manual test path:
-   - Create Add extrude
-   - Create Cut feature
-   - Arm New Sketch
-   - Click cut floor/wall face
-   - Confirm sketch starts on hit-derived plane pose
+6. **Still needed** — Manual runtime validation.
+   - Create Add extrude → Cut feature → Arm New Sketch → Click cut floor/wall face → Confirm sketch starts on hit-derived plane pose
 
-## Execution Order
+## New Sketch face pick coverage (verified in code)
 
-1. Remove principal face filter.
-2. Build and validate.
-3. Refresh docs.
-4. Build and validate again.
-5. Manual runtime validation.
+| Solid renderer | Face pick for New Sketch |
+|----------------|--------------------------|
+| `ExtrudedSolids.tsx` | Yes — `planePoseFromHit` |
+| `RevolvedSolids.tsx` | No — render-only mesh |
+| `LoftedSolids.tsx` | No — render-only mesh |
+| `SweepedSolids.tsx` | No — render-only mesh |
+
+Loft / revolve / sweep solids **do not** currently support New Sketch face picking; only extruded solids do.
+
+## Remaining execution order
+
+1. Finish docs refresh (`teach.md` historical appendix, constraint catalogs, tests README, etc.).
+2. Build validate if touching code (docs-only changes skip).
+3. Manual runtime validation of cut-face New Sketch.

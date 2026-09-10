@@ -1,3 +1,5 @@
+﻿> **HISTORICAL** — This guide documents an April 2026 CSG raycasting investigation. Cut/pocket face picking and principal-axis filtering are no longer current blockers: `ExtrudedSolids` uses `planePoseFromHit` / `SketchPlanePose`. Keep for debugging archaeology only. See `plan.md` and `next.md` for current status.
+
 # CSG Geometry Debugging Guide
 
 This file explains how to debug why raycasting fails on CSG-generated geometries.
@@ -50,7 +52,7 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
       }
 
       for (let i = 0; i < solids.length; i++) {
-        // ← ADD THIS LOGGING
+        // â† ADD THIS LOGGING
         console.log(`[CSG] Before subtract:`)
         console.log(`  Original mesh geometry:`, {
           indexed: !!solids[i].geometry.index,
@@ -93,10 +95,10 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
 ```
 
 **What to check in console:**
-- `indexed: false` → Geometry has no index! This breaks raycasting
-- `indexLength: undefined` → Same problem
-- `positionCount: 0` → Geometry is empty
-- `bounds: undefined` → Geometry boundaries unknown
+- `indexed: false` â†’ Geometry has no index! This breaks raycasting
+- `indexLength: undefined` â†’ Same problem
+- `positionCount: 0` â†’ Geometry is empty
+- `bounds: undefined` â†’ Geometry boundaries unknown
 
 ### Step 2: Add Raycasting Debugging
 
@@ -144,7 +146,7 @@ const handleClick = () => {
       startNewSketch(plane, offsetForPlane(plane, hit.point))
     }
   } else {
-    console.log(`  ✗ No intersections found!`)
+    console.log(`  âœ— No intersections found!`)
     console.log(`  This could mean:`)
     console.log(`    1. Geometry has no index (CSG problem)`)
     console.log(`    2. Mesh is not in scene`)
@@ -160,7 +162,7 @@ Open browser DevTools console and paste:
 ```javascript
 // Get the first solid mesh
 const scene = window.__THREE__.scene  // If available
-// Or inspect via React DevTools → Viewport3D → Scene → meshRef
+// Or inspect via React DevTools â†’ Viewport3D â†’ Scene â†’ meshRef
 
 // Once you have a mesh reference:
 const mesh = window.debugMesh  // Set from component

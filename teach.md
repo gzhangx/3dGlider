@@ -1,6 +1,6 @@
-# 3D Glider Teaching Guide (Current Code)
+﻿# 3D Glider Teaching Guide (Current Code)
 
-Last updated: 2026-05-10
+Last updated: 2026-09-09
 
 This guide explains how the current app works, from user interaction to geometry generation and export. It is aligned with the implementation in src/.
 
@@ -39,8 +39,8 @@ Primary types:
   - ExtrudeFeature: add/cut, depth, optional custom direction, optional symmetric
   - RevolveFeature: axis x/y/z/element, angle, optional axisElementId
   - LoftFeature: sketchId1 -> sketchId2, operation add/cut
-  - SweepFeature: profile + path, operation add/cut (stored, mesh pending)
-  - ShellFeature: sketch + thickness (stored, mesh pending)
+  - SweepFeature: profile + path, operation add/cut (geometry via `sweepModel.ts`; rendered + exported)
+  - ShellFeature: sketch + thickness (applied via `applyShellFeatures` during model build + export; FeatureTree still shows "(pending mesh)")
 - Parameters
   - Named scalar parameters used by constraints and feature inputs
 
@@ -338,7 +338,15 @@ Pending / partial:
 5. src/lib/solidModel.ts, src/lib/revolveModel.ts, src/lib/loftModel.ts (3D generation)
 6. src/components/FeatureTree/FeatureTree.tsx (feature UI orchestration)
 7. src/lib/exportSTL.ts and src/lib/exportSTEP.ts (output pipeline)
+---
+
+> **HISTORICAL / SUPERSEDED (do not treat as current)**
+>
+> Everything below this banner describes an older architecture (PlaneId + offset, manual Raycaster on CSG meshes, pre-loft/sweep/shell). The **current** guide is the front half of this file (sections 1–12). Prefer plan.md, 	asks.md, and 
+ext.md for status. Kept only for archaeology.
+
 # 3D Glider: Complete Architecture & Library Flow Guide
+
 
 ## Part 1: Project Architecture Overview
 
@@ -346,13 +354,13 @@ Pending / partial:
 
 ```
 User Interaction (UI/Viewport)
-    ↓
+    â†“
 State Management (Zustand Store)
-    ↓
+    â†“
 React Components (Render UI & 3D)
-    ↓
+    â†“
 Three.js Scene (3D Visualization)
-    ↓
+    â†“
 Library Calls (THREE, CSG, Three Fiber)
 ```
 
@@ -363,7 +371,7 @@ Library Calls (THREE, CSG, Three Fiber)
 | **React Framework** | React 18.3.1 | Component state & lifecycle management |
 | **State Management** | Zustand 5.0.3 | Global app state (centralized model data) |
 | **3D Rendering** | Three.js 0.172.0 | WebGL abstraction, 3D primitives, geometry |
-| **React-to-Three Bridge** | @react-three/fiber 8.18.0 | React components → Three.js objects |
+| **React-to-Three Bridge** | @react-three/fiber 8.18.0 | React components â†’ Three.js objects |
 | **3D Utilities** | @react-three/drei 9.120.3 | Pre-made components (Grid, CameraControls, Line) |
 | **Boolean Operations** | three-csg-ts 3.2.0 | CSG (Constructive Solid Geometry) for pockets |
 | **Build Tool** | Vite 6.0.7 | Fast development & production builds |
@@ -428,10 +436,10 @@ const { extrudes, sketches, mode } = useModelStore()
 ### Understanding the Three Planes
 
 All sketches live in one of three coordinate planes:
-  └─ Sketch point (2, 3) with offset 5 → World (2, 5+LIFT, 3)
+  â””â”€ Sketch point (2, 3) with offset 5 â†’ World (2, 5+LIFT, 3)
 
 YZ Plane:  front view,     normal is [1,0,0] (X-axis)
-  └─ Sketch point (2, 3) with offset 5 → World (5+LIFT, 2, 3)
+  â””â”€ Sketch point (2, 3) with offset 5 â†’ World (5+LIFT, 2, 3)
 ```
 
 **File: `src/lib/sketchGeometry.ts`**
@@ -534,11 +542,11 @@ function featureGeometry(ext: ExtrudeFeature, sketch: Sketch): BufferGeometry | 
   const geo = new ExtrudeGeometry(shapes, {
     depth: Math.abs(ext.depth),  // How far to extrude
   // STEP 3: ExtrudeGeometry creates geometry in LOCAL coordinate space:
-  //   - XY plane sketch → extrudes along local +Z
-  //   - But we need it on XZ or YZ planes → must ROTATE
+  //   - XY plane sketch â†’ extrudes along local +Z
+  //   - But we need it on XZ or YZ planes â†’ must ROTATE
     XY: [0, 0, 0],                      // No rotation needed
-    XZ: [-Math.PI / 2, 0, 0],           // Rotate around X by -90°
-    YZ: [Math.PI / 2, Math.PI / 2, 0]   // Rotate around X by 90°, then Y by 90°
+    XZ: [-Math.PI / 2, 0, 0],           // Rotate around X by -90Â°
+    YZ: [Math.PI / 2, Math.PI / 2, 0]   // Rotate around X by 90Â°, then Y by 90Â°
   }
   const matrix = new Matrix4()
   matrix.makeRotationFromEuler(new Euler(...EXTRUDE_ROTATION[sketch.plane]))
@@ -587,18 +595,18 @@ export function buildSolidMeshes(extrudes: ExtrudeFeature[], sketches: Sketch[])
 
 // WHAT IT DOES:
 // Features: [Extrude(rect, +5, 'add'), Extrude(circle, -2, 'cut')]
-// Step 1: Create box from rect, add to solids → solids = [box]
+// Step 1: Create box from rect, add to solids â†’ solids = [box]
 // Step 2: Create cylinder from circle
-// Step 3: Subtract cylinder from box → solids = [box-with-hole]
+// Step 3: Subtract cylinder from box â†’ solids = [box-with-hole]
 // Return: [mesh representing box-with-hole]
 ### CSG Library Details
 
 ```typescript
 // 
 // API:
-//   CSG.union(mesh1, mesh2)     → mesh1 + mesh2 (combined volume)
-//   CSG.subtract(mesh1, mesh2)  → mesh1 - mesh2 (mesh2 cut from mesh1)
-//   CSG.intersect(mesh1, mesh2) → only the overlapping part
+//   CSG.union(mesh1, mesh2)     â†’ mesh1 + mesh2 (combined volume)
+//   CSG.subtract(mesh1, mesh2)  â†’ mesh1 - mesh2 (mesh2 cut from mesh1)
+//   CSG.intersect(mesh1, mesh2) â†’ only the overlapping part
 //
 // Requirements:
 //   - Both input meshes must have valid BufferGeometry
@@ -706,9 +714,9 @@ function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
 // Definition: Stores vertex data (positions, normals, indices) for rendering
 // 
 // Key properties:
-//   .attributes.position  → THREE.BufferAttribute with vertex positions [x,y,z]
-//   .index                → THREE.BufferAttribute with triangle indices
-//   .computeVertexNormals()  → Calculate normals for lighting
+//   .attributes.position  â†’ THREE.BufferAttribute with vertex positions [x,y,z]
+//   .index                â†’ THREE.BufferAttribute with triangle indices
+//   .computeVertexNormals()  â†’ Calculate normals for lighting
 //
 // Why it matters for raycasting:
 //   - Raycaster needs .index (which triangles exist)
@@ -721,13 +729,13 @@ function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
 // Definition: Combines geometry with material for rendering
 //
 // Constructor: new Mesh(geometry, material)
-//   geometry  → Shape data (THREE.BufferGeometry)
-//   material  → How to render it (THREE.MeshStandardMaterial, etc.)
+//   geometry  â†’ Shape data (THREE.BufferGeometry)
+//   material  â†’ How to render it (THREE.MeshStandardMaterial, etc.)
 //
 // Key properties:
-//   .matrixWorld  → Position/rotation/scale in world space
-//   .geometry     → The shape
-//   .material     → The appearance
+//   .matrixWorld  â†’ Position/rotation/scale in world space
+//   .geometry     â†’ The shape
+//   .material     â†’ The appearance
 //
 // Used by:
 //   - Scene rendering (Three.js draws it)
@@ -746,11 +754,11 @@ function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
 //
 // intersectObject returns array of:
 //   {
-//     distance: number        → How far from camera
-//     point: Vector3          → World position of hit
-//     face: Face3             → The triangle that was hit
-//     object: Object3D        → The mesh that was hit
-//     uv: Vector2             → Texture coordinates if applicable
+//     distance: number        â†’ How far from camera
+//     point: Vector3          â†’ World position of hit
+//     face: Face3             â†’ The triangle that was hit
+//     object: Object3D        â†’ The mesh that was hit
+//     uv: Vector2             â†’ Texture coordinates if applicable
 //   }
 //
 // Problem area:
@@ -763,11 +771,11 @@ function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
 // Definition: Converts a 2D shape into a 3D extruded solid
 //
 // Constructor: new ExtrudeGeometry(shapes, options)
-//   shapes  → Array of THREE.Shape (2D closed paths)
-//   options →
-//     depth: number          → How far to extrude
-//     bevelEnabled: boolean  → Round the edges?
-//     steps: number          → Smoothness of extrusion
+//   shapes  â†’ Array of THREE.Shape (2D closed paths)
+//   options â†’
+//     depth: number          â†’ How far to extrude
+//     bevelEnabled: boolean  â†’ Round the edges?
+//     steps: number          â†’ Smoothness of extrusion
 //
 // Output: THREE.BufferGeometry with:
 //   - Front face (original shape)
@@ -786,13 +794,13 @@ function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
 //
 // Usage:
 //   const matrix = new Matrix4()
-//   matrix.makeRotationFromEuler(euler)  → Set rotation
-//   matrix.setPosition(x, y, z)          → Set translation
-//   geo.applyMatrix4(matrix)             → Apply to geometry vertices
+//   matrix.makeRotationFromEuler(euler)  â†’ Set rotation
+//   matrix.setPosition(x, y, z)          â†’ Set translation
+//   geo.applyMatrix4(matrix)             â†’ Apply to geometry vertices
 //
 // Why it's needed:
 //   - ExtrudeGeometry is always in local XY
-//   - To put it on XZ plane, must rotate -90° around X
+//   - To put it on XZ plane, must rotate -90Â° around X
 //   - Matrix4 handles this rotation + translation in one operation
 ```
 
@@ -802,9 +810,9 @@ function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
 //
 // Returns:
 //   {
-//     camera: PerspectiveCamera  → The camera object
-//     scene: Scene               → The 3D scene
-//     gl: WebGLRenderer          → The renderer
+//     camera: PerspectiveCamera  â†’ The camera object
+//     scene: Scene               â†’ The 3D scene
+//     gl: WebGLRenderer          â†’ The renderer
 //     ... many more
 //   }
 //
@@ -820,11 +828,11 @@ function SolidMesh({ solidMesh }: { solidMesh: Mesh }) {
 
 ### Hypothesis Chain:
 
-1. **CSG-generated mesh exists and renders** ✓
+1. **CSG-generated mesh exists and renders** âœ“
    - Visual evidence: pocket cuts appear on screen
    - So THREE.Mesh creation works
 
-2. **Raycaster doesn't find intersections** ✗
+2. **Raycaster doesn't find intersections** âœ—
    - raycaster.intersectObject() returns empty array
    - Indicates: Either mesh geometry is malformed OR raycaster can't reach the mesh
 
@@ -936,34 +944,34 @@ exportSTL([result])  // See if export works (proves geometry is valid)
 ## Summary: Data Flow
 
 ```
-User clicks "New Sketch" → Raycaster fires on clicked face
-    ↓
-Face normal extracted → Converted to plane (XY/XZ/YZ)
-    ↓
-startNewSketch(plane, offset) called → Store updated
-    ↓
-Component re-renders → Enters sketch mode
-    ↓
+User clicks "New Sketch" â†’ Raycaster fires on clicked face
+    â†“
+Face normal extracted â†’ Converted to plane (XY/XZ/YZ)
+    â†“
+startNewSketch(plane, offset) called â†’ Store updated
+    â†“
+Component re-renders â†’ Enters sketch mode
+    â†“
 Camera animates to plane view (Scene.tsx)
-    ↓
-User draws lines/rects/circles → Store.sketchElements updated
-    ↓
+    â†“
+User draws lines/rects/circles â†’ Store.sketchElements updated
+    â†“
 CommittedSketches renders with `<Line>` components
-    ↓
-User clicks "Extrude" → addExtrude() called
-    ↓
+    â†“
+User clicks "Extrude" â†’ addExtrude() called
+    â†“
 sketchElementsToShape() converts to THREE.Shape[]
-    ↓
+    â†“
 ExtrudeGeometry creates 3D geometry
-    ↓
+    â†“
 Matrix4 rotates to correct plane
-    ↓
+    â†“
 buildSolidMeshes() creates final Mesh
-    ↓
+    â†“
 If 'cut': CSG.subtract() removes volume
-    ↓
+    â†“
 ExtrudedSolids renders with `<mesh>` + raycasting
-    ↓
+    â†“
 User can click new cut surfaces to start sketches
 ```
 

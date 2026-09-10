@@ -1,7 +1,7 @@
-# Constraint Solver Implementation - Final Report
+﻿# Constraint Solver Implementation - Final Report
 
 **Date**: May 1, 2026  
-**Status**: ✅ **COMPLETE**  
+**Status**: âœ… **COMPLETE**  
 **Impact**: Addresses the #1 critical gap in 3D Glider CAD application
 
 ---
@@ -34,7 +34,7 @@ export function solveConstraints(
 #### Algorithm
 - **Method**: Newton-Raphson iteration with Gaussian elimination
 - **Residual Computation**: Each constraint generates residual equations
-- **Jacobian Matrix**: Symbolic partial derivatives for all 8 constraint types
+- **Jacobian Matrix**: Symbolic partial derivatives for constraint types (originally 8; catalog now includes tangent / point-on-* — see CONSTRAINT_SOLVER.md)
 - **Linear Solver**: Gaussian elimination with partial pivoting
 - **Stability**: Damping factor (0.5) prevents oscillation
 - **Convergence**: Typically 5-20 iterations per frame
@@ -48,14 +48,14 @@ export function solveConstraints(
 | 4 | Horizontal | Line level | 1 |
 | 5 | Vertical | Line plumb | 1 |
 | 6 | Parallel | Same direction | 1 |
-| 7 | Perpendicular | 90° angle | 1 |
+| 7 | Perpendicular | 90Â° angle | 1 |
 | 8 | Equal | Same length | 1 |
 
 ### 3. Integration
 **File**: `src/components/Viewport3D/SketchPlane.tsx`
 
 The solver is called every frame when a point is being dragged:
-1. User drags point → updates to mouse position
+1. User drags point â†’ updates to mouse position
 2. Dragged point marked as "fixed variable"
 3. Solver adjusts all other points to satisfy all constraints
 4. Result applied to sketch elements in store
@@ -86,12 +86,12 @@ The solver is called every frame when a point is being dragged:
 - Common patterns
 
 ### 5. Code Quality
-✅ No compilation errors  
-✅ No TypeScript warnings  
-✅ Type-safe implementation  
-✅ Follows existing code style  
-✅ Well-commented functions  
-✅ Error handling for edge cases  
+âœ… No compilation errors  
+âœ… No TypeScript warnings  
+âœ… Type-safe implementation  
+âœ… Follows existing code style  
+âœ… Well-commented functions  
+âœ… Error handling for edge cases  
 
 ---
 
@@ -105,8 +105,8 @@ The solver is called every frame when a point is being dragged:
      a. Compute residuals for all constraints
      b. Check convergence (max residual < tolerance)
      c. Build jacobian matrix (partial derivatives)
-     d. Solve J·Δx = -r using Gaussian elimination
-     e. Apply update with damping: x ← x + 0.5·Δx
+     d. Solve JÂ·Î”x = -r using Gaussian elimination
+     e. Apply update with damping: x â† x + 0.5Â·Î”x
 4. Return solved elements
 ```
 
@@ -114,7 +114,7 @@ The solver is called every frame when a point is being dragged:
 - **Convergence**: 5-20 iterations typical
 - **Time per frame**: < 5ms (most sketches)
 - **Memory**: ~1KB per variable
-- **Scaling**: O(n²) where n = # equations
+- **Scaling**: O(nÂ²) where n = # equations
 
 ### Robustness
 - Handles over-constrained systems (least-squares solution)
@@ -131,7 +131,7 @@ The solver is called every frame when a point is being dragged:
 1. User creates line with length = 10
 2. User adds length constraint
 3. User drags endpoint
-4. Line length breaks → becomes something else
+4. Line length breaks â†’ becomes something else
 5. Constraint ignored during drag
 ```
 
@@ -162,19 +162,19 @@ The solver is called every frame when a point is being dragged:
 
 ## Validation & Testing
 
-### Code Analysis ✅
+### Code Analysis âœ…
 - TypeScript compilation: No errors
 - ESLint: No issues
 - Import analysis: All dependencies present
 - Reference checking: All functions found
 
-### Logical Validation ✅
+### Logical Validation âœ…
 - Math verified for each constraint type
 - Jacobian derivatives correct
 - Gaussian elimination algorithm correct
 - Damping factor appropriate
 
-### Integration Testing ✅
+### Integration Testing âœ…
 - Dev server compiles successfully
 - Hot reload working
 - No runtime errors in console
@@ -190,14 +190,14 @@ The solver is called every frame when a point is being dragged:
 3. Draw a line with `Line` tool
 4. Add `Length` constraint with value 5
 5. Drag endpoint with mouse
-6. **Result**: Line length stays ~5 during drag ✓
+6. **Result**: Line length stays ~5 during drag âœ“
 
 ### More Complex Test
 1. Draw two connected lines
 2. Add `Coincident` constraint to connection point
 3. Add `Length` constraints to both
 4. Drag one line
-5. **Result**: Both lines maintain connection and length ✓
+5. **Result**: Both lines maintain connection and length âœ“
 
 For detailed testing procedures, see [TEST_CONSTRAINT_SOLVER.md](./TEST_CONSTRAINT_SOLVER.md)
 
@@ -205,7 +205,7 @@ For detailed testing procedures, see [TEST_CONSTRAINT_SOLVER.md](./TEST_CONSTRAI
 
 ## Priority Update
 
-### Completed ✅
+### Completed âœ…
 1. **Constraint solver** - Implements real-time constraint maintenance
 
 ### Next Priority (Updated)
@@ -233,7 +233,7 @@ For detailed testing procedures, see [TEST_CONSTRAINT_SOLVER.md](./TEST_CONSTRAI
 
 ## Repository Status
 
-✅ **Production Ready**
+âœ… **Production Ready**
 - All tests passing
 - No compilation errors
 - Backward compatible
@@ -281,7 +281,7 @@ const constraints = [
 
 - **Lines of Code**: 850+ (solver) + 20 (integration)
 - **Documentation**: 1200+ lines across 3 guides
-- **Constraint Types**: 8 fully implemented
+- **Constraint Types**: 13 in current code (original 8 + tangent, pointOnLine, pointOnAxis, pointAtOrigin, pointOnCircle)
 - **Convergence Time**: 5-20ms typical
 - **Type Safety**: 100% (strict TypeScript)
 - **Error Handling**: Comprehensive
@@ -294,7 +294,7 @@ const constraints = [
 - **Solver**: Gaussian elimination with partial pivoting
 - **References**:
   - Numerical Recipes: Press et al.
-  - CAD Parametric Design: Jüttler & Wagner
+  - CAD Parametric Design: JÃ¼ttler & Wagner
   - Newton's Method: https://en.wikipedia.org/wiki/Newton%27s_method
 
 ---
@@ -321,4 +321,4 @@ The constraint solver successfully transforms 3D Glider from a "one-shot constra
 **Total Development Time**: 1 session  
 **Code Review**: Passed  
 **Documentation**: Complete  
-**Ready for Merge**: ✅ YES
+**Ready for Merge**: âœ… YES

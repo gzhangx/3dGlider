@@ -1,4 +1,4 @@
-# Constraint Solver Implementation Guide
+﻿# Constraint Solver Implementation Guide
 
 ## Overview
 
@@ -12,7 +12,7 @@ The solver uses Newton-Raphson iteration to find element positions that satisfy 
 
 1. **Residual Computation**: For each constraint, compute how much it's violated (residual)
 2. **Jacobian Construction**: Build a matrix of partial derivatives showing how each variable affects each constraint
-3. **Linear System Solve**: Use Gaussian elimination to solve J·Δx = -r
+3. **Linear System Solve**: Use Gaussian elimination to solve JÂ·Î”x = -r
 4. **Variable Update**: Apply damping factor (0.5) and update element coordinates
 5. **Iteration**: Repeat until residuals converge below tolerance (1e-6)
 
@@ -130,6 +130,61 @@ Dot product of direction vectors = 0
 ```
 Compares lengths (works for lines, circles, rectangles)
 
+
+### 9. **Tangent** - Line tangent to circle/arc
+```typescript
+{
+  id: "tan1",
+  type: "tangent",
+  elementId1: "line1",
+  elementId2: "circle1"
+}
+```
+Distance from circle center to the infinite line equals the radius. Circle/arc radius may become a solver variable.
+
+### 10. **PointOnLine** - Point lies on a line
+```typescript
+{
+  id: "pol1",
+  type: "pointOnLine",
+  p: { elementId: "line2", which: "start" },
+  lineId: "line1"
+}
+```
+Cross-product residual keeps the point collinear with the line segment's supporting line.
+
+### 11. **PointOnAxis** - Point on sketch X or Y axis
+```typescript
+{
+  id: "poa1",
+  type: "pointOnAxis",
+  p: { elementId: "line1", which: "start" },
+  axis: "x"  // or "y"
+}
+```
+Forces the orthogonal coordinate to zero (on-axis).
+
+### 12. **PointAtOrigin** - Point at sketch origin
+```typescript
+{
+  id: "origin1",
+  type: "pointAtOrigin",
+  p: { elementId: "line1", which: "start" }
+}
+```
+Two equations: point x = 0 and y = 0.
+
+### 13. **PointOnCircle** - Point on circle/arc circumference
+```typescript
+{
+  id: "poc1",
+  type: "pointOnCircle",
+  p: { elementId: "line1", which: "end" },
+  circleId: "circle1"
+}
+```
+Distance from center equals radius.
+
 ## Integration with Drag Handling
 
 The solver is integrated in `src/components/Viewport3D/SketchPlane.tsx` in the `onMove` handler when dragging is active:
@@ -159,7 +214,7 @@ if (dragTarget) {
 | Aspect | Typical Value |
 |--------|---------------|
 | Convergence iterations | 5-20 |
-| Jacobian computation | O(n²) where n = # variables |
+| Jacobian computation | O(nÂ²) where n = # variables |
 | Total time (drag frame) | < 5ms for typical sketch |
 | Memory | ~1KB per variable |
 
@@ -269,7 +324,7 @@ console.log('Converged in', iteration, 'iterations')
 ## References
 
 - **Newton-Raphson Method**: https://en.wikipedia.org/wiki/Newton%27s_method
-- **Constraint Solving in CAD**: Jüttler & Wagner, "CAD-Based Parametric Design"
+- **Constraint Solving in CAD**: JÃ¼ttler & Wagner, "CAD-Based Parametric Design"
 - **Gaussian Elimination**: Numerical Recipes, Press et al.
 
 ---

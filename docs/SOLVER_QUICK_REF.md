@@ -1,4 +1,4 @@
-# Constraint Solver - Developer Reference Card
+﻿# Constraint Solver - Developer Reference Card
 
 ## Quick API Reference
 
@@ -25,8 +25,13 @@ const solved = solveConstraints(
 | `horizontal` | Line level | Y-coords equal | Effective for alignment |
 | `vertical` | Line plumb | X-coords equal | Effective for alignment |
 | `parallel` | Same direction | Both lines rotate | Cross product = 0 |
-| `perpendicular` | 90° angle | Both lines rotate | Dot product = 0 |
+| `perpendicular` | 90Â° angle | Both lines rotate | Dot product = 0 |
 | `equal` | Same length | Both scale | Compares magnitudes |
+| `tangent` | Line to circle/arc | Line + radius | Dist(center, line) = r |
+| `pointOnLine` | Point on line | Point coords | Collinearity residual |
+| `pointOnAxis` | Point on X or Y | One coord | axis: 'x' or 'y' |
+| `pointAtOrigin` | Point at (0,0) | x and y | Two equations |
+| `pointOnCircle` | Point on circumference | Point + radius | Dist(center, p) = r |
 
 ## Integration Pattern
 
@@ -155,7 +160,7 @@ if (element_matches && coord === 'x') return 1 or -1
 return (dx or dy) / Math.hypot(dx, dy)
 
 // For angle:
-return dy/r² or -dx/r² (using atan2 derivative)
+return dy/rÂ² or -dx/rÂ² (using atan2 derivative)
 ```
 
 ## Known Issues & Workarounds

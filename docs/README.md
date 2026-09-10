@@ -1,28 +1,33 @@
-# Documentation
+﻿# Documentation
 
-This folder contains documentation for the 3D Glider project, with a focus on the constraint solver implementation.
+This folder contains documentation for the 3D Glider project (constraint solver, scripting, and related guides).
 
 ## Quick Navigation
 
-### 📋 Constraint Solver Guides
+### Constraint Solver Guides
 
 1. **[CONSTRAINT_SOLVER.md](./CONSTRAINT_SOLVER.md)** - Full Technical Documentation
    - Complete architecture explanation
-   - All 8 constraint types with examples
+   - All constraint types with examples (original 8 plus later additions)
    - Integration guide for developers
    - Performance characteristics
    - Testing strategy
    - Future improvements
    - **Read this if**: You need complete technical details
 
-2. **[TEST_CONSTRAINT_SOLVER.md](./TEST_CONSTRAINT_SOLVER.md)** - Testing & Verification Guide
-   - 5 step-by-step test scenarios
+2. **[solver.md](./solver.md)** - Design and Usage
+   - Problem formulation, variables, numerical method
+   - Practical performance and debugging notes
+   - **Read this if**: You want the design-oriented solver write-up
+
+3. **[TEST_CONSTRAINT_SOLVER.md](./TEST_CONSTRAINT_SOLVER.md)** - Testing & Verification Guide
+   - Step-by-step test scenarios
    - Visual indicators explanation
    - Debugging tips and console output
    - Troubleshooting table
    - **Read this if**: You want to verify the solver works correctly
 
-3. **[SOLVER_QUICK_REF.md](./SOLVER_QUICK_REF.md)** - Developer Quick Reference
+4. **[SOLVER_QUICK_REF.md](./SOLVER_QUICK_REF.md)** - Developer Quick Reference
    - API reference card
    - Integration patterns
    - Constraint types at-a-glance
@@ -30,14 +35,17 @@ This folder contains documentation for the 3D Glider project, with a focus on th
    - Common patterns
    - **Read this if**: You're integrating or modifying the solver
 
-4. **[IMPLEMENTATION_REPORT.md](./IMPLEMENTATION_REPORT.md)** - Project Completion Report
-   - Executive summary
-   - What was delivered
-   - Technical details
-   - How it changed the application
+5. **[IMPLEMENTATION_REPORT.md](./IMPLEMENTATION_REPORT.md)** - Project Completion Report
+   - Executive summary of the May 2026 solver delivery
+   - What was delivered (catalog has grown since; see CONSTRAINT_SOLVER.md)
    - Validation and testing
-   - Metrics and status
-   - **Read this if**: You want an overview of the project
+   - **Read this if**: You want an overview of the original solver project
+
+### Scripting
+
+6. **[SCRIPTING.md](./SCRIPTING.md)** - Scripting API
+   - Programmatic sketch/feature construction
+   - Notes on FeatureTree-only shell (no `addShell` in the scripting API)
 
 ## File Organization
 
@@ -45,41 +53,44 @@ This folder contains documentation for the 3D Glider project, with a focus on th
 docs/
 ├── README.md (this file)
 ├── CONSTRAINT_SOLVER.md (technical guide)
+├── solver.md (design & usage)
 ├── TEST_CONSTRAINT_SOLVER.md (testing guide)
 ├── SOLVER_QUICK_REF.md (quick reference)
-└── IMPLEMENTATION_REPORT.md (project report)
+├── IMPLEMENTATION_REPORT.md (project report)
+└── SCRIPTING.md (scripting API)
 ```
 
-Tests are located in: `tests/constraintSolve.test.ts`
+Tests are located in: `tests/` (see `tests/README.md`)
 
 ## For Different Audiences
 
-### 👨‍💻 Software Developers
-- Start with: [SOLVER_QUICK_REF.md](./SOLVER_QUICK_REF.md)
+### Software Developers
+- Start with: [SOLVER_QUICK_REF.md](./SOLVER_QUICK_REF.md) or [solver.md](./solver.md)
 - Deep dive: [CONSTRAINT_SOLVER.md](./CONSTRAINT_SOLVER.md)
+- Scripting: [SCRIPTING.md](./SCRIPTING.md)
 
-### 🧪 QA / Testers
+### QA / Testers
 - Start with: [TEST_CONSTRAINT_SOLVER.md](./TEST_CONSTRAINT_SOLVER.md)
 - Reference: [SOLVER_QUICK_REF.md](./SOLVER_QUICK_REF.md)
 
-### 📊 Project Managers
-- Start with: [IMPLEMENTATION_REPORT.md](./IMPLEMENTATION_REPORT.md)
+### Project Managers
+- Start with: [IMPLEMENTATION_REPORT.md](./IMPLEMENTATION_REPORT.md) and `../tasks.md`
 - Details: [CONSTRAINT_SOLVER.md](./CONSTRAINT_SOLVER.md)
 
-### 🎓 Learning the Solver
+### Learning the Solver
 - Beginner: [TEST_CONSTRAINT_SOLVER.md](./TEST_CONSTRAINT_SOLVER.md)
-- Intermediate: [SOLVER_QUICK_REF.md](./SOLVER_QUICK_REF.md)
+- Intermediate: [SOLVER_QUICK_REF.md](./SOLVER_QUICK_REF.md) / [solver.md](./solver.md)
 - Advanced: [CONSTRAINT_SOLVER.md](./CONSTRAINT_SOLVER.md)
 
 ## Key Sections
 
 ### Algorithm & Theory
-- Location: [CONSTRAINT_SOLVER.md](./CONSTRAINT_SOLVER.md) - Architecture section
+- Location: [CONSTRAINT_SOLVER.md](./CONSTRAINT_SOLVER.md) - Architecture section; also [solver.md](./solver.md)
 - Topics: Newton-Raphson, residuals, Jacobian matrix, convergence
 
 ### Constraint Types
 - Location: [CONSTRAINT_SOLVER.md](./CONSTRAINT_SOLVER.md) - Supported Constraint Types section
-- All 8 types with examples and usage
+- Catalog matches `modelStore` / `constraintSolve` (coincident, length, angle, horizontal, vertical, parallel, perpendicular, equal, tangent, pointOnLine, pointOnAxis, pointAtOrigin, pointOnCircle)
 
 ### Integration Code
 - Location: [SOLVER_QUICK_REF.md](./SOLVER_QUICK_REF.md) - Integration Pattern section
@@ -87,7 +98,7 @@ Tests are located in: `tests/constraintSolve.test.ts`
 
 ### Testing Procedures
 - Location: [TEST_CONSTRAINT_SOLVER.md](./TEST_CONSTRAINT_SOLVER.md)
-- 5 complete scenarios to verify functionality
+- Complete scenarios to verify functionality
 
 ### Performance Metrics
 - Location: [IMPLEMENTATION_REPORT.md](./IMPLEMENTATION_REPORT.md) - Metrics section
@@ -102,25 +113,23 @@ Tests are located in: `tests/constraintSolve.test.ts`
 → Copy code from [SOLVER_QUICK_REF.md](./SOLVER_QUICK_REF.md) - Integration Pattern
 
 ### I want to understand it
-→ Read [CONSTRAINT_SOLVER.md](./CONSTRAINT_SOLVER.md) - Architecture section
+→ Read [CONSTRAINT_SOLVER.md](./CONSTRAINT_SOLVER.md) / [solver.md](./solver.md)
 
 ### I want the big picture
-→ Read [IMPLEMENTATION_REPORT.md](./IMPLEMENTATION_REPORT.md) - Executive Summary
+→ Read [IMPLEMENTATION_REPORT.md](./IMPLEMENTATION_REPORT.md) and `../tasks.md`
 
 ## Recent Changes
 
-- **May 1, 2026**: Constraint solver implemented
-  - Newton-Raphson solver with 8 constraint types
-  - Integrated into drag handler
-  - All documentation created
-  - Comprehensive testing guide included
+- **May 1, 2026**: Constraint solver implemented (Newton-Raphson; original 8 types)
+- **Later 2026**: Additional constraint types (tangent, pointOnLine, pointOnAxis, pointAtOrigin, pointOnCircle); loft/sweep/shell; dual STL/STEP
+- **September 2026**: Docs refresh — linked `solver.md` + `SCRIPTING.md`; constraint catalogs synced to code
 
 ## Related Files
 
-- **Source Code**: `src/lib/constraintSolve.ts` (850+ lines)
+- **Source Code**: `src/lib/constraintSolve.ts`
 - **Integration**: `src/components/Viewport3D/SketchPlane.tsx`
-- **Tests**: `tests/constraintSolve.test.ts`
-- **Project Status**: `../tasks.md`
+- **Tests**: `tests/` (see `tests/README.md`)
+- **Project Status**: `../tasks.md`, `../next.md`, `../plan.md`
 
 ## Feedback & Issues
 
@@ -130,6 +139,6 @@ Tests are located in: `tests/constraintSolve.test.ts`
 
 ---
 
-**Last Updated**: May 1, 2026  
-**Documentation Status**: Complete  
+**Last Updated**: September 9, 2026  
+**Documentation Status**: Synced with current constraint catalog  
 **Implementation Status**: Production Ready
