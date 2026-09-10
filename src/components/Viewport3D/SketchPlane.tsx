@@ -55,6 +55,8 @@ const SNAP_DOT_SCREEN = 10
 const SNAP_MIN_WORLD = 0.08
 const DOT_MIN_WORLD = 0.04
 const HANDLE_SCREEN = 8
+const HANDLE_HIT_SCREEN = 22
+const HANDLE_EMPHASIS_SCREEN = 12
 const _screenSizePt = new Vector3()
 
 function worldSizeForScreenPx(camera: Camera, viewHeight: number, pos: [number, number, number], screenPx: number) {
@@ -109,7 +111,7 @@ function Dot({ pos, color, screenSize, size = 0.06, ring = false }: { pos: [numb
 /** Let the invisible sketch plane receive hits in cut mode (Line2 otherwise wins the raycast). */
 const noopRaycast: () => void = () => {}
 
-  function SketchEl({ el, plane, highlighted, onPointerMove, pointPickRadius, suppressElementClick, onRadiusDragStart, onRadiusDragEnd }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean; onPointerMove?: (e: ThreeEvent<PointerEvent>) => void; pointPickRadius?: number; suppressElementClick?: () => boolean; onRadiusDragStart?: (elementId: string, e: ThreeEvent<PointerEvent>) => void; onRadiusDragEnd?: (e: ThreeEvent<PointerEvent>) => void }) {
+  function SketchEl({ el, plane, highlighted, onPointerMove, pointPickRadius, suppressElementClick, onRadiusDragStart, onRadiusDragEnd, onHoveredPoint }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean; onPointerMove?: (e: ThreeEvent<PointerEvent>) => void; pointPickRadius?: number; suppressElementClick?: () => boolean; onRadiusDragStart?: (elementId: string, e: ThreeEvent<PointerEvent>) => void; onRadiusDragEnd?: (e: ThreeEvent<PointerEvent>) => void; onHoveredPoint?: (ref: PointRef | null) => void }) {
   const { activeTool, selectedElementIds, selectedPointRefs, highlightElementIds, selectElement, selectPoint, togglePointSelection, toggleElementSelection, showElementNames, addSketchConstraint, applyConstraints } = useModelStore(useShallow((state) => ({
     activeTool: state.activeTool, selectedElementIds: state.selectedElementIds,
     selectedPointRefs: state.selectedPointRefs,
@@ -228,8 +230,22 @@ const noopRaycast: () => void = () => {}
 
           selectElement(el.id)
         },
-        onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setHovered(true) },
-        onPointerOut: () => setHovered(false),
+        onPointerOver: (e: ThreeEvent<PointerEvent>) => {
+          e.stopPropagation()
+          const raw = toSketch(e.point, plane)
+          const nearPoint = pointPickRadius != null ? nearestSelectablePoint(raw, el, pointPickRadius) : null
+          if (nearPoint) {
+            onHoveredPoint?.(nearPoint.ref)
+            setHovered(false)
+          } else {
+            onHoveredPoint?.(null)
+            setHovered(true)
+          }
+        },
+        onPointerOut: () => {
+          setHovered(false)
+          onHoveredPoint?.(null)
+        },
         onPointerMove: (e: ThreeEvent<PointerEvent>) => {
           e.stopPropagation()
           const gesture = radiusGesture.current
@@ -240,6 +256,15 @@ const noopRaycast: () => void = () => {}
               gesture.dragging = true
               onRadiusDragStart?.(el.id, e)
             }
+          }
+          const raw = toSketch(e.point, plane)
+          const nearPoint = pointPickRadius != null ? nearestSelectablePoint(raw, el, pointPickRadius) : null
+          if (nearPoint) {
+            onHoveredPoint?.(nearPoint.ref)
+            setHovered(false)
+          } else {
+            onHoveredPoint?.(null)
+            setHovered(true)
           }
           onPointerMove?.(e)
         },
@@ -308,6 +333,7 @@ function PointHandle({
   onPress,
   highlighted,
   selected,
+  hovered: hoveredFromParent,
 }: {
   pos: [number, number, number]
   onDragStart: (e: ThreeEvent<PointerEvent>) => void
@@ -317,68 +343,96 @@ function PointHandle({
   onPress?: (e: ThreeEvent<PointerEvent>) => void
   highlighted?: boolean
   selected?: boolean
+  hovered?: boolean
 }) {
-  const [hovered, setHovered] = useState(false)
+  const [localHovered, setLocalHovered] = useState(false)
   const dragging = useRef(false)
   const downPos = useRef<{ x: number; y: number } | null>(null)
-  const meshRef = useRef<Mesh>(null)
-  const { camera, size: viewSize } = useThree()
+  const hitRef = useRef<Mesh>(null)
+  const visRef = useRef<Mesh>(null)
+  const { camera, size: viewSize, gl } = useThree()
   const DRAG_PX = 5
-  const worldSize = worldSizeForScreenPx(camera, viewSize.height, pos, HANDLE_SCREEN)
+  const hovered = localHovered || !!hoveredFromParent
+  const emphasized = hovered || !!selected
+  const visPx = emphasized ? HANDLE_EMPHASIS_SCREEN : HANDLE_SCREEN
+  const visSize = worldSizeForScreenPx(camera, viewSize.height, pos, visPx)
+  const hitSize = worldSizeForScreenPx(camera, viewSize.height, pos, HANDLE_HIT_SCREEN)
   useFrame(() => {
-    meshRef.current?.scale.setScalar(worldSizeForScreenPx(camera, viewSize.height, pos, HANDLE_SCREEN))
+    const liveVis = worldSizeForScreenPx(camera, viewSize.height, pos, emphasized ? HANDLE_EMPHASIS_SCREEN : HANDLE_SCREEN)
+    const liveHit = worldSizeForScreenPx(camera, viewSize.height, pos, HANDLE_HIT_SCREEN)
+    visRef.current?.scale.setScalar(liveVis)
+    hitRef.current?.scale.setScalar(liveHit)
   })
   const color = hovered ? '#ffffff' : selected ? '#66ddff' : highlighted ? '#88ff88' : '#ffdd44'
+  const bindPointer = {
+    onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+      if (e.button !== 0) return
+      e.stopPropagation()
+      dragging.current = false
+      downPos.current = { x: e.clientX, y: e.clientY }
+      onPress?.(e)
+      ;(e.currentTarget as unknown as { setPointerCapture: (id: number) => void }).setPointerCapture(e.pointerId)
+    },
+    onPointerMove: (e: ThreeEvent<PointerEvent>) => {
+      if (!downPos.current) return
+      e.stopPropagation()
+      if (!dragging.current) {
+        const dx = e.clientX - downPos.current.x
+        const dy = e.clientY - downPos.current.y
+        if (Math.hypot(dx, dy) < DRAG_PX) return
+        dragging.current = true
+        onDragStart(e)
+      }
+      onDragMove?.(e)
+    },
+    onPointerUp: (e: ThreeEvent<PointerEvent>) => {
+      if (e.button !== 0) return
+      e.stopPropagation()
+      ;(e.currentTarget as unknown as { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(e.pointerId)
+      const wasDragging = dragging.current
+      dragging.current = false
+      downPos.current = null
+      if (wasDragging) onDragEnd?.(e)
+      else onClick?.(e)
+    },
+    onPointerCancel: (e: ThreeEvent<PointerEvent>) => {
+      e.stopPropagation()
+      ;(e.currentTarget as unknown as { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(e.pointerId)
+      const wasDragging = dragging.current
+      dragging.current = false
+      downPos.current = null
+      if (wasDragging) onDragEnd?.(e)
+    },
+    onPointerOver: (e: ThreeEvent<PointerEvent>) => {
+      e.stopPropagation()
+      setLocalHovered(true)
+      gl.domElement.style.cursor = 'pointer'
+    },
+    onPointerOut: () => {
+      setLocalHovered(false)
+      gl.domElement.style.cursor = ''
+    },
+  }
   return (
-    <mesh
-      ref={meshRef}
-      position={pos}
-      scale={[worldSize, worldSize, worldSize]}
-      renderOrder={50}
-      onPointerDown={(e) => {
-        if (e.button !== 0) return
-        e.stopPropagation()
-        dragging.current = false
-        downPos.current = { x: e.clientX, y: e.clientY }
-        onPress?.(e)
-        ;(e.currentTarget as unknown as { setPointerCapture: (id: number) => void }).setPointerCapture(e.pointerId)
-      }}
-      onPointerMove={(e) => {
-        if (!downPos.current) return
-        e.stopPropagation()
-        if (!dragging.current) {
-          const dx = e.clientX - downPos.current.x
-          const dy = e.clientY - downPos.current.y
-          if (Math.hypot(dx, dy) < DRAG_PX) return
-          dragging.current = true
-          onDragStart(e)
-        }
-        onDragMove?.(e)
-      }}
-      onPointerUp={(e) => {
-        if (e.button !== 0) return
-        e.stopPropagation()
-        ;(e.currentTarget as unknown as { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(e.pointerId)
-        const wasDragging = dragging.current
-        dragging.current = false
-        downPos.current = null
-        if (wasDragging) onDragEnd?.(e)
-        else onClick?.(e)
-      }}
-      onPointerCancel={(e) => {
-        e.stopPropagation()
-        ;(e.currentTarget as unknown as { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(e.pointerId)
-        const wasDragging = dragging.current
-        dragging.current = false
-        downPos.current = null
-        if (wasDragging) onDragEnd?.(e)
-      }}
-      onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
-      onPointerOut={() => setHovered(false)}
-    >
-      <sphereGeometry args={[1, 8, 8]} />
-      <meshBasicMaterial color={color} depthTest={false} />
-    </mesh>
+    <group position={pos}>
+      <mesh
+        ref={hitRef}
+        scale={[hitSize, hitSize, hitSize]}
+        {...bindPointer}
+      >
+        <sphereGeometry args={[1, 8, 8]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+      <mesh
+        ref={visRef}
+        scale={[visSize, visSize, visSize]}
+        renderOrder={50}
+        raycast={noopRaycast}
+      >
+        <sphereGeometry args={[1, 8, 8]} />
+        <meshBasicMaterial color={color} depthTest={false} />
+      </mesh>
+    </group>
   )
 }
 
@@ -434,6 +488,7 @@ export function SketchPlane() {
   // Drag-box selection state (sketch-local coordinates)
   const [selectBoxStart, setSelectBoxStart] = useState<SketchPoint | null>(null)
   const [selectBoxEnd, setSelectBoxEnd] = useState<SketchPoint | null>(null)
+  const [hoveredPoint, setHoveredPoint] = useState<PointRef | null>(null)
   const handleConsumedClick = useRef(false)
 
   useEffect(() => {
@@ -1150,6 +1205,7 @@ export function SketchPlane() {
             setIsDraggingPoint(true)
           }}
           onRadiusDragEnd={() => { onPointerUp() }}
+          onHoveredPoint={setHoveredPoint}
         />
       ))}
 
@@ -1171,20 +1227,22 @@ export function SketchPlane() {
         }
         const pointSelected = (which: PointRef['which']) =>
           selectedPointRefs.some((p) => p.elementId === el.id && p.which === which)
+        const pointHovered = (which: PointRef['which']) =>
+          !!hoveredPoint && hoveredPoint.elementId === el.id && hoveredPoint.which === which
         const handleHighlight = highlightElementIds.includes(el.id)
         if (el.type === 'line') return (
           <group key={el.id + '_handles'}>
-            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('start')} highlighted={handleHighlight} selected={pointSelected('start')} />
-            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('end')} highlighted={handleHighlight} selected={pointSelected('end')} />
+            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('start')} highlighted={handleHighlight} selected={pointSelected('start')} hovered={pointHovered('start')} />
+            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('end')} highlighted={handleHighlight} selected={pointSelected('end')} hovered={pointHovered('end')} />
           </group>
         )
         if (el.type === 'circle') return (
-          <PointHandle key={el.id + '_handle'} pos={getHandlePoint(el.center)} onDragStart={startDrag('center')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('center')} highlighted={handleHighlight} selected={pointSelected('center')} />
+          <PointHandle key={el.id + '_handle'} pos={getHandlePoint(el.center)} onDragStart={startDrag('center')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('center')} highlighted={handleHighlight} selected={pointSelected('center')} hovered={pointHovered('center')} />
         )
         if (el.type === 'rect') return (
           <group key={el.id + '_handles'}>
-            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('start')} highlighted={handleHighlight} selected={pointSelected('start')} />
-            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('end')} highlighted={handleHighlight} selected={pointSelected('end')} />
+            <PointHandle pos={getHandlePoint(el.start)} onDragStart={startDrag('start')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('start')} highlighted={handleHighlight} selected={pointSelected('start')} hovered={pointHovered('start')} />
+            <PointHandle pos={getHandlePoint(el.end)} onDragStart={startDrag('end')} onDragMove={onMove} onDragEnd={onPointerUp} onPress={clickPoint('end')} highlighted={handleHighlight} selected={pointSelected('end')} hovered={pointHovered('end')} />
           </group>
         )
         if (el.type === 'arc') {
@@ -1201,6 +1259,7 @@ export function SketchPlane() {
                   onPress={clickPoint(ref.which)}
                   highlighted={handleHighlight}
                   selected={pointSelected(ref.which)}
+                  hovered={pointHovered(ref.which)}
                 />
               ))}
             </group>
