@@ -334,7 +334,7 @@ export interface ModelState {
   activePlane: SketchPlanePose | null
   hoveredPlane: PlaneId | null
   newSketchArmed: boolean
-  activeTool: SketchTool
+  activeTool: SketchTool | null
   constructionMode: boolean
   snapToGrid: boolean
   snapToOtherPlanes: boolean
@@ -372,7 +372,7 @@ export interface ModelState {
   solverDebugLog: SolverDebugLog | null
 
   setHoveredPlane: (plane: PlaneId | null) => void
-  setActiveTool: (tool: SketchTool) => void
+  setActiveTool: (tool: SketchTool | null) => void
   setPreviewPlane: (plane: SketchPlanePose | null) => void
   setActivePlane: (plane: SketchPlanePose | null) => void
   setConstructionMode: (on: boolean) => void

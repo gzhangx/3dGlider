@@ -13,9 +13,10 @@ const KEY_TOOL: Record<string, SketchTool> = {
 }
 
 export default function App() {
-  const { mode, showSketchNavigator, setActiveTool } = useModelStore(useShallow((state) => ({
+  const { mode, showSketchNavigator, activeTool, setActiveTool } = useModelStore(useShallow((state) => ({
     mode: state.mode,
     showSketchNavigator: state.showSketchNavigator,
+    activeTool: state.activeTool,
     setActiveTool: state.setActiveTool,
   })))
 
@@ -25,11 +26,12 @@ export default function App() {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       const tool = KEY_TOOL[e.key.toLowerCase()]
-      if (tool) setActiveTool(tool)
+      if (!tool) return
+      setActiveTool(tool === 'select' && activeTool === 'select' ? null : tool)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [mode, setActiveTool])
+  }, [mode, activeTool, setActiveTool])
 
   return (
     <div className={styles.app}>

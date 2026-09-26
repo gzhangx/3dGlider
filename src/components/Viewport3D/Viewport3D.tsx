@@ -6,7 +6,7 @@ import { Scene } from './Scene'
 
 export function Viewport3D() {
   const { mode, activeTool } = useModelStore(useShallow((state) => ({ mode: state.mode, activeTool: state.activeTool })))
-  const cursor = mode === 'sketch' && activeTool !== 'select' ? 'crosshair' : 'default'
+  const cursor = mode === 'sketch' && activeTool != null && activeTool !== 'select' ? 'crosshair' : 'default'
 
   const d = distanceToFitPlane()
   return (

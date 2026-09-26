@@ -111,7 +111,7 @@ export function findSnapTarget(
   sketches: Sketch[],
   editingSketchId: string | null,
   plane: SketchPlanePose,
-  activeTool: SketchTool,
+  activeTool: SketchTool | null,
   snapToObjects: boolean,
   snapToOtherPlanes: boolean,
   snapEndpointThreshold: number,

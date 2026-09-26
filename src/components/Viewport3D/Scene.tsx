@@ -101,16 +101,14 @@ export function Scene() {
     )
   }, [sketchViewResetCounter, activePlane, plateDist])
 
-  // In sketch mode with a draw tool: disable left-button orbit so clicks reach the sketch plane.
-  // Right-drag and scroll still pan/zoom freely.
+  // Left-drag orbits only when no sketch tool is active.
+  // Select and draw tools use the left button, so it must not move the camera.
+  // Right-drag and scroll still pan and zoom.
   useEffect(() => {
     if (!controlsRef.current) return
     const c = controlsRef.current
-    if (mode === 'sketch' && (activeTool !== 'select' || isDraggingPoint)) {
-      c.mouseButtons.left = ACTION_NONE
-    } else {
-      c.mouseButtons.left = ACTION_ROTATE
-    }
+    const toolUsesLeftButton = mode === 'sketch' && (activeTool !== null || isDraggingPoint)
+    c.mouseButtons.left = toolUsesLeftButton ? ACTION_NONE : ACTION_ROTATE
     c.mouseButtons.right = ACTION_TRUCK
   }, [mode, activeTool, isDraggingPoint])
 

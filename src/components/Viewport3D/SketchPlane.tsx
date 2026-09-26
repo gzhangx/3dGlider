@@ -525,7 +525,7 @@ export function SketchPlane() {
   const plane = activePlane
   const planeOrigin = planeOriginFromPose(plane)
   const planeNormal = planeNormalFromPose(plane)
-  const isDrawTool = activeTool !== 'select'
+  const isDrawTool = activeTool != null && activeTool !== 'select'
   const { camera, size } = useThree()
 
   const cameraDistance = useMemo(() => {
@@ -1130,7 +1130,7 @@ export function SketchPlane() {
       )}
 
       {/* Background click plane — select mode only, clears highlight/selection on empty-space click or starts drag-box */}
-      {!isDrawTool && !dragTarget && (
+      {activeTool === 'select' && !dragTarget && (
         <mesh
           position={[planeOrigin.x, planeOrigin.y, planeOrigin.z]}
           rotation={plane.rotation}

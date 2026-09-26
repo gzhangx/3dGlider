@@ -239,7 +239,9 @@ export function SketchSidebar() {
   const showConstraints = activeTool === 'select' && (!!sel1 || selectedPointRefs.length > 0)
 
   let hintText = ''
-  if (activeTool !== 'select') {
+  if (activeTool == null) {
+    hintText = 'No tool · left-drag to orbit · click Select to pick geometry'
+  } else if (activeTool !== 'select') {
     hintText = constructionMode ? 'Drawing construction geometry' : 'Click 1st point · Click 2nd point · Esc cancel'
   } else if (!sel1 && selectedPointRefs.length === 0) {
     hintText = 'Click element or endpoint · Shift+click for multi'
@@ -258,8 +260,8 @@ export function SketchSidebar() {
         <button
           key={t.id}
           className={`${styles.btn} ${activeTool === t.id ? styles.active : ''}`}
-          onClick={() => setActiveTool(t.id)}
-          title={`${t.label} (${t.key})`}
+          onClick={() => setActiveTool(t.id === 'select' && activeTool === 'select' ? null : t.id)}
+          title={t.id === 'select' ? `${t.label} (${t.key}) — click again to turn off` : `${t.label} (${t.key})`}
         >
           <span className={styles.icon}>{t.icon}</span>
           <span className={styles.label}>{t.label}</span>
