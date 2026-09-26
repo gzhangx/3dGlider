@@ -98,6 +98,14 @@ export function rectPts(a: SketchPoint, b: SketchPoint, plane: SketchPlanePose) 
   ] as [number, number, number][]
 }
 
+/** Segments for a full circle so each chord stays about 3px on screen. */
+export function curveSegmentCount(radius: number, worldPerPixel: number): number {
+  const chordPx = 3
+  const radiusPx = Math.abs(radius) / Math.max(worldPerPixel, 1e-9)
+  const count = Math.ceil((2 * Math.PI * radiusPx) / chordPx)
+  return Math.min(2048, Math.max(64, count))
+}
+
 export function circlePts(center: SketchPoint, radius: number, plane: SketchPlanePose, segs = 64) {
   const pts: [number, number, number][] = []
   for (let i = 0; i <= segs; i++) {

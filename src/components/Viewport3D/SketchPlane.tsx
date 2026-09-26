@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { DoubleSide, Group, Mesh, Plane as ThreePlane, Vector3 } from 'three'
 import type { Camera } from 'three'
@@ -26,6 +26,7 @@ import {
   rectPts,
   circlePts,
   arcPts,
+  curveSegmentCount,
   closestPointOnCircle,
   angleInArc,
 } from '../../lib/sketchGeometry'
@@ -44,6 +45,7 @@ import {
 import { planeOriginFromPose, planeNormalFromPose } from '../../lib/planePose'
 import { PLANE_SIZE } from '../../lib/units'
 import { distToSeg, distToCircle, distToArc, computeCut, computeCircleCut, computeArcCut, CutResult, CircleCutResult, ArcCutResult } from '../../lib/cutTool'
+import { useWorldPerPixel } from './useWorldPerPixel'
 import { solveConstraintsDetailed } from '../../lib/constraintSolve'
 
 const HIT_PLANE_SIZE = PLANE_SIZE * 4
@@ -111,7 +113,7 @@ function Dot({ pos, color, screenSize, size = 0.06, ring = false }: { pos: [numb
 /** Let the invisible sketch plane receive hits in cut mode (Line2 otherwise wins the raycast). */
 const noopRaycast: () => void = () => {}
 
-  function SketchEl({ el, plane, highlighted, onPointerMove, pointPickRadius, suppressElementClick, onRadiusDragStart, onRadiusDragEnd, onHoveredPoint }: { el: SketchElement; plane: SketchPlanePose; highlighted?: boolean; onPointerMove?: (e: ThreeEvent<PointerEvent>) => void; pointPickRadius?: number; suppressElementClick?: () => boolean; onRadiusDragStart?: (elementId: string, e: ThreeEvent<PointerEvent>) => void; onRadiusDragEnd?: (e: ThreeEvent<PointerEvent>) => void; onHoveredPoint?: (ref: PointRef | null) => void }) {
+  function SketchEl({ el, plane, worldPerPixel, highlighted, onPointerMove, pointPickRadius, suppressElementClick, onRadiusDragStart, onRadiusDragEnd, onHoveredPoint }: { el: SketchElement; plane: SketchPlanePose; worldPerPixel: number; highlighted?: boolean; onPointerMove?: (e: ThreeEvent<PointerEvent>) => void; pointPickRadius?: number; suppressElementClick?: () => boolean; onRadiusDragStart?: (elementId: string, e: ThreeEvent<PointerEvent>) => void; onRadiusDragEnd?: (e: ThreeEvent<PointerEvent>) => void; onHoveredPoint?: (ref: PointRef | null) => void }) {
   const { activeTool, selectedElementIds, selectedPointRefs, highlightElementIds, selectElement, selectPoint, togglePointSelection, toggleElementSelection, showElementNames, addSketchConstraint, applyConstraints } = useModelStore(useShallow((state) => ({
     activeTool: state.activeTool, selectedElementIds: state.selectedElementIds,
     selectedPointRefs: state.selectedPointRefs,
@@ -295,14 +297,14 @@ const noopRaycast: () => void = () => {}
     const mid = { x: (el.start.x + el.end.x) / 2, y: (el.start.y + el.end.y) / 2 }
     labelPos = worldPt(mid, plane)
   } else if (el.type === 'circle') {
-    const points = circlePts(el.center, el.radius, plane, 64)
+    const points = circlePts(el.center, el.radius, plane, curveSegmentCount(el.radius, worldPerPixel))
     shape = <>
       {activeTool === 'select' && <Line points={points} color="#ffffff" lineWidth={16} transparent opacity={0} depthWrite={false} {...selectProps} />}
       <Line points={points} color={color} lineWidth={width} {...visibleLineProps} {...dashProps} />
     </>
     labelPos = worldPt(el.center, plane)
   } else if (el.type === 'arc') {
-    const points = arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64)
+    const points = arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, curveSegmentCount(el.radius, worldPerPixel))
     shape = <>
       {activeTool === 'select' && <Line points={points} color="#ffffff" lineWidth={16} transparent opacity={0} depthWrite={false} {...selectProps} />}
       <Line points={points} color={color} lineWidth={width} {...visibleLineProps} {...dashProps} />
@@ -521,24 +523,13 @@ export function SketchPlane() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [handleKey])
 
-  if (!activePlane) return null
+  const planeOrigin = activePlane ? planeOriginFromPose(activePlane) : null
+  const worldPerPixel = useWorldPerPixel(planeOrigin ?? { x: 0, y: 0, z: 0 })
+
+  if (!activePlane || !planeOrigin) return null
   const plane = activePlane
-  const planeOrigin = planeOriginFromPose(plane)
   const planeNormal = planeNormalFromPose(plane)
   const isDrawTool = activeTool != null && activeTool !== 'select'
-  const { camera, size } = useThree()
-
-  const cameraDistance = useMemo(() => {
-    const origin = new Vector3(planeOrigin.x, planeOrigin.y, planeOrigin.z)
-    const direction = new Vector3()
-    camera.getWorldDirection(direction)
-    return Math.abs(direction.dot(origin.sub(camera.position))) || 1
-  }, [camera, planeOrigin])
-
-  const worldPerPixel = useMemo(() => {
-    const fov = 'fov' in camera ? camera.fov * Math.PI / 180 : 50 * Math.PI / 180
-    return 2 * cameraDistance * Math.tan(fov / 2) / size.height
-  }, [camera, cameraDistance, size.height])
 
   const getHandlePoint = (p: SketchPoint): [number, number, number] => {
     const [x, y, z] = worldPt(p, plane)
@@ -1193,6 +1184,7 @@ export function SketchPlane() {
           key={el.id}
           el={el}
           plane={plane}
+          worldPerPixel={worldPerPixel}
           highlighted={cutPreview?.lineId === el.id}
           onPointerMove={onMove}
           pointPickRadius={snapObjectThreshold}
@@ -1278,7 +1270,7 @@ export function SketchPlane() {
               cutPreview.cutArc.startAngle,
               cutPreview.cutArc.endAngle,
               plane,
-              64,
+              curveSegmentCount(cutPreview.cutArc.radius, worldPerPixel),
             )}
             color="#ff3333"
             lineWidth={4}
@@ -1370,7 +1362,7 @@ export function SketchPlane() {
       {preview && activeTool === 'circle' && (() => {
         const r = Math.hypot(cursorPt.x - startPt.x, cursorPt.y - startPt.y)
         return r > 0
-          ? <Line points={circlePts(startPt, r, plane, 64)} color="#ffdd4488" lineWidth={1.5} raycast={noopRaycast} />
+          ? <Line points={circlePts(startPt, r, plane, curveSegmentCount(r, worldPerPixel))} color="#ffdd4488" lineWidth={1.5} raycast={noopRaycast} />
           : null
       })()}
     </>

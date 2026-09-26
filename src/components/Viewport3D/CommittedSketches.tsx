@@ -3,16 +3,20 @@ import { useShallow } from 'zustand/react/shallow'
 import { Line } from '@react-three/drei'
 import { ThreeEvent } from '@react-three/fiber'
 import { useModelStore, Sketch, SketchElement, SketchPlanePose } from '../../store/modelStore'
-import { linePts, rectPts, circlePts, arcPts } from '../../lib/sketchGeometry'
+import { linePts, rectPts, circlePts, arcPts, curveSegmentCount } from '../../lib/sketchGeometry'
+import { planeOriginFromPose } from '../../lib/planePose'
+import { useWorldPerPixel } from './useWorldPerPixel'
 
 function SketchEl({
   el,
   plane,
+  worldPerPixel,
   sketchColor,
   sketchOpacity,
 }: {
   el: SketchElement
   plane: SketchPlanePose
+  worldPerPixel: number
   sketchColor: string
   sketchOpacity: number
 }) {
@@ -56,19 +60,20 @@ function SketchEl({
   if (el.type === 'rect')
     return <Line ref={lineRef} points={rectPts(el.start, el.end, plane)} color={color} lineWidth={width} {...selectProps} {...dashProps} />
   if (el.type === 'circle')
-    return <Line ref={lineRef} points={circlePts(el.center, el.radius, plane, 64)} color={color} lineWidth={width} {...selectProps} {...dashProps} />
+    return <Line ref={lineRef} points={circlePts(el.center, el.radius, plane, curveSegmentCount(el.radius, worldPerPixel))} color={color} lineWidth={width} {...selectProps} {...dashProps} />
   if (el.type === 'arc')
-    return <Line ref={lineRef} points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, 64)} color={color} lineWidth={width} {...selectProps} {...dashProps} />
+    return <Line ref={lineRef} points={arcPts(el.center, el.radius, el.startAngle, el.endAngle, plane, curveSegmentCount(el.radius, worldPerPixel))} color={color} lineWidth={width} {...selectProps} {...dashProps} />
   return null
 }
 
 function SavedSketch({ sketch }: { sketch: Sketch }) {
   const color = sketch.color ?? '#ffdd44'
   const opacity = sketch.opacity ?? 1
+  const worldPerPixel = useWorldPerPixel(planeOriginFromPose(sketch.plane))
   return (
     <>
       {sketch.elements.map((el) => (
-        <SketchEl key={el.id} el={el} plane={sketch.plane} sketchColor={color} sketchOpacity={opacity} />
+        <SketchEl key={el.id} el={el} plane={sketch.plane} worldPerPixel={worldPerPixel} sketchColor={color} sketchOpacity={opacity} />
       ))}
     </>
   )
