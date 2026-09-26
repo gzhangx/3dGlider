@@ -1,6 +1,6 @@
 import { Mesh, BufferGeometry, ExtrudeGeometry, Matrix4, Euler, Vector3, Quaternion, Shape } from 'three'
 import { CSG } from 'three-csg-ts'
-import { ExtrudeFeature, ShellFeature, Sketch } from '../store/modelStore'
+import { ExtrudeFeature, ShellFeature, Sketch, SketchElement } from '../store/modelStore'
 import { sketchElementsToShape } from './sketchToShape'
 import { planeOriginFromPose } from './planePose'
 
@@ -33,12 +33,30 @@ function profileBounds(shapes: Shape[]) {
   return { minX, minY, maxX, maxY }
 }
 
+/** ExtrudeGeometry samples ellipse curves at `curveSegments * 2`. */
+function profileCurveSegments(elements: SketchElement[]): number {
+  let maxRadius = 0
+  for (const el of elements) {
+    if ((el.type === 'circle' || el.type === 'arc') && el.radius > maxRadius) maxRadius = el.radius
+  }
+  if (maxRadius <= 0) return 12
+  // About 0.4 mm chords, capped so a circle that fills the view stays smooth
+  // without making boolean meshes huge.
+  const chord = 0.04
+  const segments = Math.min(1024, Math.max(64, Math.ceil((2 * Math.PI * maxRadius) / chord)))
+  return Math.max(12, Math.ceil(segments / 2))
+}
+
 function featureGeometry(ext: ExtrudeFeature, sketch: Sketch, options: FeatureGeometryOptions = {}): BufferGeometry | null {
   const shapes = sketchElementsToShape(sketch.elements)
   if (shapes.length === 0) return null
 
   const depth = Math.abs(ext.depth)
-  const geo = new ExtrudeGeometry(shapes, { depth, bevelEnabled: false })
+  const geo = new ExtrudeGeometry(shapes, {
+    depth,
+    bevelEnabled: false,
+    curveSegments: profileCurveSegments(sketch.elements),
+  })
   if (options.profileInset) {
     const bounds = profileBounds(shapes)
     if (!bounds) { geo.dispose(); return null }

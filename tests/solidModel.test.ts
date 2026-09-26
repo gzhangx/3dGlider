@@ -21,6 +21,20 @@ describe('solid model', () => {
     disposeSolidMeshes(shelled)
   }, 10_000)
 
+  it('extrudes a large circle with enough sides to stay round', () => {
+    const sketch: Sketch = {
+      id: 'sketch', plane: presetPlanePose('XY'),
+      elements: [{ type: 'circle', id: 'circle', center: { x: 0, y: 0 }, radius: 8 }],
+    }
+    const extrudes: ExtrudeFeature[] = [{ id: 'extrude', sketchId: sketch.id, operation: 'add', depth: 2 }]
+    const solids = buildSolidMeshes(extrudes, [sketch])
+
+    expect(solids).toHaveLength(1)
+    expect(solids[0].geometry.getAttribute('position').count).toBeGreaterThan(1000)
+
+    disposeSolidMeshes(solids)
+  })
+
   it('tags each solid with its originating extrude id, even when an earlier extrude is skipped', () => {
     const emptySketch: Sketch = { id: 'empty', plane: presetPlanePose('XY'), elements: [] }
     const sketch: Sketch = {
