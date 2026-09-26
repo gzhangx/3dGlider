@@ -117,6 +117,24 @@ describe('constrained drag snapping', () => {
     expect([...constraintClusterIds('lh', constraints)].sort()).toEqual(['c1', 'lh', 'lv'])
   })
 
+  it('lets the last free endpoint land on a circle already tied to this sketch', () => {
+    const freeEnd = { elementId: 'lh', which: 'end' as const }
+    const tiedElsewhere: SketchConstraint[] = [
+      { id: 'join', type: 'coincident', p1: { elementId: 'lh', which: 'start' }, p2: { elementId: 'lv', which: 'start' } },
+      { id: 'pv', type: 'pointOnCircle', p: { elementId: 'lv', which: 'end' }, circleId: 'c1' },
+    ]
+    expect(dragSnapConflictsWithConstraints(
+      freeEnd,
+      { pt: { x: 4, y: 2 }, ref: null, circleId: 'c1' },
+      tiedElsewhere,
+    )).toBe(false)
+    expect(dragSnapConflictsWithConstraints(
+      freeEnd,
+      { pt: { x: 0, y: 2 }, ref: { elementId: 'lv', which: 'end' } },
+      tiedElsewhere,
+    )).toBe(false)
+  })
+
   it('rejects snapping the shared corner back onto the same circle', () => {
     expect(dragSnapConflictsWithConstraints(
       { elementId: 'lh', which: 'start' },

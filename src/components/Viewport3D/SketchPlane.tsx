@@ -689,14 +689,17 @@ export function SketchPlane() {
 
       const dragRef: PointRef = { elementId: dragTarget.elementId, which: dragTarget.pointType }
       const cluster = constraintClusterIds(dragTarget.elementId, liveConstraints)
+      const alreadyTiedToCurve = liveElements.some((el) => (
+        cluster.has(el.id) && (el.type === 'circle' || el.type === 'arc')
+      ))
 
-      // If dragging a line endpoint, provide the other endpoint as `lineStart`
-      // so tangent-to-circle snapping can be detected while dragging — but only
-      // onto geometry that is not already in this constraint cluster.
+      // Tangent snap uses the other endpoint. Skip it once this geometry is
+      // already tied to a circle, so the last free point can land on that
+      // circle (or its free endpoint) as a coincident instead of a second tangent.
       let lineStartForSnap: SketchPoint | null = null
       let activeToolForSnap = activeTool
       const draggedEl = liveElements.find((e) => e.id === dragTarget.elementId)
-      if (draggedEl && draggedEl.type === 'line') {
+      if (draggedEl && draggedEl.type === 'line' && !alreadyTiedToCurve) {
         const le = draggedEl as SketchLine
         lineStartForSnap = dragTarget.pointType === 'start' ? le.end : le.start
         activeToolForSnap = 'line'
@@ -716,7 +719,6 @@ export function SketchPlane() {
         snapTangentThreshold,
         lineStartForSnap,
         dragTarget.elementId,
-        cluster,
       )
       const usableSnap = snap && !dragSnapConflictsWithConstraints(dragRef, snap, liveConstraints) ? snap : null
       setDragSnapTarget(usableSnap)
@@ -1047,7 +1049,6 @@ export function SketchPlane() {
         const c = { id: crypto.randomUUID(), type: 'pointOnCircle' as const, p: { elementId: dragTarget.elementId, which: dragTarget.pointType } as PointRef, circleId: dragSnapTarget.circleId }
         addSketchConstraintsBatch([c], true)
       } else {
-        const cluster = constraintClusterIds(dragTarget.elementId, liveConstraints)
         const draggedEl = liveElements.find((e) => e.id === dragTarget.elementId)
         const draggedPt = draggedEl && 'start' in draggedEl && 'end' in draggedEl
           ? (dragTarget.pointType === 'start' ? draggedEl.start : draggedEl.end)
@@ -1056,18 +1057,13 @@ export function SketchPlane() {
           let bestRef: PointRef | null = null
           let bestDist = Infinity
           for (const el of liveElements) {
-            if (cluster.has(el.id)) continue
-            if (el.type === 'line' || el.type === 'rect') {
-              const endpoints = el.type === 'line'
-                ? [{ pt: (el as SketchLine).start, which: 'start' as const }, { pt: (el as SketchLine).end, which: 'end' as const }]
-                : [{ pt: (el as SketchRect).start, which: 'start' as const }, { pt: (el as SketchRect).end, which: 'end' as const }]
-              for (const ep of endpoints) {
-                const d = Math.hypot(draggedPt.x - ep.pt.x, draggedPt.y - ep.pt.y)
-                if (d < snapEndpointThreshold && d < bestDist) {
-                  bestDist = d
-                  bestRef = { elementId: el.id, which: ep.which }
-                }
-              }
+            if (el.id === dragTarget.elementId) continue
+            for (const ep of elementEndpoints(el)) {
+              const d = Math.hypot(draggedPt.x - ep.pt.x, draggedPt.y - ep.pt.y)
+              if (d >= snapEndpointThreshold || d >= bestDist) continue
+              if (dragSnapConflictsWithConstraints(dragRef, { pt: ep.pt, ref: ep.ref }, liveConstraints)) continue
+              bestDist = d
+              bestRef = ep.ref
             }
           }
           if (bestRef) {

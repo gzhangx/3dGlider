@@ -288,11 +288,18 @@ export function constraintClusterIds(seedId: string, constraints: SketchConstrai
   return ids
 }
 
+function pointHasCoincident(constraints: SketchConstraint[], ref: PointRef): boolean {
+  return constraints.some((constraint) => (
+    constraint.type === 'coincident'
+    && (pointRefsEqual(constraint.p1, ref) || pointRefsEqual(constraint.p2, ref))
+  ))
+}
+
 /**
- * Snapping a drag onto geometry already in this point's constraint cluster
- * (the other tangent line, the circle, the far contact point) collapses or
- * over-constrains the sketch — the same failure as adding a second tangent
- * at the shared corner.
+ * Block snaps that would collapse an already-joined corner (a second tangent
+ * onto the same circle, or merging that corner into another contact).
+ * A point that is not yet coincident with anything may still land on a circle
+ * or endpoint already connected through the rest of the sketch.
  */
 export function dragSnapConflictsWithConstraints(
   target: PointRef,
@@ -300,9 +307,32 @@ export function dragSnapConflictsWithConstraints(
   constraints: SketchConstraint[],
 ): boolean {
   const cluster = constraintClusterIds(target.elementId, constraints)
-  if (snap.tangentCircleId && cluster.has(snap.tangentCircleId)) return true
-  if (snap.circleId && cluster.has(snap.circleId)) return true
-  if (snap.ref && cluster.has(snap.ref.elementId)) return true
+  const joined = pointHasCoincident(constraints, target)
+
+  if (snap.tangentCircleId) {
+    const alreadyTangent = constraints.some((constraint) => (
+      constraint.type === 'tangent'
+      && (
+        (constraint.elementId1 === target.elementId && constraint.elementId2 === snap.tangentCircleId)
+        || (constraint.elementId2 === target.elementId && constraint.elementId1 === snap.tangentCircleId)
+      )
+    ))
+    if (alreadyTangent) return true
+    if (joined && cluster.has(snap.tangentCircleId)) return true
+  }
+  if (snap.circleId) {
+    const alreadyOn = constraints.some((constraint) => (
+      constraint.type === 'pointOnCircle'
+      && constraint.circleId === snap.circleId
+      && pointRefsEqual(constraint.p, target)
+    ))
+    if (alreadyOn) return true
+    if (joined && cluster.has(snap.circleId)) return true
+  }
+  if (snap.ref) {
+    if (pointRefsEqual(snap.ref, target)) return true
+    if (joined && cluster.has(snap.ref.elementId)) return true
+  }
   return false
 }
 
